@@ -140,16 +140,21 @@ async function toggleWishlist(userId, gameId) {
 }
 
 async function getTopThree(userId) {
-  const { data, error } = await supabaseAdmin
+  const { data: positions, error } = await supabaseAdmin
     .from('top_three')
-    .select(`
-      position,
-      games:game_id (*)
-    `)
+    .select('game_id, position')
     .eq('user_id', userId)
     .order('position');
-  checkResult({ data, error });
-  return data.map(t => ({ ...t.games, position: t.position }));
+  if (error) throw new Error(error.message);
+  if (!positions || positions.length === 0) return [];
+  const gameIds = positions.map(p => p.game_id);
+  const { data: games, error: gameError } = await supabaseAdmin
+    .from('games')
+    .select('*')
+    .eq('user_id', userId)
+    .in('game_id', gameIds);
+  checkResult({ data: games, error: gameError });
+  return positions.map(p => ({ ...games.find(g => g.game_id === p.game_id), position: p.position }));
 }
 
 async function setTopThree(userId, gameId, position) {

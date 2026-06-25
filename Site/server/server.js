@@ -88,14 +88,24 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/me', requireAuth, async (req, res) => {
-  const user = await db.getUserById(req.session.userId);
-  if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
-  res.json({ user });
+  try {
+    const user = await db.getUserById(req.session.userId);
+    if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    res.json({ user });
+  } catch (err) {
+    console.error('[Me] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/games', requireAuth, async (req, res) => {
-  const games = await db.getGames(req.session.userId);
-  res.json({ games });
+  try {
+    const games = await db.getGames(req.session.userId);
+    res.json({ games });
+  } catch (err) {
+    console.error('[Games] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/games/sync', requireAuth, async (req, res) => {
@@ -116,43 +126,78 @@ app.post('/api/games/sync', requireAuth, async (req, res) => {
 });
 
 app.post('/api/games/status', requireAuth, async (req, res) => {
-  const { gameId, status } = req.body;
-  await db.updateGameStatus(req.session.userId, gameId, status);
-  res.json({ ok: true });
+  try {
+    const { gameId, status } = req.body;
+    await db.updateGameStatus(req.session.userId, gameId, status);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Status] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/games/review', requireAuth, async (req, res) => {
-  const { gameId, rating, reviewText, reviewPublic } = req.body;
-  await db.updateGameRating(req.session.userId, gameId, rating || 0, reviewText || '', reviewPublic !== false);
-  res.json({ ok: true });
+  try {
+    const { gameId, rating, reviewText, reviewPublic } = req.body;
+    await db.updateGameRating(req.session.userId, gameId, rating || 0, reviewText || '', reviewPublic !== false);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Review] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/wishlist', requireAuth, async (req, res) => {
-  const ids = await db.getWishlist(req.session.userId);
-  res.json({ wishlist: ids });
+  try {
+    const ids = await db.getWishlist(req.session.userId);
+    res.json({ wishlist: ids });
+  } catch (err) {
+    console.error('[Wishlist] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/wishlist/toggle', requireAuth, async (req, res) => {
-  const { gameId } = req.body;
-  const added = await db.toggleWishlist(req.session.userId, gameId);
-  res.json({ added });
+  try {
+    const { gameId } = req.body;
+    const added = await db.toggleWishlist(req.session.userId, gameId);
+    res.json({ added });
+  } catch (err) {
+    console.error('[WishlistToggle] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/topthree', requireAuth, async (req, res) => {
-  const top = await db.getTopThree(req.session.userId);
-  res.json({ topThree: top });
+  try {
+    const top = await db.getTopThree(req.session.userId);
+    res.json({ topThree: top });
+  } catch (err) {
+    console.error('[TopThree] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/topthree', requireAuth, async (req, res) => {
-  const { gameId, position } = req.body;
-  await db.setTopThree(req.session.userId, gameId, position);
-  res.json({ ok: true });
+  try {
+    const { gameId, position } = req.body;
+    await db.setTopThree(req.session.userId, gameId, position);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[TopThreeSet] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.delete('/api/account', requireAuth, async (req, res) => {
-  await db.deleteUserAccount(req.session.userId);
-  req.session.destroy();
-  res.json({ ok: true });
+  try {
+    await db.deleteUserAccount(req.session.userId);
+    req.session.destroy();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[AccountDelete] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {

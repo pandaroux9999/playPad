@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PlayPad Preview</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { background: '#0f0f1c', foreground: '#e8e8f0', 'muted-foreground': '#8888aa', secondary: '#1a1a2e', border: '#1e1e32', card: '#151528' }
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * { scrollbar-width: none; }
+    body { margin: 0; background: #030308; }
+
+    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .animate-spin { animation: spin 1s linear infinite; }
+
+    /* ── Animations ─────────────────────────────────────────── */
+    @keyframes fadeSlideIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+    .view-enter { animation: fadeSlideIn 0.2s ease-out; }
+
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .sheet-overlay { animation: fadeIn 0.2s ease-out; }
+    .sheet-panel { animation: slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
+
+    .game-card { transition: transform 0.15s ease, box-shadow 0.15s ease; cursor: pointer; }
+    .game-card:hover { transform: scale(1.02); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
+    .game-card:active { transform: scale(0.94); }
+
+    .nav-btn { transition: color 0.2s ease; }
+    .nav-btn:hover { opacity: 0.8; }
+
+    .pill-btn { transition: all 0.2s ease; }
+    .pill-btn:hover { opacity: 0.85; }
+
+    .review-card { transition: border-color 0.2s ease, transform 0.15s ease; cursor: pointer; }
+    .review-card:hover { border-color: #8B5CF6 !important; transform: scale(1.01); }
+    .review-card:active { transform: scale(0.98); }
+
+    .sync-btn { transition: opacity 0.2s ease; }
+    .sync-btn:hover { opacity: 0.8 !important; }
+
+    .sheet-close-btn { transition: background 0.2s ease; }
+    .sheet-close-btn:hover { background: rgba(0,0,0,0.7) !important; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+
+  <script>
+const { useState, useMemo, createElement: h } = React;
+
+// ── Inline SVG Icons (lucide-react replacement) ────────────────────────────────
+function Icon(paths, viewBox = "0 0 24 24") {
+  return ({ size = 24, className, style, fill = "none", stroke = "currentColor", strokeWidth = 2 }) =>
+    h('svg', { xmlns: "http://www.w3.org/2000/svg", width: size, height: size, viewBox, fill, stroke, strokeWidth, strokeLinecap: "round", strokeLinejoin: "round", className, style },
+      paths.map((p, i) => h('path', { key: i, d: p }))
+    );
+}
+
+const Search = Icon(["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "m21 21-4.35-4.35"]);
+const Star = Icon(["M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"]);
+const Lock = Icon(["M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z", "M7 11V7a5 5 0 0 1 10 0v4"]);
+const Globe = Icon(["M21.54 15H17a2 2 0 0 0-2 2v4.54", "M7 3.34V5a3 3 0 0 0 3 3v0a2 2 0 0 1 2 2v0c0 1.1.9 2 2 2v0a2 2 0 0 0 2-2v0c0-1.1.9-2 2-2h3.17", "M11 21.95V18a2 2 0 0 0-2-2v0a2 2 0 0 1-2-2v-1a2 2 0 0 0-2-2H2.05", "M3.27 9.73A10 10 0 0 1 12 2c2.4 0 4.6.84 6.32 2.24", "M12 22h0a10 10 0 0 0 10-10"]);
+const X = Icon(["M18 6 6 18", "m6 6 12 12"]);
+const RefreshCw = Icon(["M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L23 8", "M23 3v5h-5", "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L1 16", "M1 21v-5h5"]);
+const Gamepad2 = Icon(["M6 11h4", "M8 9v4", "M15 11h.01", "M18 11h.01", "M17.32 5H6.68a4 4 0 0 0-3.978 3.59L2.09 14.8A2 2 0 0 0 2 15v1a2 2 0 0 0 2 2h1.5a2.5 2.5 0 0 0 2.5-2.5v-.5h8v.5a2.5 2.5 0 0 0 2.5 2.5H20a2 2 0 0 0 2-2v-1a2 2 0 0 0-.09-.59l-1.61-6.21A4 4 0 0 0 17.32 5z"]);
+const User = Icon(["M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2", "M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"]);
+const Clock = Icon(["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M12 6v6l4 2"]);
+const Trophy = Icon(["M6 9H4.5a2.5 2.5 0 0 1 0-5H6", "M18 9h1.5a2.5 2.5 0 0 0 0-5H18", "M4 22h16", "M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22", "M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22", "M18 2H6v7a6 6 0 0 0 12 0V2z"]);
+const Edit3 = Icon(["M17 5a2.83 2.83 0 1 1 4 4L7.5 22.5 2 22l.5-5.5L17 5z"]);
+const Wifi = Icon(["M5 12.55a10.94 10.94 0 0 1 14.08 0", "M1.42 9a16 16 0 0 1 21.16 0", "M8.53 16.11a6 6 0 0 1 6.95 0", "M12 20h.01"]);
+const Check = Icon(["M20 6 9 17l-5-5"]);
+const Zap = Icon(["M15.66 2 8 12h6l-2 10 7.66-10H14l2-10z"]);
+const Library = Icon(["M16 6 16 22", "M1 6 16 6", "M1 18 16 18", "M1 12 16 12", "M9 22 1 14 1 6", "M9 2 1 10 1 6", "M9 2 16 10 16 6", "M16 13 22 18 22 22 16 18", "M22 6 22 22"]);
+const Briefcase = Icon(["M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16", "M4 10v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10", "M2 10h20"]);
+const Heart = Icon(["M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"]);
+const Crown = Icon(["M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z", "M2 20h20"]);
+const Bell = Icon(["M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9", "M13.73 21a2 2 0 0 1-3.46 0"]);
+const Users = Icon(["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z", "M22 21v-2a4 4 0 0 0-3-3.87", "M16 3.13a4 4 0 0 1 0 7.75"]);
+const LogOut = Icon(["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "M16 17l5-5-5-5", "M21 12H9"]);
+// Platform badge text colors for different platforms
+const GlobeIcon = Globe;
+const LockIcon = Lock;
+const CheckIcon = Check;
+const ClockIcon = Clock;
+const TrophyIcon = Trophy;
+const Gamepad2Icon = Gamepad2;
+const Edit3Icon = Edit3;
+const ZapIcon = Zap;
+const SearchIcon = Search;
+const LibraryIcon = Library;
+
+// ── Brand tokens ───────────────────────────────────────────────────────────────
+const P1 = "#8B5CF6";
+const P2 = "#3B82F6";
+const GRAD = `linear-gradient(135deg, ${P1}, ${P2})`;
+
+const PLATFORM_CONFIG = {
+  ps5:      { label: "PS5",      color: "#003087", text: "#ffffff", name: "PlayStation 5"  },
+  steam:    { label: "Steam",    color: "#1b2838", text: "#c2dbf0", name: "Steam"           },
+  epic:     { label: "Epic",     color: "#2d2d2d", text: "#ffffff", name: "Epic Games"      },
+  nintendo: { label: "Nintendo", color: "#e60012", text: "#ffffff", name: "Nintendo Switch" },
+  xbox:     { label: "Xbox",     color: "#107c10", text: "#ffffff", name: "Xbox"            },
+};
+
+const STATUS_CONFIG = {
+  playing:   { label: "En cours",  color: "#22c55e" },
+  completed: { label: "Termin\u00e9",   color: P1        },
+  backlog:   { label: "\u00c0 jouer",   color: "#f59e0b" },
+  dropped:   { label: "Abandonn\u00e9", color: "#ef4444" },
+  not_started:{ label: "Pas commenc\u00e9", color: "#444466" },
+};
+
+const PLATFORM_LOGO_URLS = {
+  ps5: "src/imports/icons8-playstation-32.png",
+  steam: "src/imports/icons8-steam-48.png",
+  epic: "src/imports/icons8-epic-games-48.png",
+  nintendo: "src/imports/icons8-nintendo-switch-48.png",
+  xbox: "src/imports/icons8-xbox-48.png",
+};
+
+const C = {
+  eldenRing:    "https://cdn.cloudflare.steamstatic.com/steam/apps/1245620/library_600x900.jpg",
+  cyberpunk:    "https://cdn.cloudflare.steamstatic.com/steam/apps/1091500/library_600x900.jpg",
+  godOfWar:     "https://cdn.cloudflare.steamstatic.com/steam/apps/2322010/library_600x900.jpg",
+  rdr2:         "https://cdn.cloudflare.steamstatic.com/steam/apps/1174180/library_600x900.jpg",
+  hollowKnight: "https://cdn.cloudflare.steamstatic.com/steam/apps/367520/library_600x900.jpg",
+  forza5:       "https://cdn.cloudflare.steamstatic.com/steam/apps/1551360/library_600x900.jpg",
+  bg3:          "https://cdn.cloudflare.steamstatic.com/steam/apps/1086940/library_600x900.jpg",
+  zeldaTotk:    "https://placehold.co/600x900/1a1a2e/e60012?text=Zelda+TOTK",
+  marioKart8:   "src/imports/MK_8_deluxe.jpg",
+  spiderMan2:   "src/imports/spider_man_2.jpg",
+  haloInfinite: "src/imports/Halo_infinite.jpg",
+  fortnite:     "https://placehold.co/600x900/2d2d2d/ffffff?text=Fortnite",
+  witcher3:     "https://cdn.cloudflare.steamstatic.com/steam/apps/292030/library_600x900.jpg",
+  sekiro:       "https://cdn.cloudflare.steamstatic.com/steam/apps/814380/library_600x900.jpg",
+  gta5:         "https://cdn.cloudflare.steamstatic.com/steam/apps/271590/library_600x900.jpg",
+  darkSouls3:   "https://cdn.cloudflare.steamstatic.com/steam/apps/374320/library_600x900.jpg",
+  horizonFW:    "https://cdn.cloudflare.steamstatic.com/steam/apps/2420110/library_600x900.jpg",
+  doomEternal:  "https://cdn.cloudflare.steamstatic.com/steam/apps/782330/library_600x900.jpg",
+  residentEvil4:"https://cdn.cloudflare.steamstatic.com/steam/apps/2050650/library_600x900.jpg",
+  streetFighter6:"https://cdn.cloudflare.steamstatic.com/steam/apps/1364780/library_600x900.jpg",
+  ff7Remake:    "src/imports/FFVIIRemake.png",
+  deathStranding:"https://cdn.cloudflare.steamstatic.com/steam/apps/1190460/library_600x900.jpg",
+  metroExodus:  "src/imports/Metro_Exodus.png",
+  diablo4:      "https://cdn.cloudflare.steamstatic.com/steam/apps/2344520/library_600x900.jpg",
+  haloMCC:      "https://cdn.cloudflare.steamstatic.com/steam/apps/976730/library_600x900.jpg",
+  seaOfThieves: "https://cdn.cloudflare.steamstatic.com/steam/apps/1172620/library_600x900.jpg",
+  acOdyssey:    "https://cdn.cloudflare.steamstatic.com/steam/apps/812140/library_600x900.jpg",
+  ghostTsushima:"https://cdn.cloudflare.steamstatic.com/steam/apps/2215430/library_600x900.jpg",
+  monsterHunter:"https://cdn.cloudflare.steamstatic.com/steam/apps/582010/library_600x900.jpg",
+  vampSurvivors:"https://cdn.cloudflare.steamstatic.com/steam/apps/1794680/library_600x900.jpg",
+  stray:        "src/imports/stray.jpg",
+  itTakesTwo:   "https://cdn.cloudflare.steamstatic.com/steam/apps/1426210/library_600x900.jpg",
+  control:      "https://cdn.cloudflare.steamstatic.com/steam/apps/870780/library_600x900.jpg",
+  liesOfP:      "https://cdn.cloudflare.steamstatic.com/steam/apps/1627720/library_600x900.jpg",
+  hogwartsLegacy:"https://cdn.cloudflare.steamstatic.com/steam/apps/990080/library_600x900.jpg",
+  daysGone:     "https://cdn.cloudflare.steamstatic.com/steam/apps/1259420/library_600x900.jpg",
+  massEffectLE: "https://cdn.cloudflare.steamstatic.com/steam/apps/1328670/library_600x900.jpg",
+  zeldaBOTW:    "https://placehold.co/600x900/0a7e3c/e60012?text=Zelda+BOTW",
+  valorant:     "https://placehold.co/600x900/ff4655/ffffff?text=Valorant",
+};
+
+const GLOBAL_RATINGS = {
+  105: 4.6, 107: 4.7, 108: 4.5, 109: 4.2, 110: 4.3,
+  116: 4.4, 117: 4.8, 118: 4.3, 119: 4.5, 120: 4.1,
+  121: 4.2, 122: 3.8, 123: 4.6, 124: 3.5, 125: 4.0,
+  126: 4.7, 127: 4.4, 128: 4.6, 129: 4.5, 130: 4.8,
+  131: 4.3, 132: 4.5, 133: 4.1, 134: 4.2, 135: 4.6,
+};
+
+const COMMUNITY_REVIEWS = [
+  { id: "r1",  rating: 5, author: "ShadowBlade",  text: "Chef-d'oeuvre absolu. Chaque combat est une chor\u00e9graphie parfaite, l'histoire te prend aux tripes.", positive: true },
+  { id: "r2",  rating: 5, author: "PixelWizard",   text: "Une exp\u00e9rience qui red\u00e9finit le genre. La direction artistique est \u00e0 couper le souffle.", positive: true },
+  { id: "r3",  rating: 4, author: "LunaFox",       text: "Tr\u00e8s bon jeu, mais quelques passages en dessous du reste. La fin m\u00e9rite d'\u00eatre v\u00e9cue.", positive: true },
+  { id: "r4",  rating: 4, author: "NovaStrike",    text: "Gameplay solide et world-building impeccable. Quelques bugs mineurs mais rien de r\u00e9dhibitoire.", positive: true },
+  { id: "r5",  rating: 2, author: "RageQuitter",   text: "Grosse d\u00e9ception. Beaucoup de temps d'attente et une histoire pr\u00e9visible. Pas \u00e0 la hauteur du battage.", positive: false },
+  { id: "r6",  rating: 3, author: "DarkKnight",    text: "Moyen. Certains moments sont g\u00e9niaux mais le rythme est tr\u00e8s in\u00e9gal, je me suis ennuy\u00e9 par moments.", positive: false },
+  { id: "r7",  rating: 1, author: "BitCrusher",    text: "Injouable sans patch. Interface catastrophique et optimisation inexistante. Dommage car le concept est sympa.", positive: false },
+  { id: "r8",  rating: 5, author: "CosmicRaven",   text: "Une claque ! Tout est soign\u00e9 : OST, gameplay, narration. Je le recommande les yeux ferm\u00e9s.", positive: true },
+  { id: "r9",  rating: 2, author: "RetroGamer",    text: "Surcot\u00e9. Rien de vraiment nouveau, les m\u00e9caniques sont dat\u00e9es et le sc\u00e9nario ne tient pas la route.", positive: false },
+  { id: "r10", rating: 4, author: "SkyRunner",     text: "Tr\u00e8s bon moment pass\u00e9. Le syst\u00e8me de combat est addictif, les graphismes somptueux.", positive: true },
+  { id: "r11", rating: 1, author: "FrostByte",     text: "Pire achat de l'ann\u00e9e. Bugs partout, progression bloqu\u00e9e, sauvegardes corrompues. Fuyez.", positive: false },
+  { id: "r12", rating: 3, author: "NeonPulse",     text: "Sympa sans plus. Quelques bonnes id\u00e9es mais l'ex\u00e9cution laisse \u00e0 d\u00e9sirer. 6/10.", positive: false },
+];
+
+const INITIAL_GAMES = [
+  { id: 1,  title: "Elden Ring",                   platform: "ps5",      genre: "Action RPG",      userRating: 5, cover: C.eldenRing,    status: "completed", playtime: 75,  year: 2022, hasReview: true,  reviewText: "Un chef-d'oeuvre absolu. L'open world le plus bien con\u00e7u jamais explor\u00e9.", reviewPublic: true  },
+  { id: 2,  title: "Cyberpunk 2077",               platform: "steam",    genre: "RPG",             userRating: 4, cover: C.cyberpunk,    status: "playing",   playtime: 55,  year: 2020, hasReview: true,  reviewText: "Apr\u00e8s les patches 2.0, le jeu est enfin \u00e0 la hauteur.", reviewPublic: true  },
+  { id: 4,  title: "Halo Infinite",               platform: "xbox",     genre: "FPS",             userRating: 3, cover: C.haloInfinite, status: "dropped",   playtime: 14,  year: 2021, hasReview: true,  reviewText: "Prometteur mais d\u00e9cevant sur la dur\u00e9e.", reviewPublic: false },
+  { id: 5,  title: "God of War Ragnar\u00f6k",     platform: "ps5",      genre: "Action-Aventure", userRating: 5, cover: C.godOfWar,     status: "completed", playtime: 30,  year: 2022, hasReview: true,  reviewText: "Une \u00e9pop\u00e9e nordique bouleversante.", reviewPublic: true  },
+  { id: 6,  title: "Red Dead Redemption 2",       platform: "epic",     genre: "Open World",      userRating: 5, cover: C.rdr2,         status: "completed", playtime: 90,  year: 2018, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 7,  title: "Hollow Knight",               platform: "steam",    genre: "Metroidvania",    userRating: 4, cover: C.hollowKnight, status: "completed", playtime: 40,  year: 2017, hasReview: true,  reviewText: "Une p\u00e9pite ind\u00e9pendante.", reviewPublic: true  },
+  { id: 8,  title: "Mario Kart 8 Deluxe",        platform: "nintendo", genre: "Course",           userRating: 4, cover: C.marioKart8,  status: "playing",   playtime: 20,  year: 2017, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 9,  title: "Spider-Man 2",               platform: "ps5",      genre: "Action-Aventure", userRating: 4, cover: C.spiderMan2,   status: "backlog",   playtime: 0,   year: 2023, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 10, title: "Forza Horizon 5",             platform: "xbox",     genre: "Course",           userRating: 4, cover: C.forza5,       status: "playing",   playtime: 35,  year: 2021, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 11, title: "Baldur's Gate 3",            platform: "steam",    genre: "RPG",             userRating: 5, cover: C.bg3,          status: "playing",   playtime: 120, year: 2023, hasReview: true,  reviewText: "Le RPG de la d\u00e9cennie.", reviewPublic: true  },
+];
+
+const CATALOGUE_GAMES = [
+  { id: 105, title: "The Witcher 3: Wild Hunt",  platform: "steam",    genre: "RPG",             userRating: 0, cover: C.witcher3,     status: "not_started", playtime: 0, year: 2015, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 107, title: "Dark Souls III",            platform: "steam",    genre: "Action RPG",      userRating: 0, cover: C.darkSouls3,   status: "not_started", playtime: 0, year: 2016, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 108, title: "Sekiro: Shadows Die Twice", platform: "ps5",      genre: "Action-Aventure", userRating: 0, cover: C.sekiro,       status: "not_started", playtime: 0, year: 2019, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 109, title: "Horizon Forbidden West",    platform: "ps5",      genre: "Action RPG",      userRating: 0, cover: C.horizonFW,    status: "not_started", playtime: 0, year: 2022, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 110, title: "Grand Theft Auto V",        platform: "epic",     genre: "Open World",      userRating: 0, cover: C.gta5,         status: "not_started", playtime: 0, year: 2013, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 116, title: "DOOM Eternal",               platform: "steam",    genre: "FPS",             userRating: 0, cover: C.doomEternal,  status: "not_started", playtime: 0, year: 2020, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 117, title: "Resident Evil 4",            platform: "steam",    genre: "Survival Horror", userRating: 0, cover: C.residentEvil4,status: "not_started", playtime: 0, year: 2023, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 118, title: "Street Fighter 6",           platform: "steam",    genre: "Combat",          userRating: 0, cover: C.streetFighter6,status: "not_started", playtime: 0, year: 2023, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 119, title: "Final Fantasy VII Remake",   platform: "ps5",      genre: "JRPG",            userRating: 0, cover: C.ff7Remake,    status: "not_started", playtime: 0, year: 2024, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 120, title: "Death Stranding",            platform: "ps5",      genre: "Aventure",        userRating: 0, cover: C.deathStranding,status: "not_started", playtime: 0, year: 2019, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 121, title: "Metro Exodus",               platform: "xbox",     genre: "FPS",             userRating: 0, cover: C.metroExodus,  status: "not_started", playtime: 0, year: 2019, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 122, title: "Diablo IV",                  platform: "steam",    genre: "Action RPG",      userRating: 0, cover: C.diablo4,      status: "not_started", playtime: 0, year: 2023, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 123, title: "Halo: The Master Chief Collection", platform: "xbox", genre: "FPS",          userRating: 0, cover: C.haloMCC,      status: "not_started", playtime: 0, year: 2019, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 124, title: "Sea of Thieves",             platform: "xbox",     genre: "Aventure",        userRating: 0, cover: C.seaOfThieves, status: "not_started", playtime: 0, year: 2018, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 125, title: "Assassin's Creed Odyssey",   platform: "epic",     genre: "Action RPG",      userRating: 0, cover: C.acOdyssey,    status: "not_started", playtime: 0, year: 2018, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 126, title: "Ghost of Tsushima",          platform: "ps5",      genre: "Action-Aventure", userRating: 0, cover: C.ghostTsushima,status: "not_started", playtime: 0, year: 2020, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 127, title: "Monster Hunter: World",      platform: "steam",    genre: "Action RPG",      userRating: 0, cover: C.monsterHunter,status: "not_started", playtime: 0, year: 2018, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 128, title: "Vampire Survivors",          platform: "steam",    genre: "Rogue-lite",      userRating: 0, cover: C.vampSurvivors,status: "not_started", playtime: 0, year: 2022, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 129, title: "Stray",                      platform: "ps5",      genre: "Aventure",        userRating: 0, cover: C.stray,        status: "not_started", playtime: 0, year: 2022, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 130, title: "It Takes Two",               platform: "steam",    genre: "Aventure",        userRating: 0, cover: C.itTakesTwo,   status: "not_started", playtime: 0, year: 2021, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 131, title: "Control",                    platform: "ps5",      genre: "Action-Aventure", userRating: 0, cover: C.control,      status: "not_started", playtime: 0, year: 2019, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 132, title: "Lies of P",                  platform: "ps5",      genre: "Action RPG",      userRating: 0, cover: C.liesOfP,      status: "not_started", playtime: 0, year: 2023, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 133, title: "Hogwarts Legacy",            platform: "ps5",      genre: "Action RPG",      userRating: 0, cover: C.hogwartsLegacy,status: "not_started",playtime: 0, year: 2023, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 134, title: "Days Gone",                  platform: "ps5",      genre: "Action-Aventure", userRating: 0, cover: C.daysGone,     status: "not_started", playtime: 0, year: 2019, hasReview: false, reviewText: "", reviewPublic: false },
+  { id: 135, title: "Mass Effect Legendary Ed.",  platform: "steam",    genre: "RPG",             userRating: 0, cover: C.massEffectLE, status: "not_started", playtime: 0, year: 2021, hasReview: false, reviewText: "", reviewPublic: false },
+];
+
+const PLATFORM_SYNC_DATA = [
+  { platform: "ps5",      gameCount: 10, lastSync: "Il y a 2h"    },
+  { platform: "steam",    gameCount: 10, lastSync: "Il y a 15min" },
+  { platform: "epic",     gameCount: 2,  lastSync: "Il y a 1j"    },
+  { platform: "nintendo", gameCount: 0,  lastSync: null           },
+  { platform: "xbox",     gameCount: 3,  lastSync: null           },
+];
+
+const NOTIFICATIONS = [
+  { id: "n1", text: "Jerome a termine Zelda: Tears of the Kingdom", read: false, friendId: "f1" },
+  { id: "n2", text: "Marie a mis une critique sur Elden Ring",     read: false, friendId: "f2" },
+  { id: "n3", text: "Marie a commence Baldur's Gate 3",            read: false, friendId: "f2" },
+  { id: "n4", text: "Alex a ajoute Cyberpunk 2077 a sa wishlist",  read: false, friendId: "f3" },
+  { id: "n5", text: "Sophie a 100% God of War Ragnarok",           read: false, friendId: "f4" },
+  { id: "n6", text: "Jerome joue a Forza Horizon 5",               read: false, friendId: "f1" },
+];
+
+const FRIENDS = [
+  {
+    id: "f1", name: "Jerome", initials: "JE", online: true,
+    games: [
+      { id: 1001, title: "Zelda: Tears of the Kingdom", platform: "nintendo", genre: "Aventure", cover: C.zeldaTotk, status: "completed", playtime: 100, year: 2023, hasReview: true, reviewText: "Le meilleur Zelda jamais cree, une claque a chaque instant.", reviewPublic: true, userRating: 5 },
+      { id: 1002, title: "Hollow Knight", platform: "steam", genre: "Metroidvania", cover: C.hollowKnight, status: "completed", playtime: 70, year: 2017, hasReview: false, reviewText: "", reviewPublic: false, userRating: 4 },
+      { id: 1003, title: "Stray", platform: "ps5", genre: "Aventure", cover: C.stray, status: "completed", playtime: 12, year: 2022, hasReview: true, reviewText: "Un chat en cyberpunk, que demander de plus ?", reviewPublic: true, userRating: 4 },
+      { id: 1004, title: "It Takes Two", platform: "steam", genre: "Aventure", cover: C.itTakesTwo, status: "playing", playtime: 25, year: 2021, hasReview: false, reviewText: "", reviewPublic: false, userRating: 5 },
+      { id: 1005, title: "Fortnite", platform: "epic", genre: "Battle Royale", cover: C.fortnite, status: "dropped", playtime: 8, year: 2017, hasReview: false, reviewText: "", reviewPublic: false, userRating: 2 },
+    ]
+  },
+  {
+    id: "f2", name: "Marie", initials: "MA", online: true,
+    games: [
+      { id: 1011, title: "God of War Ragnarok", platform: "ps5", genre: "Action-Aventure", cover: C.godOfWar, status: "completed", playtime: 55, year: 2022, hasReview: true, reviewText: "Une aventure epique et emouvante. Kratos est mon personnage prefere.", reviewPublic: true, userRating: 5 },
+      { id: 1012, title: "Horizon Forbidden West", platform: "ps5", genre: "Action RPG", cover: C.horizonFW, status: "playing", playtime: 35, year: 2022, hasReview: false, reviewText: "", reviewPublic: false, userRating: 4 },
+      { id: 1013, title: "Baldur's Gate 3", platform: "steam", genre: "RPG", cover: C.bg3, status: "playing", playtime: 80, year: 2023, hasReview: true, reviewText: "Larian a fait un travail monumental, chaque partie est unique.", reviewPublic: true, userRating: 5 },
+      { id: 1014, title: "Final Fantasy VII Remake", platform: "ps5", genre: "JRPG", cover: C.ff7Remake, status: "backlog", playtime: 0, year: 2024, hasReview: false, reviewText: "", reviewPublic: false, userRating: 0 },
+      { id: 1015, title: "Sea of Thieves", platform: "xbox", genre: "Aventure", cover: C.seaOfThieves, status: "dropped", playtime: 15, year: 2018, hasReview: false, reviewText: "", reviewPublic: false, userRating: 3 },
+    ]
+  },
+  {
+    id: "f3", name: "Alex", initials: "AL", online: false,
+    games: [
+      { id: 1021, title: "Cyberpunk 2077", platform: "steam", genre: "RPG", cover: C.cyberpunk, status: "completed", playtime: 90, year: 2020, hasReview: true, reviewText: "Apres les correctifs 2.0 et Phantom Liberty, c'est une masterpiece.", reviewPublic: true, userRating: 5 },
+      { id: 1022, title: "DOOM Eternal", platform: "steam", genre: "FPS", cover: C.doomEternal, status: "completed", playtime: 40, year: 2020, hasReview: false, reviewText: "", reviewPublic: false, userRating: 5 },
+      { id: 1023, title: "Halo Infinite", platform: "xbox", genre: "FPS", cover: C.haloInfinite, status: "dropped", playtime: 15, year: 2021, hasReview: true, reviewText: "Multiplayer sympa mais la campagne est decevante.", reviewPublic: false, userRating: 3 },
+      { id: 1024, title: "Metro Exodus", platform: "xbox", genre: "FPS", cover: C.metroExodus, status: "playing", playtime: 30, year: 2019, hasReview: false, reviewText: "", reviewPublic: false, userRating: 4 },
+      { id: 1025, title: "Resident Evil 4", platform: "steam", genre: "Survival Horror", cover: C.residentEvil4, status: "playing", playtime: 20, year: 2023, hasReview: false, reviewText: "", reviewPublic: false, userRating: 5 },
+    ]
+  },
+  {
+    id: "f4", name: "Sophie", initials: "SO", online: true,
+    games: [
+      { id: 1031, title: "Elden Ring", platform: "ps5", genre: "Action RPG", cover: C.eldenRing, status: "completed", playtime: 200, year: 2022, hasReview: true, reviewText: "Le jeu d'une vie, 100% accompli. FromSoftware au sommet de son art.", reviewPublic: true, userRating: 5 },
+      { id: 1032, title: "Red Dead Redemption 2", platform: "epic", genre: "Open World", cover: C.rdr2, status: "completed", playtime: 160, year: 2018, hasReview: true, reviewText: "L'histoire la plus immersive jamais ecrite dans un jeu video.", reviewPublic: true, userRating: 5 },
+      { id: 1033, title: "The Witcher 3", platform: "steam", genre: "RPG", cover: C.witcher3, status: "completed", playtime: 130, year: 2015, hasReview: false, reviewText: "", reviewPublic: false, userRating: 5 },
+      { id: 1034, title: "Dark Souls III", platform: "steam", genre: "Action RPG", cover: C.darkSouls3, status: "backlog", playtime: 0, year: 2016, hasReview: false, reviewText: "", reviewPublic: false, userRating: 0 },
+      { id: 1035, title: "Ghost of Tsushima", platform: "ps5", genre: "Action-Aventure", cover: C.ghostTsushima, status: "playing", playtime: 45, year: 2020, hasReview: false, reviewText: "", reviewPublic: false, userRating: 4 },
+    ]
+  },
+];
+
+// ── Helper components ──────────────────────────────────────────────────────────
+function PlatformLogo({ platform, size = 24 }) {
+  const url = PLATFORM_LOGO_URLS[platform];
+  if (!url) return null;
+  return h('img', { src: url, alt: platform, width: size, height: size, style: { objectFit: "contain", display: "inline-block" } });
+}
+
+function PlatformBadge({ platform }) {
+  const cfg = PLATFORM_CONFIG[platform];
+  return h('span', { className: "inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded font-mono tracking-widest uppercase leading-none", style: { background: cfg.color + "cc", color: cfg.text, border: `1px solid ${cfg.color}` } }, h(PlatformLogo, { platform, size: 10 }), cfg.label);
+}
+
+function StarRating({ rating, size = 14, interactive = false, onChange }) {
+  return h('div', { className: "flex gap-0.5" }, ...[1,2,3,4,5].map(i =>
+    h('button', { key: i, onClick: () => interactive && onChange?.(i), className: interactive ? "cursor-pointer hover:scale-125 transition-transform" : "cursor-default pointer-events-none" },
+      h(Star, { size, fill: i <= rating ? "#f59e0b" : "transparent", stroke: i <= rating ? "#f59e0b" : "#3a3a55", strokeWidth: 1.5 })
+    )
+  ));
+}
+
+function GameCard({ game, onClick, onWishlist, wishlist, onCrown, topThree }) {
+  const status = STATUS_CONFIG[game.status];
+  const inWishlist = wishlist?.some(g => g.id === game.id);
+  const inTopThree = topThree?.some(g => g.id === game.id);
+  return h('div', { onClick, className: "game-card relative rounded-2xl overflow-hidden", style: { aspectRatio: "3/4", background: "#1a1a2e" } },
+    h('img', { src: game.cover, alt: game.title, className: "absolute inset-0 w-full h-full object-cover", loading: "lazy" }),
+    h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent" }),
+    game.status !== "not_started" && h('div', { className: "absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full", style: { background: status.color, boxShadow: `0 0 8px ${status.color}80` } }),
+    game.hasReview && h('div', { className: "absolute top-2.5 left-2.5 w-5 h-5 rounded-full flex items-center justify-center", style: { background: GRAD } }, h(Edit3, { size: 10, className: "text-white" })),
+    onWishlist && h('button', { onClick: e => { e.stopPropagation(); onWishlist(game); }, className: "absolute top-9 left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: inWishlist ? "rgba(239,68,68,0.9)" : "rgba(0,0,0,0.5)" } }, h(Heart, { size: 11, fill: inWishlist ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
+    onCrown && h('button', { onClick: e => { e.stopPropagation(); onCrown(game); }, className: "absolute top-[60px] left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: inTopThree ? "rgba(245,158,11,0.9)" : "rgba(0,0,0,0.5)" } }, h(Crown, { size: 11, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
+    h('div', { className: "absolute bottom-0 left-0 right-0 p-2.5" },
+      h(PlatformBadge, { platform: game.platform }),
+      h('p', { className: "text-white text-xs font-bold leading-tight mt-1.5 line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
+      h('div', { className: "mt-1.5" }, h(StarRating, { rating: game.userRating, size: 9 }))
+    )
+  );
+}
+
+// ── Views ──────────────────────────────────────────────────────────────────────
+function LibraryView({ games, onSelect, notifications, onMarkAsRead }) {
+  const [search, setSearch] = useState("");
+  const [activePlatform, setActivePlatform] = useState("all");
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showSync, setShowSync] = useState(false);
+  const [syncing, setSyncing] = useState(null);
+  const [connected, setConnected] = useState({ ps5: true, steam: true, epic: true, nintendo: false, xbox: false });
+  const filtered = useMemo(() => games.filter(g => (activePlatform === "all" || g.platform === activePlatform) && g.title.toLowerCase().includes(search.toLowerCase())), [games, activePlatform, search]);
+  const totalHours = games.reduce((s, g) => s + g.playtime, 0);
+  const platforms = ["all", "ps5", "steam", "epic", "nintendo", "xbox"];
+  const unreadCount = notifications.filter(n => !n.read).length;
+  const connectedCount = Object.values(connected).filter(Boolean).length;
+
+  return h('div', { className: "flex flex-col h-full view-enter" },
+    h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
+      h('div', { className: "flex items-center gap-2.5 mb-3" },
+        h('img', { src: "src/imports/logo_hackaton.png", alt: "PlayPad", className: "w-9 h-9 object-contain" }),
+        h('div', null,
+          h('h1', { className: "text-xl font-black text-foreground leading-none", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Ma Biblioth\u00e8que"),
+          h('p', { className: "text-xs text-muted-foreground mt-0.5" }, h('span', { className: "font-bold", style: { color: P1 } }, games.length), " jeux \u00b7 ", h('span', { className: "font-bold", style: { color: P2 } }, `${totalHours}h`), " jou\u00e9es")
+        ),
+        h('div', { className: "ml-auto flex items-center gap-2" },
+          h('button', { onClick: () => setShowSync(!showSync), className: "relative w-8 h-8 rounded-full flex items-center justify-center", style: { background: showSync ? `${P1}25` : `${P1}15` } },
+            h(RefreshCw, { size: 14, style: { color: P1 } })
+          ),
+          h('div', { className: "relative" },
+            h('button', { onClick: () => setShowNotifications(!showNotifications), className: "relative w-8 h-8 rounded-full flex items-center justify-center", style: { background: `${P1}15` } },
+              h(Bell, { size: 16, style: { color: P1 } }),
+              unreadCount > 0 && h('span', { className: "absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black text-white", style: { background: "#ef4444", boxShadow: "0 0 8px rgba(239,68,68,0.6)" } }, unreadCount)
+            ),
+            showNotifications && h('div', { className: "absolute right-0 top-10 w-72 bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-50", style: { maxHeight: 320 } },
+              h('div', { className: "px-3 py-2.5 border-b border-border flex items-center justify-between" },
+                h('p', { className: "text-xs font-bold text-foreground" }, "Notifications"),
+                h('button', { onClick: () => setShowNotifications(false) }, h(X, { size: 12, className: "text-muted-foreground" }))
+              ),
+              h('div', { className: "overflow-y-auto", style: { maxHeight: 260 } },
+                notifications.length === 0
+                  ? h('div', { className: "p-4 text-center text-xs text-muted-foreground" }, "Aucune notification")
+                  : notifications.map(n => h('button', { key: n.id, onClick: () => { onMarkAsRead?.(n.id, n.friendId); }, className: "w-full text-left px-3 py-2.5 border-b border-border/50 hover:bg-secondary/30 transition-colors", style: { background: n.read ? "transparent" : `${P1}08` } },
+                      h('div', { className: "flex items-start gap-2.5" },
+                        !n.read && h('div', { className: "w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5", style: { background: P1, boxShadow: `0 0 6px ${P1}80` } }),
+                        h('div', { className: "flex-1" },
+                          h('p', { className: "text-xs text-foreground leading-relaxed", style: { fontWeight: n.read ? 400 : 500 } }, n.text),
+                          h('p', { className: "text-[9px] text-muted-foreground mt-0.5" }, "\u00e0 l'instant")
+                        )
+                      )
+                    ))
+              )
+            )
+          )
+        )
+      ),
+      h('div', { className: "relative mb-3" },
+        h(Search, { size: 13, className: "absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" }),
+        h('input', { value: search, onChange: e => setSearch(e.target.value), placeholder: "Rechercher un jeu\u2026", className: "w-full bg-secondary/60 border border-border rounded-xl pl-8 pr-4 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none" })
+      ),
+      h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
+        platforms.map(p => { const a = activePlatform === p; const c = p === "all" ? games.length : games.filter(g => g.platform === p).length; return h('button', { key: p, onClick: () => setActivePlatform(p), className: "pill-btn flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold", style: a ? { background: GRAD, color: "#fff", boxShadow: "0 4px 14px rgba(139,92,246,0.35)" } : { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, p !== "all" && h(PlatformLogo, { platform: p, size: 13 }), h('span', null, p === "all" ? "Tous" : PLATFORM_CONFIG[p].label), h('span', { style: { opacity: 0.6, fontSize: 10 } }, c)); })
+      ),
+      showSync && h('div', { className: "rounded-2xl p-3.5 mb-3 mt-1", style: { background: `${P1}08`, border: `1px solid ${P1}20` } },
+        h('div', { className: "flex items-center justify-between mb-2" },
+          h('div', { className: "flex items-center gap-2" }, h(Zap, { size: 12, style: { color: P1 } }), h('span', { className: "text-xs font-bold", style: { color: "#c4b5fd" } }, `${connectedCount} plateforme(s) connect\u00e9e(s)`)),
+          h('button', { onClick: () => {}, className: "sync-btn px-3 py-1 text-white text-[10px] font-bold rounded-lg flex items-center gap-1.5", style: { background: GRAD } }, h(RefreshCw, { size: 10 }), "Tout sync")
+        ),
+        h('div', { className: "space-y-1.5" },
+          PLATFORM_SYNC_DATA.map(({ platform, gameCount, lastSync }) => {
+            const cfg = PLATFORM_CONFIG[platform];
+            const isConnected = connected[platform];
+            return h('div', { key: platform, className: "flex items-center gap-2.5 py-1.5" },
+              h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0", style: { background: cfg.color + "20" } }, h(PlatformLogo, { platform, size: 16 })),
+              h('div', { className: "flex-1 min-w-0" },
+                h('div', { className: "flex items-center gap-1.5" }, h('span', { className: "text-[11px] font-bold text-foreground" }, cfg.name), h('div', { className: "w-1 h-1 rounded-full", style: { background: isConnected ? "#4ade80" : "#ef444450", boxShadow: isConnected ? "0 0 4px #4ade8080" : "none" } })),
+                h('p', { className: "text-[9px] text-muted-foreground" }, isConnected ? `${gameCount} jeux \u00b7 ${lastSync}` : "Non connect\u00e9")
+              ),
+              h('div', { className: "flex-shrink-0" },
+                isConnected
+                  ? h('button', { onClick: () => { setSyncing(platform); setTimeout(() => setSyncing(null), 2000); }, className: "p-1.5 rounded-lg", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, className: syncing === platform ? "animate-spin" : "", style: { color: P1 } }))
+                  : h('button', { onClick: () => setConnected(p => ({ ...p, [platform]: true })), className: "px-2 py-0.5 text-[9px] font-bold rounded-md text-white", style: { background: GRAD } }, "+")
+              )
+            );
+          })
+        )
+      )
+    ),
+    h('div', { className: "flex-1 overflow-y-auto px-4 pb-4", style: { scrollbarWidth: "none" } },
+      filtered.length === 0
+        ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
+        : h('div', { className: "grid grid-cols-2 gap-3" }, filtered.map(game => h(GameCard, { key: game.id, game, onClick: () => onSelect(game) })))
+    )
+  );
+}
+
+function DiscoverView() {
+  const [syncing, setSyncing] = useState(null);
+  const [connected, setConnected] = useState({ ps5: true, steam: true, epic: true, nintendo: false, xbox: false });
+  const connectedCount = Object.values(connected).filter(Boolean).length;
+
+  return h('div', { className: "flex flex-col h-full overflow-y-auto view-enter", style: { scrollbarWidth: "none" } },
+    h('div', { className: "px-4 pt-3 pb-2" }, h('h1', { className: "text-xl font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Synchroniser"), h('p', { className: "text-xs text-muted-foreground mt-0.5" }, "Connecte tes plateformes pour importer tes jeux")),
+    h('div', { className: "mx-4 mb-4 rounded-2xl p-4", style: { background: `${P1}10`, border: `1px solid ${P1}28` } },
+      h('div', { className: "flex items-center gap-2 mb-1.5" }, h(Zap, { size: 13, style: { color: P1 } }), h('span', { className: "text-xs font-bold", style: { color: "#c4b5fd" } }, "Synchronisation automatique active")),
+      h('p', { className: "text-xs text-muted-foreground mb-3" }, `${connectedCount} plateforme(s) connect\u00e9e(s) \u00b7 Derni\u00e8re synchro il y a 15 min`),
+      h('button', { onClick: () => {}, className: "sync-btn w-full py-2.5 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2", style: { background: GRAD } }, h(RefreshCw, { size: 12 }), "Tout synchroniser")
+    ),
+    h('div', { className: "px-4 space-y-3 pb-6" },
+      PLATFORM_SYNC_DATA.map(({ platform, gameCount, lastSync }) => {
+        const cfg = PLATFORM_CONFIG[platform];
+        const isConnected = connected[platform];
+        return h('div', { key: platform, className: "rounded-2xl bg-card border border-border p-4 flex items-center gap-3" },
+          h('div', { className: "w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0", style: { background: cfg.color + "20", border: `1px solid ${cfg.color}35` } }, h(PlatformLogo, { platform, size: 28 })),
+          h('div', { className: "flex-1 min-w-0" },
+            h('div', { className: "flex items-center gap-2" }, h('span', { className: "text-sm font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, cfg.name), h('div', { className: "w-1.5 h-1.5 rounded-full", style: { background: isConnected ? "#4ade80" : "#ef444450", boxShadow: isConnected ? "0 0 6px #4ade8080" : "none" } })),
+            isConnected ? h('p', { className: "text-xs text-muted-foreground mt-0.5" }, `${gameCount} jeux \u00b7 Synchro ${lastSync}`) : h('p', { className: "text-xs mt-0.5", style: { color: "#8888aa55" } }, "Non connect\u00e9")
+          ),
+          h('div', { className: "flex flex-col gap-2 items-end flex-shrink-0" },
+            isConnected ? [h('button', { onClick: () => { setSyncing(platform); setTimeout(() => setSyncing(null), 2000); }, className: "p-2 rounded-xl", style: { background: `${P1}18` } }, h(RefreshCw, { size: 12, className: syncing === platform ? "animate-spin" : "", style: { color: P1 } })), h('button', { onClick: () => setConnected(p => ({ ...p, [platform]: false })), className: "text-[10px] font-medium", style: { color: "#ef444455" } }, "D\u00e9connecter")]
+              : h('button', { onClick: () => setConnected(p => ({ ...p, [platform]: true })), className: "px-3 py-1.5 text-xs font-bold rounded-xl text-white hover:opacity-90", style: { background: GRAD } }, "Connecter")
+          )
+        );
+      })
+    )
+  );
+}
+
+function ReviewsView({ games, onSelect }) {
+  const reviewed = games.filter(g => g.hasReview);
+  const publicCount = reviewed.filter(g => g.reviewPublic).length;
+  return h('div', { className: "flex flex-col h-full view-enter" },
+    h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
+      h('h1', { className: "text-xl font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Mes Critiques"),
+      h('p', { className: "text-xs text-muted-foreground mt-0.5" }, h('span', { className: "font-bold", style: { color: P1 } }, reviewed.length), " r\u00e9dig\u00e9es \u00b7 ", h('span', { className: "font-bold text-green-400" }, publicCount), " publiques")
+    ),
+    h('div', { className: "flex-1 overflow-y-auto px-4 pb-6 space-y-3", style: { scrollbarWidth: "none" } },
+      reviewed.length === 0
+        ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Edit3, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucune critique r\u00e9dig\u00e9e"))
+        : reviewed.map(game => h('div', { key: game.id, onClick: () => onSelect(game), className: "review-card bg-card border border-border rounded-2xl overflow-hidden" },
+            h('div', { className: "flex gap-3 p-3" },
+              h('div', { className: "relative w-14 h-20 rounded-xl overflow-hidden flex-shrink-0" }, h('img', { src: game.cover, alt: game.title, className: "w-full h-full object-cover" })),
+              h('div', { className: "flex-1 min-w-0 py-0.5" },
+                h('div', { className: "flex items-center gap-2 mb-1.5 flex-wrap" },
+                  h(PlatformBadge, { platform: game.platform }),
+                  h('div', { className: "flex items-center gap-1" }, game.reviewPublic ? h(Globe, { size: 10, className: "text-green-400" }) : h(Lock, { size: 10, className: "text-amber-400" }), h('span', { className: `text-[10px] font-bold ${game.reviewPublic ? "text-green-400" : "text-amber-400"}` }, game.reviewPublic ? "Public" : "Priv\u00e9"))
+                ),
+                h('p', { className: "text-sm font-bold text-foreground leading-tight truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
+                h(StarRating, { rating: game.userRating, size: 11 }),
+                h('p', { className: "text-xs text-muted-foreground mt-1.5 leading-relaxed line-clamp-2" }, game.reviewText)
+              )
+            )
+          ))
+    )
+  );
+}
+
+function ProfileView({ games, wishlist, onWishlist, onSelect, topThree, onToggleTopThree, onLogout }) {
+  const completed  = games.filter(g => g.status === "completed").length;
+  const playing    = games.filter(g => g.status === "playing").length;
+  const backlog    = games.filter(g => g.status === "backlog").length;
+  const dropped    = games.filter(g => g.status === "dropped").length;
+  const totalHours = games.reduce((s, g) => s + g.playtime, 0);
+  const reviewed   = games.filter(g => g.hasReview).length;
+  const rated      = games.filter(g => g.userRating > 0);
+  const avgRating  = rated.length ? rated.reduce((s, g) => s + g.userRating, 0) / rated.length : 0;
+  const ratingDist = [5,4,3,2,1].map(r => ({ score: r, count: games.filter(g => g.userRating === r).length }));
+  const maxCount   = Math.max(...ratingDist.map(r => r.count), 1);
+
+  return h('div', { className: "flex flex-col h-full overflow-y-auto view-enter", style: { scrollbarWidth: "none" } },
+    h('div', { className: "px-4 pt-4 pb-4" },
+      h('div', { className: "flex items-center gap-4" },
+        h('div', { className: "w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black text-white flex-shrink-0", style: { background: GRAD, boxShadow: "0 8px 24px rgba(139,92,246,0.35)" } }, "AX"),
+        h('div', null,
+          h('h1', { className: "text-lg font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Lucas Auchard"),
+          h('p', { className: "text-xs text-muted-foreground" }, "@Squeezie \u00b7 Depuis 2026"),
+          h('div', { className: "flex items-center gap-1.5 mt-1" }, h(Star, { size: 11, fill: "#f59e0b", stroke: "#f59e0b" }), h('span', { className: "text-xs font-bold text-amber-400" }, avgRating.toFixed(1)), h('span', { className: "text-xs text-muted-foreground" }, "note moyenne"))
+        )
+      ),
+      h('div', { className: "flex items-center gap-2 mt-4 pt-3 border-t border-border" },
+        h('img', { src: "src/imports/logo_hackaton.png", alt: "PlayPad", className: "w-5 h-5 object-contain opacity-70" }),
+        h('span', { className: "text-xs font-black flex-1", style: { fontFamily: "'Rajdhani', sans-serif" } },
+          h('span', { style: { color: "#ffffff" } }, "PLAY"), h('span', { style: { background: GRAD, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" } }, "pad")),
+        onLogout && h('button', { onClick: onLogout, className: "text-[10px] font-medium flex items-center gap-1 hover:opacity-80 transition-opacity", style: { color: "#ef4444" } }, h(LogOut, { size: 12 }), "Quitter")
+      )
+    ),
+    h('div', { className: "px-4 mb-4" },
+      h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5" }, h(Crown, { size: 12, fill: "#f59e0b", stroke: "#f59e0b" }), "Top 3"),
+      h('div', { className: "grid grid-cols-3 gap-2" },
+        [0, 1, 2].map(idx => {
+          const game = topThree[idx];
+          return game
+            ? h(GameCard, { key: game.id, game, onClick: () => onSelect?.(game), onCrown: onToggleTopThree, topThree })
+            : h('div', { key: `empty-${idx}`, className: "game-card relative rounded-2xl overflow-hidden flex items-center justify-center", style: { aspectRatio: "3/4", background: "rgba(26,26,46,0.5)", border: "1px dashed rgba(139,92,246,0.3)" } },
+                h('div', { className: "flex flex-col items-center gap-1.5" },
+                  h(Crown, { size: 20, className: "opacity-20", style: { color: P1 } }),
+                  h('span', { className: "text-[9px] font-bold", style: { color: `${P1}60` } }, "Ajouter")
+                )
+              );
+        })
+      )
+    ),
+    h('div', { className: "px-4 grid grid-cols-2 gap-3 mb-4" },
+      [{ label: "Jeux totaux", value: games.length, color: P1, Icon: Gamepad2 },{ label: "Heures jou\u00e9es", value: `${totalHours}h`, color: P2, Icon: Clock },{ label: "Termin\u00e9s", value: completed, color: "#22c55e", Icon: Trophy },{ label: "Critiques", value: reviewed, color: "#f59e0b", Icon: Edit3 }].map(({ label, value, color, Icon }) =>
+        h('div', { key: label, className: "bg-card border border-border rounded-2xl p-3.5" }, h('div', { className: "flex items-center gap-1.5 mb-2" }, h(Icon, { size: 13, style: { color } }), h('span', { className: "text-xs font-medium text-muted-foreground" }, label)), h('span', { className: "text-2xl font-black", style: { fontFamily: "'Rajdhani', sans-serif", color } }, value))
+      )
+    ),
+    h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Statut des jeux"), h('div', { className: "bg-card border border-border rounded-2xl p-4 space-y-3" }, [["playing", playing], ["completed", completed], ["backlog", backlog], ["dropped", dropped]].map(([key, count]) => h('div', { key },
+      h('div', { className: "flex justify-between mb-1" }, h('span', { className: "text-xs text-muted-foreground" }, STATUS_CONFIG[key].label), h('span', { className: "text-xs font-bold text-foreground" }, count)),
+      h('div', { className: "h-1.5 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full", style: { width: `${(count / games.length) * 100}%`, background: STATUS_CONFIG[key].color } }))
+    )))),
+    h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Distribution des notes"), h('div', { className: "bg-card border border-border rounded-2xl p-4" }, ratingDist.map(({ score, count }) => h('div', { key: score, className: "flex items-center gap-2 mb-1.5 last:mb-0" }, h('div', { className: "flex gap-px w-14 flex-shrink-0" }, Array.from({ length: score }).map((_, i) => h(Star, { key: i, size: 9, fill: "#f59e0b", stroke: "#f59e0b" }))), h('div', { className: "flex-1 h-2 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full bg-amber-500", style: { width: `${(count / maxCount) * 100}%` } })), h('span', { className: "text-xs text-muted-foreground w-4 text-right font-mono" }, count))))),
+    h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Par plateforme"), h('div', { className: "bg-card border border-border rounded-2xl p-4 flex flex-wrap gap-4" }, ["ps5","steam","epic","nintendo","xbox"].map(p => h('div', { key: p, className: "flex items-center gap-2" }, h(PlatformLogo, { platform: p, size: 16 }), h('span', { className: "text-xs font-bold text-foreground" }, PLATFORM_CONFIG[p].label), h('span', { className: "text-xs font-black font-mono", style: { color: p === "steam" ? "#c2dbf0" : PLATFORM_CONFIG[p].color } }, games.filter(g => g.platform === p).length))))),
+    h('div', { className: "px-4 mb-6" },
+      h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5" }, h(Heart, { size: 11, fill: "#ef4444", stroke: "#ef4444", strokeWidth: 2 }), "Liste de souhaits (", wishlist.length, ")"),
+      wishlist.length === 0
+        ? h('div', { className: "bg-card border border-border rounded-2xl p-5 text-center" }, h(Heart, { size: 24, className: "mx-auto mb-2 opacity-20 text-muted-foreground" }), h('p', { className: "text-xs text-muted-foreground" }, "Aucun jeu dans ta liste"))
+        : h('div', { className: "grid grid-cols-2 gap-3" }, wishlist.map(game => h(GameCard, { key: game.id, game, onClick: () => onSelect?.(game), wishlist, onWishlist })))
+    )
+  );
+}
+
+function CatalogueView({ onSelect, wishlist, onWishlist }) {
+  const [search, setSearch] = useState("");
+  const [activePlatform, setActivePlatform] = useState("all");
+  const [activeGenre, setActiveGenre] = useState("all");
+  const genres = useMemo(() => ["all", ...new Set(CATALOGUE_GAMES.map(g => g.genre))], []);
+  const platforms = ["all", "ps5", "steam", "epic", "nintendo", "xbox"];
+  const filtered = useMemo(() => CATALOGUE_GAMES.filter(g =>
+    (activePlatform === "all" || g.platform === activePlatform) &&
+    (activeGenre === "all" || g.genre === activeGenre) &&
+    g.title.toLowerCase().includes(search.toLowerCase())
+  ), [activePlatform, activeGenre, search]);
+
+  return h('div', { className: "flex flex-col h-full view-enter" },
+    h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
+      h('div', { className: "flex items-center gap-2.5 mb-3" },
+        h('img', { src: "src/imports/logo_hackaton.png", alt: "PlayPad", className: "w-9 h-9 object-contain" }),
+        h('div', null,
+          h('h1', { className: "text-xl font-black text-foreground leading-none", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Catalogue Complet"),
+          h('p', { className: "text-xs text-muted-foreground mt-0.5" }, h('span', { className: "font-bold", style: { color: P1 } }, CATALOGUE_GAMES.length), " jeux disponibles")
+        )
+      ),
+      h('div', { className: "relative mb-3" }, h(Search, { size: 13, className: "absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" }), h('input', { value: search, onChange: e => setSearch(e.target.value), placeholder: "Chercher dans le catalogue\u2026", className: "w-full bg-secondary/60 border border-border rounded-xl pl-8 pr-4 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none" })),
+      h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } }, platforms.map(p => { const a = activePlatform === p; const c = p === "all" ? CATALOGUE_GAMES.length : CATALOGUE_GAMES.filter(g => g.platform === p).length; return h('button', { key: p, onClick: () => setActivePlatform(p), className: "pill-btn flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold", style: a ? { background: GRAD, color: "#fff", boxShadow: "0 4px 14px rgba(139,92,246,0.35)" } : { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, p !== "all" && h(PlatformLogo, { platform: p, size: 13 }), h('span', null, p === "all" ? "Tous" : PLATFORM_CONFIG[p].label), h('span', { style: { opacity: 0.6, fontSize: 10 } }, c)); })),
+      h('div', { className: "flex gap-2 overflow-x-auto pb-1 mt-2", style: { scrollbarWidth: "none" } }, genres.map(g => { const a = activeGenre === g; const c = g === "all" ? CATALOGUE_GAMES.length : CATALOGUE_GAMES.filter(gg => gg.genre === g).length; return h('button', { key: g, onClick: () => setActiveGenre(g), className: "pill-btn flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap", style: a ? { background: GRAD, color: "#fff", boxShadow: "0 4px 14px rgba(139,92,246,0.35)" } : { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, g === "all" ? "Tous" : g, h('span', { className: "ml-1", style: { opacity: 0.6, fontSize: 10 } }, c)); }))
+    ),
+    h('div', { className: "flex-1 overflow-y-auto px-4 pb-4", style: { scrollbarWidth: "none" } },
+      filtered.length === 0
+        ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
+        : h('div', { className: "grid grid-cols-2 gap-3" }, filtered.map(game => h(GameCard, { key: game.id, game, onClick: () => onSelect(game), wishlist, onWishlist })))
+    )
+  );
+}
+
+function CommunityView({ friends, onSelectFriend }) {
+  return h('div', { className: "flex flex-col h-full overflow-y-auto view-enter", style: { scrollbarWidth: "none" } },
+    h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
+      h('h1', { className: "text-xl font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Communaute"),
+      h('p', { className: "text-xs text-muted-foreground mt-0.5" }, h('span', { className: "font-bold", style: { color: P1 } }, friends.length), " amis connectes")
+    ),
+    h('div', { className: "px-4 pb-6 space-y-3" },
+      friends.map(friend => {
+        const completedCount = friend.games.filter(g => g.status === "completed").length;
+        return h('div', { key: friend.id, onClick: () => onSelectFriend?.(friend), className: "bg-card border border-border rounded-2xl p-4 flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" },
+          h('div', { className: "relative w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black text-white flex-shrink-0", style: { background: GRAD } },
+            friend.initials,
+            friend.online && h('div', { className: "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-card", style: { background: "#22c55e", boxShadow: "0 0 8px rgba(34,197,94,0.6)" } })
+          ),
+          h('div', { className: "flex-1 min-w-0" },
+            h('p', { className: "text-sm font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, friend.name),
+            h('p', { className: "text-[10px] text-muted-foreground mt-0.5" }, `${friend.games.length} jeux \u00b7 ${completedCount} termines`)
+          ),
+          h('div', { className: "flex items-center gap-1" },
+            h('div', { className: "w-2 h-2 rounded-full", style: { background: friend.online ? "#22c55e" : "#444466", boxShadow: friend.online ? "0 0 8px rgba(34,197,94,0.6)" : "none" } }),
+            h('span', { className: "text-[10px] font-medium", style: { color: friend.online ? "#22c55e" : "#444466" } }, friend.online ? "En ligne" : "Hors ligne")
+          )
+        );
+      })
+    )
+  );
+}
+
+function FriendProfileSheet({ friend, onClose }) {
+  const [selectedGame, setSelectedGame] = useState(null);
+  const completed = friend.games.filter(g => g.status === "completed").length;
+  const reviewed = friend.games.filter(g => g.hasReview).length;
+
+  if (selectedGame) {
+    const game = selectedGame;
+    const status = STATUS_CONFIG[game.status];
+    return h('div', { className: "absolute inset-0 z-50" },
+      h('div', { className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: () => setSelectedGame(null) }),
+      h('div', { className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-hidden flex flex-col", style: { maxHeight: "80%" } },
+        h('div', { className: "relative h-40 flex-shrink-0" },
+          h('img', { src: game.cover, alt: game.title, className: "w-full h-full object-cover" }),
+          h('div', { className: "absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent" }),
+          h('button', { onClick: () => setSelectedGame(null), className: "sheet-close-btn absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center", style: { background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(X, { size: 16, className: "text-white" })),
+          h('div', { className: "absolute bottom-0 left-0 right-0 px-4 pb-3" },
+            h('div', { className: "flex items-center gap-2 mb-1" }, h(PlatformBadge, { platform: game.platform }), h('span', { className: "text-xs px-2 py-0.5 rounded-md font-bold", style: { background: status.color + "28", color: status.color } }, status.label)),
+            h('h2', { className: "text-lg font-black text-white leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
+            h('p', { className: "text-xs mt-0.5", style: { color: "rgba(255,255,255,0.5)" } }, `${game.genre} \u00b7 ${game.year}`)
+          )
+        ),
+        h('div', { className: "overflow-y-auto flex-1 px-4 pt-4 pb-8", style: { scrollbarWidth: "none" } },
+          h('div', { className: "grid grid-cols-4 gap-1.5 mb-5" },
+            [{ icon: h(Clock, { size: 11, style: { color: P2 } }), val: `${game.playtime}h`, sub: "jouees" },{ icon: h(Trophy, { size: 11, className: "text-amber-400" }), val: String(game.year), sub: "sortie" },{ icon: h(Star, { size: 11, fill: "#f59e0b", stroke: "#f59e0b" }), val: game.userRating ? `${game.userRating}/5` : "\u2014", sub: "note" },{ icon: h(Edit3, { size: 11, className: "text-muted-foreground" }), val: game.hasReview ? "Oui" : "Non", sub: "critique" }].map(({ icon, val, sub }) => h('div', { key: sub, className: "bg-secondary/50 rounded-xl p-2 text-center" }, h('div', { className: "flex justify-center mb-0.5" }, icon), h('p', { className: "text-xs font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, val), h('p', { className: "text-[9px] text-muted-foreground" }, sub)))
+          ),
+          game.hasReview && game.reviewText && h('div', { className: "border-t border-border pt-4" },
+            h('h3', { className: "text-sm font-black text-foreground mb-3", style: { fontFamily: "'Rajdhani', sans-serif" } }, `Critique de ${friend.name}`),
+            h('div', { className: "bg-secondary/40 rounded-xl p-3.5" },
+              h(StarRating, { rating: game.userRating, size: 14 }),
+              h('p', { className: "text-xs text-foreground/80 leading-relaxed mt-2" }, game.reviewText),
+              h('div', { className: "flex items-center gap-1.5 mt-2" }, h(Globe, { size: 10, className: "text-green-400" }), h('span', { className: "text-[10px] font-bold text-green-400" }, "Critique publique"))
+            )
+          ),
+          !game.hasReview && h('div', { className: "border-t border-border pt-4 text-center py-8" },
+            h(Edit3, { size: 24, className: "text-muted-foreground/20 mx-auto mb-2" }),
+            h('p', { className: "text-xs text-muted-foreground" }, `${friend.name} n'a pas redige de critique`)
+          ),
+          h('button', { onClick: () => setSelectedGame(null), className: "w-full mt-4 py-2.5 bg-secondary/60 text-foreground text-sm font-bold rounded-xl" }, "Retour aux jeux")
+        )
+      )
+    );
+  }
+
+  return h('div', { className: "absolute inset-0 z-50" },
+    h('div', { className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
+    h('div', { className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-hidden flex flex-col", style: { maxHeight: "88%" } },
+      h('div', { className: "h-36 flex-shrink-0 flex items-center justify-center", style: { background: GRAD } },
+        h('button', { onClick: onClose, className: "sheet-close-btn absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center", style: { background: "rgba(0,0,0,0.3)", backdropFilter: "blur(8px)" } }, h(X, { size: 16, className: "text-white" })),
+        h('div', { className: "flex flex-col items-center gap-2" },
+          h('div', { className: "w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black text-white", style: { background: "rgba(255,255,255,0.15)" } }, friend.initials),
+          h('h2', { className: "text-xl font-black text-white", style: { fontFamily: "'Rajdhani', sans-serif" } }, friend.name),
+          h('div', { className: "flex items-center gap-1.5" }, h('div', { className: "w-1.5 h-1.5 rounded-full", style: { background: friend.online ? "#22c55e" : "#444466" } }), h('span', { className: "text-xs font-medium", style: { color: "rgba(255,255,255,0.7)" } }, friend.online ? "En ligne" : "Hors ligne"))
+        )
+      ),
+      h('div', { className: "px-4 pt-4" },
+        h('div', { className: "grid grid-cols-3 gap-3 mb-4" },
+          [{ val: friend.games.length, sub: "Jeux", color: P1 },{ val: completed, sub: "Termines", color: "#22c55e" },{ val: reviewed, sub: "Critiques", color: "#f59e0b" }].map(({ val, sub, color }) =>
+            h('div', { key: sub, className: "bg-secondary/50 rounded-xl p-3 text-center" }, h('p', { className: "text-lg font-black", style: { fontFamily: "'Rajdhani', sans-serif", color } }, val), h('p', { className: "text-[10px] text-muted-foreground" }, sub))
+          )
+        )
+      ),
+      h('div', { className: "flex-1 overflow-y-auto px-4 pb-6", style: { scrollbarWidth: "none" } },
+        h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Bibliotheque jeux"),
+        h('div', { className: "grid grid-cols-2 gap-3" }, friend.games.map(game =>
+          h(GameCard, { key: game.id, game, onClick: () => setSelectedGame(game) })
+        ))
+      )
+    )
+  );
+}
+
+function GameDetailSheet({ game, onClose, onSave, wishlist, onWishlist, topThree, onToggleTopThree }) {
+  const [editing, setEditing] = useState(false);
+  const [draftRating, setDraftRating] = useState(game.userRating);
+  const [draftReview, setDraftReview] = useState(game.reviewText);
+  const [draftPublic, setDraftPublic] = useState(game.reviewPublic);
+  const status = STATUS_CONFIG[game.status];
+  const inWishlist = wishlist?.some(g => g.id === game.id);
+  const inTopThree = topThree?.some(g => g.id === game.id);
+  const globalRating = GLOBAL_RATINGS[game.id] || null;
+  const gameReviews = useMemo(() => {
+    const reviews = COMMUNITY_REVIEWS;
+    const start = (game.id * 3) % reviews.length;
+    const picked = [];
+    for (let i = 0; i < 4; i++) {
+      picked.push(reviews[(start + i) % reviews.length]);
+    }
+    const hasPositive = picked.some(r => r.positive);
+    const hasNegative = picked.some(r => !r.positive);
+    if (!hasPositive || !hasNegative) {
+      const idx = reviews.findIndex(r => hasPositive ? !r.positive : r.positive);
+      if (idx >= 0) picked[picked.length - 1] = reviews[idx];
+    }
+    return picked;
+  }, [game.id]);
+  const handleSave = () => { onSave(game.id, draftRating, draftReview, draftPublic); setEditing(false); };
+  return h('div', { className: "absolute inset-0 z-50" },
+    h('div', { className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
+    h('div', { className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-hidden flex flex-col", style: { maxHeight: "88%" } },
+      h('div', { className: "relative h-44 flex-shrink-0" },
+        h('img', { src: game.cover, alt: game.title, className: "w-full h-full object-cover" }),
+        h('div', { className: "absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent" }),
+        h('button', { onClick: onClose, className: "sheet-close-btn absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center", style: { background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(X, { size: 16, className: "text-white" })),
+        h('button', { onClick: () => onWishlist?.(game), className: "absolute top-4 left-4 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110", style: { background: inWishlist ? "rgba(239,68,68,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Heart, { size: 14, fill: inWishlist ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
+        h('button', { onClick: () => onToggleTopThree?.(game), className: "absolute top-4 left-14 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110", style: { background: inTopThree ? "rgba(245,158,11,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Crown, { size: 14, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
+        h('div', { className: "absolute bottom-0 left-0 right-0 px-4 pb-3" },
+          h('div', { className: "flex items-center gap-2 mb-1" }, h(PlatformBadge, { platform: game.platform }), h('span', { className: "text-xs px-2 py-0.5 rounded-md font-bold", style: { background: status.color + "28", color: status.color } }, status.label)),
+          h('h2', { className: "text-lg font-black text-white leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
+          h('p', { className: "text-xs mt-0.5", style: { color: "rgba(255,255,255,0.5)" } }, `${game.genre} \u00b7 ${game.year}`)
+        )
+      ),
+      h('div', { className: "overflow-y-auto flex-1", style: { scrollbarWidth: "none" } },
+        h('div', { className: "px-4 pt-4 pb-8" },
+          h('div', { className: "grid grid-cols-4 gap-1.5 mb-5" },
+            [{ icon: h(Clock, { size: 11, style: { color: P2 } }), val: `${game.playtime}h`, sub: "jou\u00e9es" },{ icon: h(Trophy, { size: 11, className: "text-amber-400" }), val: String(game.year), sub: "sortie" },{ icon: h(Star, { size: 11, fill: "#f59e0b", stroke: "#f59e0b" }), val: game.userRating ? `${game.userRating}/5` : "\u2014", sub: "ta note" },{ icon: h(Star, { size: 11, fill: globalRating ? "#8B5CF6" : "none", stroke: "#8B5CF6" }), val: globalRating ? globalRating.toFixed(1) : "\u2014", sub: "globale" }].map(({ icon, val, sub }) => h('div', { key: sub, className: "bg-secondary/50 rounded-xl p-2 text-center" }, h('div', { className: "flex justify-center mb-0.5" }, icon), h('p', { className: "text-xs font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, val), h('p', { className: "text-[9px] text-muted-foreground" }, sub)))
+          ),
+          h('div', { className: "border-t border-border pt-4" },
+            h('div', { className: "flex items-center justify-between mb-4" }, h('h3', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Ma Critique"), !editing && h('button', { onClick: () => setEditing(true), className: "flex items-center gap-1.5 text-xs font-bold hover:opacity-80", style: { color: P1 } }, h(Edit3, { size: 12 }), game.hasReview ? "Modifier" : "R\u00e9diger")),
+            editing
+              ? h('div', { className: "space-y-4" },
+                  h('div', null, h('p', { className: "text-xs text-muted-foreground mb-2.5" }, "Note"), h(StarRating, { rating: draftRating, size: 26, interactive: true, onChange: setDraftRating })),
+                  h('div', null, h('p', { className: "text-xs text-muted-foreground mb-2" }, "Critique"), h('textarea', { value: draftReview, onChange: e => setDraftReview(e.target.value), placeholder: "\u00c9cris ta critique ici\u2026", rows: 4, className: "w-full bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none resize-none" })),
+                  h('button', { onClick: () => setDraftPublic(!draftPublic), className: "w-full flex items-center justify-between bg-secondary/50 rounded-xl p-3.5" },
+                    h('div', { className: "flex items-center gap-2.5" }, draftPublic ? h(Globe, { size: 14, className: "text-green-400" }) : h(Lock, { size: 14, className: "text-amber-400" }), h('div', { className: "text-left" }, h('p', { className: "text-xs font-bold text-foreground" }, draftPublic ? "Critique publique" : "Critique priv\u00e9e"), h('p', { className: "text-[10px] text-muted-foreground" }, draftPublic ? "Visible par tous" : "Visible par toi seul"))),
+                    h('div', { className: "w-11 h-6 rounded-full relative", style: { background: draftPublic ? P1 : "#1e1e30" } }, h('div', { className: "absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all", style: { left: draftPublic ? "calc(100% - 22px)" : "2px" } }))
+                  ),
+                  h('div', { className: "flex gap-3" }, h('button', { onClick: () => setEditing(false), className: "flex-1 py-2.5 bg-secondary/60 text-foreground text-sm font-bold rounded-xl" }, "Annuler"), h('button', { onClick: handleSave, className: "flex-1 py-2.5 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2", style: { background: GRAD } }, h(Check, { size: 14 }), "Sauvegarder"))
+                )
+              : game.hasReview
+                ? h('div', { className: "space-y-3" }, h(StarRating, { rating: game.userRating, size: 18 }), h('div', { className: "bg-secondary/40 rounded-xl p-3.5" }, h('p', { className: "text-xs text-foreground/80 leading-relaxed" }, game.reviewText)), h('div', { className: "flex items-center gap-2" }, game.reviewPublic ? h(Globe, { size: 12, className: "text-green-400" }) : h(Lock, { size: 12, className: "text-amber-400" }), h('span', { className: `text-xs font-bold ${game.reviewPublic ? "text-green-400" : "text-amber-400"}` }, game.reviewPublic ? "Critique publique" : "Critique priv\u00e9e")))
+                : h('div', { className: "py-8 text-center" }, h(Edit3, { size: 28, className: "text-muted-foreground/20 mx-auto mb-2.5" }), h('p', { className: "text-xs text-muted-foreground" }, "Aucune critique r\u00e9dig\u00e9e"), h('p', { className: "text-xs mt-1", style: { color: "rgba(136,136,170,0.45)" } }, "Appuie sur \"R\u00e9diger\" pour partager ton avis"))
+          ),
+          h('div', { className: "border-t border-border pt-4 mt-4" },
+            h('h3', { className: "text-sm font-black text-foreground mb-3", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Avis de la communaut\u00e9"),
+            h('div', { className: "space-y-2.5" }, gameReviews.map(r => h('div', { key: r.id, className: `rounded-xl p-3`, style: { background: r.positive ? "rgba(34,197,94,0.06)" : "rgba(239,68,68,0.06)", border: `1px solid ${r.positive ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)"}` } },
+              h('div', { className: "flex items-center justify-between mb-1.5" },
+                h('div', { className: "flex items-center gap-1.5" }, h('div', { className: "w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-black text-white", style: { background: r.positive ? "#22c55e" : "#ef4444" } }, r.author[0]), h('span', { className: "text-[10px] font-bold text-foreground" }, r.author)),
+                h(StarRating, { rating: r.rating, size: 8 })
+              ),
+              h('p', { className: "text-[10px] text-muted-foreground leading-relaxed" }, r.text),
+              h('div', { className: "flex items-center gap-1 mt-1.5" }, h('span', { className: `text-[8px] font-bold ${r.positive ? "text-green-400" : "text-red-400"}` }, r.positive ? "Recommand\u00e9" : "D\u00e9conseill\u00e9"))
+            )))
+          )
+        )
+      )
+    )
+  );
+}
+
+function BottomNav({ view, setView }) {
+  const items = [
+    { id: "library",   label: "Biblio",     Icon: Gamepad2 },
+    { id: "community", label: "Communaute", Icon: Users },
+    { id: "reviews",   label: "Critiques",  Icon: Edit3 },
+    { id: "catalogue", label: "Catalogue",  Icon: Briefcase },
+    { id: "profile",   label: "Profil",     Icon: User },
+  ];
+  return h('div', { className: "absolute bottom-0 left-0 right-0 h-20 flex items-start justify-around px-2 pt-3 pb-5 border-t border-border", style: { background: "rgba(15,15,28,0.96)", backdropFilter: "blur(20px)" } },
+    items.map(({ id, label, Icon }) => h('button', { key: id, onClick: () => setView(id), className: "nav-btn flex flex-col items-center gap-1 transition-all", style: { color: view === id ? P1 : "#8888aa" } },
+      h('div', { className: "p-1.5 rounded-xl", style: { background: view === id ? `${P1}20` : "transparent" } }, h(Icon, { size: 20 })),
+      h('span', { className: "text-[9px] font-bold tracking-wide uppercase", style: { fontFamily: "'JetBrains Mono', monospace" } }, label)
+    ))
+  );
+}
+
+// ── App ────────────────────────────────────────────────────────────────────────
+function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [view, setView] = useState("library");
+  const [selectedGame, setSelectedGame] = useState(null);
+  const [selectedFriend, setSelectedFriend] = useState(null);
+  const [games, setGames] = useState(INITIAL_GAMES);
+  const [wishlist, setWishlist] = useState([]);
+  const [notifications, setNotifications] = useState(NOTIFICATIONS);
+  const [topThree, setTopThree] = useState([]);
+  const toggleWishlist = (game) => {
+    setWishlist(prev => prev.some(g => g.id === game.id) ? prev.filter(g => g.id !== game.id) : [...prev, game]);
+  };
+  const handleSaveReview = (id, rating, review, isPublic) => {
+    const update = (g) => g.id === id ? { ...g, userRating: rating, reviewText: review, reviewPublic: isPublic, hasReview: review.trim().length > 0 } : g;
+    setGames(prev => prev.map(update));
+    setSelectedGame(prev => prev ? update(prev) : null);
+  };
+  const markAsRead = (id, friendId) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    if (friendId) {
+      const friend = FRIENDS.find(f => f.id === friendId);
+      if (friend) { setSelectedFriend(friend); setView("community"); }
+    }
+  };
+  const toggleTopThree = (game) => {
+    setTopThree(prev => {
+      if (prev.some(g => g.id === game.id)) return prev.filter(g => g.id !== game.id);
+      if (prev.length >= 3) return prev;
+      return [...prev, game];
+    });
+  };
+  const handleLogin = (username, password) => {
+    if (username === "lucasauchard" && password === "1234") {
+      setIsLoggedIn(true);
+      setLoginError("");
+    } else {
+      setLoginError("Identifiant ou mot de passe incorrect");
+    }
+  };
+
+  if (!isLoggedIn) {
+    return h('div', { className: "min-h-screen flex items-center justify-center", style: { background: "#030308" } },
+      h('div', { className: "fixed inset-0 pointer-events-none overflow-hidden" },
+        h('div', { className: "absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full blur-3xl", style: { background: `${P1}07` } }),
+        h('div', { className: "absolute bottom-1/4 right-1/3 w-64 h-64 rounded-full blur-3xl", style: { background: `${P2}07` } })
+      ),
+      h('div', { className: "relative overflow-hidden bg-background flex flex-col items-center justify-center p-8", style: { width: 390, height: 844, borderRadius: 50, border: "1px solid rgba(255,255,255,0.09)", boxShadow: "0 40px 80px -10px rgba(0,0,0,0.9)" } },
+        h('div', { className: "absolute top-3 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-full z-20" }),
+        h('img', { src: "src/imports/logo_hackaton.png", alt: "PlayPad", className: "w-14 h-14 object-contain mb-3" }),
+        h('h1', { className: "text-2xl font-black mb-1", style: { fontFamily: "'Rajdhani', sans-serif", color: "#fff" } },
+          h('span', null, "PLAY"), h('span', { style: { background: GRAD, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" } }, "pad")
+        ),
+        h('p', { className: "text-xs text-muted-foreground mb-8" }, "Connecte-toi pour acc\u00e9der \u00e0 ton catalogue"),
+        h('div', { className: "w-full space-y-3" },
+          h('div', null,
+            h('p', { className: "text-[10px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider" }, "Identifiant"),
+            h('input', { id: "login-user", placeholder: "Entrez votre identifiant", className: "w-full bg-secondary/60 border border-border rounded-xl px-3.5 py-3 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-purple-500 transition-colors" })
+          ),
+          h('div', null,
+            h('p', { className: "text-[10px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider" }, "Mot de passe"),
+            h('input', { id: "login-pass", type: "password", placeholder: "Entrez votre mot de passe", onKeyDown: e => { if (e.key === "Enter") { const u = document.getElementById("login-user").value; const p = document.getElementById("login-pass").value; handleLogin(u, p); } }, className: "w-full bg-secondary/60 border border-border rounded-xl px-3.5 py-3 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-purple-500 transition-colors" })
+          ),
+          loginError && h('p', { className: "text-[11px] text-red-400 font-medium text-center" }, loginError),
+          h('button', { onClick: () => { const u = document.getElementById("login-user").value; const p = document.getElementById("login-pass").value; handleLogin(u, p); }, className: "w-full py-3 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity", style: { background: GRAD, boxShadow: "0 8px 24px rgba(139,92,246,0.35)" } }, "Se connecter")
+        ),
+        h('p', { className: "text-[10px] text-muted-foreground/50 mt-8" }, "PlayPad \u00a9 2026")
+      )
+    );
+  }
+
+  return h('div', { className: "min-h-screen flex items-center justify-center", style: { background: "#030308" } },
+    h('div', { className: "fixed inset-0 pointer-events-none overflow-hidden" },
+      h('div', { className: "absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full blur-3xl", style: { background: `${P1}07` } }),
+      h('div', { className: "absolute bottom-1/4 right-1/3 w-64 h-64 rounded-full blur-3xl", style: { background: `${P2}07` } })
+    ),
+    h('div', { className: "relative overflow-hidden bg-background", style: { width: 390, height: 844, borderRadius: 50, border: "1px solid rgba(255,255,255,0.09)", boxShadow: "0 40px 80px -10px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.05)", fontFamily: "'DM Sans', sans-serif" } },
+      h('div', { className: "absolute top-3 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-full z-20" }),
+      h('div', { className: "relative z-10 flex justify-between items-center px-8 pt-3 pb-1 h-11" },
+        h('span', { className: "text-[11px] font-bold text-foreground/60", style: { fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: "tabular-nums" } }, "9:41"),
+        h('div', { className: "w-28" }),
+        h('div', { className: "flex items-center gap-1.5" },
+          h(Wifi, { size: 11, className: "text-foreground/60" }),
+          h('div', { className: "flex items-end gap-px h-3" }, [3,5,7,9].map((val, i) => h('div', { key: i, className: "w-1 rounded-sm", style: { height: val, background: "rgba(238,238,245,0.55)" } }))),
+          h('div', { className: "w-5 h-2.5 rounded-sm flex items-center p-px", style: { border: "1px solid rgba(238,238,245,0.45)" } }, h('div', { className: "w-4/5 h-full rounded-sm", style: { background: "rgba(238,238,245,0.65)" } }))
+        )
+      ),
+      h('div', { className: "absolute", style: { top: 44, bottom: 80, left: 0, right: 0, overflow: "hidden" } },
+        h('div', { className: "h-full" },
+          ({ library: h(LibraryView, { games, onSelect: setSelectedGame, notifications, onMarkAsRead: markAsRead }), community: h(CommunityView, { friends: FRIENDS, onSelectFriend: setSelectedFriend }), reviews: h(ReviewsView, { games, onSelect: setSelectedGame }), catalogue: h(CatalogueView, { onSelect: setSelectedGame, wishlist, onWishlist: toggleWishlist }), profile: h(ProfileView, { games, wishlist, onWishlist: toggleWishlist, onSelect: setSelectedGame, topThree, onToggleTopThree: toggleTopThree, onLogout: () => setIsLoggedIn(false) }) })[view]
+        )
+      ),
+      h(BottomNav, { view, setView }),
+      selectedGame && h(GameDetailSheet, { key: selectedGame.id, game: selectedGame, onClose: () => setSelectedGame(null), onSave: handleSaveReview, wishlist, onWishlist: toggleWishlist, topThree, onToggleTopThree: toggleTopThree }),
+      selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => setSelectedFriend(null) })
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+  </script>
+</body>
+</html>

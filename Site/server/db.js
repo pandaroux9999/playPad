@@ -1,163 +1,179 @@
-const Database = require('better-sqlite3');
-const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 
-const DB_PATH = path.join(__dirname, 'data', 'playpad.db');
-let db;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
 
-function getDb() {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initSchema();
-  }
-  return db;
+if (!supabaseUrl || !supabaseKey) {
+  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables');
+  process.exit(1);
 }
 
-function initSchema() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      display_name TEXT NOT NULL,
-      password TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-    CREATE TABLE IF NOT EXISTS games (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      game_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      platform TEXT DEFAULT '',
-      genre TEXT DEFAULT '',
-      cover TEXT DEFAULT '',
-      status TEXT DEFAULT 'not_started',
-      playtime INTEGER DEFAULT 0,
-      year INTEGER DEFAULT 0,
-      user_rating INTEGER DEFAULT 0,
-      review_text TEXT DEFAULT '',
-      review_public INTEGER DEFAULT 1,
-      has_review INTEGER DEFAULT 0,
-      UNIQUE(user_id, game_id),
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS wishlist (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      game_id TEXT NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS top_three (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      game_id TEXT NOT NULL,
-      position INTEGER NOT NULL CHECK(position IN (1,2,3)),
-      UNIQUE(user_id, position),
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-  `);
+function checkResult({ data, error }) {
+  if (error) throw new Error(error.message);
+  return data;
 }
 
-function createUser(username, displayName, hashedPassword) {
-  const stmt = getDb().prepare(
-    'INSERT INTO users (username, display_name, password) VALUES (?, ?, ?)'
-  );
-  const result = stmt.run(username, displayName, hashedPassword);
-  return result.lastInsertRowid;
+async function createUser(username, displayName, hashedPassword) {
+  const { data, error } = await supabase
+    .from('users')
+    .insert({ username, display_name: displayName, password: hashedPassword })
+    .select('id')
+    .single();
+  checkResult({ data, error });
+  return data.id;
 }
 
-function getUserByUsername(username) {
-  return getDb().prepare('SELECT * FROM users WHERE username = ?').get(username);
+async function getUserByUsername(username) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('username', username)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
 }
 
-function getUserById(id) {
-  return getDb().prepare('SELECT id, username, display_name, created_at FROM users WHERE id = ?').get(id);
+async function getUserById(id) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, username, display_name, created_at')
+    .eq('id', id)
+    .single();
+  checkResult({ data, error });
+  return data;
 }
 
-function getGames(userId) {
-  return getDb().prepare('SELECT * FROM games WHERE user_id = ?').all(userId);
+async function getGames(userId) {
+  const { data, error } = await supabase
+    .from('games')
+    .select('*')
+    .eq('user_id', userId);
+  checkResult({ data, error });
+  return data;
 }
 
-function upsertGame(userId, game) {
-  const stmt = getDb().prepare(`
-    INSERT INTO games (user_id, game_id, title, platform, genre, cover, status, playtime, year, user_rating, review_text, review_public, has_review)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(user_id, game_id) DO UPDATE SET
-      title = excluded.title,
-      platform = excluded.platform,
-      genre = excluded.genre,
-      cover = excluded.cover,
-      status = excluded.status,
-      playtime = excluded.playtime,
-      year = excluded.year,
-      user_rating = excluded.user_rating,
-      review_text = excluded.review_text,
-      review_public = excluded.review_public,
-      has_review = excluded.has_review
-  `);
-  stmt.run(
-    userId, game.game_id, game.title, game.platform, game.genre, game.cover,
-    game.status, game.playtime, game.year, game.user_rating || 0,
-    game.review_text || '', game.review_public ? 1 : 0,
-    game.has_review ? 1 : 0
-  );
+async function upsertGame(userId, game) {
+  const { error } = await supabase
+    .from('games')
+    .upsert({
+      user_id: userId,
+      game_id: game.game_id,
+      title: game.title,
+      platform: game.platform || '',
+      genre: game.genre || '',
+      cover: game.cover || '',
+      status: game.status || 'not_started',
+      playtime: game.playtime || 0,
+      year: game.year || 0,
+      user_rating: game.user_rating || 0,
+      review_text: game.review_text || '',
+      review_public: game.review_public !== false,
+      has_review: game.has_review ? true : false,
+    }, { onConflict: 'user_id, game_id' });
+  if (error) throw new Error(error.message);
 }
 
-function updateGameStatus(userId, gameId, status) {
-  getDb().prepare('UPDATE games SET status = ? WHERE user_id = ? AND game_id = ?').run(status, userId, gameId);
+async function updateGameStatus(userId, gameId, status) {
+  const { error } = await supabase
+    .from('games')
+    .update({ status })
+    .eq('user_id', userId)
+    .eq('game_id', gameId);
+  if (error) throw new Error(error.message);
 }
 
-function updateGameRating(userId, gameId, rating, reviewText, reviewPublic) {
-  const hasReview = reviewText && reviewText.trim().length > 0 ? 1 : 0;
-  getDb().prepare(
-    'UPDATE games SET user_rating = ?, review_text = ?, review_public = ?, has_review = ? WHERE user_id = ? AND game_id = ?'
-  ).run(rating, reviewText, reviewPublic ? 1 : 0, hasReview, userId, gameId);
+async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic) {
+  const hasReview = reviewText && reviewText.trim().length > 0;
+  const { error } = await supabase
+    .from('games')
+    .update({
+      user_rating: rating,
+      review_text: reviewText,
+      review_public: reviewPublic,
+      has_review: hasReview,
+    })
+    .eq('user_id', userId)
+    .eq('game_id', gameId);
+  if (error) throw new Error(error.message);
 }
 
-function getWishlist(userId) {
-  return getDb().prepare('SELECT game_id FROM wishlist WHERE user_id = ?').all(userId).map(r => r.game_id);
+async function getWishlist(userId) {
+  const { data, error } = await supabase
+    .from('wishlist')
+    .select('game_id')
+    .eq('user_id', userId);
+  checkResult({ data, error });
+  return data.map(r => r.game_id);
 }
 
-function toggleWishlist(userId, gameId) {
-  const existing = getDb().prepare('SELECT id FROM wishlist WHERE user_id = ? AND game_id = ?').get(userId, gameId);
+async function toggleWishlist(userId, gameId) {
+  const { data: existing } = await supabase
+    .from('wishlist')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('game_id', gameId)
+    .maybeSingle();
+
   if (existing) {
-    getDb().prepare('DELETE FROM wishlist WHERE id = ?').run(existing.id);
+    const { error } = await supabase
+      .from('wishlist')
+      .delete()
+      .eq('id', existing.id);
+    if (error) throw new Error(error.message);
     return false;
   } else {
-    getDb().prepare('INSERT INTO wishlist (user_id, game_id) VALUES (?, ?)').run(userId, gameId);
+    const { error } = await supabase
+      .from('wishlist')
+      .insert({ user_id: userId, game_id: gameId });
+    if (error) throw new Error(error.message);
     return true;
   }
 }
 
-function getTopThree(userId) {
-  return getDb().prepare(
-    'SELECT g.*, t.position FROM top_three t JOIN games g ON g.game_id = t.game_id AND g.user_id = t.user_id WHERE t.user_id = ? ORDER BY t.position'
-  ).all(userId);
+async function getTopThree(userId) {
+  const { data, error } = await supabase
+    .from('top_three')
+    .select(`
+      position,
+      games:game_id (*)
+    `)
+    .eq('user_id', userId)
+    .order('position');
+  checkResult({ data, error });
+  return data.map(t => ({ ...t.games, position: t.position }));
 }
 
-function setTopThree(userId, gameId, position) {
-  const existing = getDb().prepare('SELECT id FROM top_three WHERE user_id = ? AND game_id = ?').get(userId, gameId);
+async function setTopThree(userId, gameId, position) {
+  const { data: existing } = await supabase
+    .from('top_three')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('game_id', gameId)
+    .maybeSingle();
+
   if (existing) {
-    getDb().prepare('DELETE FROM top_three WHERE id = ?').run(existing.id);
+    await supabase.from('top_three').delete().eq('id', existing.id);
   }
+
   if (position !== null) {
-    getDb().prepare('DELETE FROM top_three WHERE user_id = ? AND position = ?').run(userId, position);
-    getDb().prepare('INSERT OR REPLACE INTO top_three (user_id, game_id, position) VALUES (?, ?, ?)').run(userId, gameId, position);
+    await supabase.from('top_three').delete().eq('user_id', userId).eq('position', position);
+    const { error } = await supabase
+      .from('top_three')
+      .insert({ user_id: userId, game_id: gameId, position });
+    if (error) throw new Error(error.message);
   }
 }
 
-function deleteUserAccount(userId) {
-  getDb().prepare('DELETE FROM top_three WHERE user_id = ?').run(userId);
-  getDb().prepare('DELETE FROM wishlist WHERE user_id = ?').run(userId);
-  getDb().prepare('DELETE FROM games WHERE user_id = ?').run(userId);
-  getDb().prepare('DELETE FROM users WHERE id = ?').run(userId);
+async function deleteUserAccount(userId) {
+  await supabase.from('top_three').delete().eq('user_id', userId);
+  await supabase.from('wishlist').delete().eq('user_id', userId);
+  await supabase.from('games').delete().eq('user_id', userId);
+  await supabase.from('users').delete().eq('id', userId);
 }
 
 module.exports = {
-  getDb,
   createUser,
   getUserByUsername,
   getUserById,

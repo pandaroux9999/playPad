@@ -4,11 +4,11 @@
   "description": "PlayPad - Game library manager",
   "scripts": {
     "start": "node Site/server/server.js",
-    "build": "cd Site/server && npm install"
+    "build": "npm install"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.0",
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.7.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "express-session": "^1.18.1"

@@ -31,6 +31,7 @@ function requireAuth(req, res, next) {
 app.post('/api/register', async (req, res) => {
   try {
     const { username, displayName, password } = req.body;
+    console.log('[Register] Request:', { username, displayName });
     if (!username || !displayName || !password) {
       return res.status(400).json({ error: 'Tous les champs sont requis' });
     }
@@ -39,38 +40,45 @@ app.post('/api/register', async (req, res) => {
     }
     const existing = await db.getUserByUsername(username);
     if (existing) {
+      console.log('[Register] Username taken:', username);
       return res.status(409).json({ error: 'Cet identifiant est déjà pris' });
     }
     const hashed = await bcrypt.hash(password, 10);
     const userId = await db.createUser(username, displayName, hashed);
     const user = await db.getUserById(userId);
     req.session.userId = userId;
+    console.log('[Register] Success:', username, 'id:', userId);
     res.json({ user });
   } catch (err) {
-    console.error('Register error:', err);
-    res.status(500).json({ error: 'Erreur serveur' });
+    console.error('[Register] Error:', err.message, err.stack);
+    res.status(500).json({ error: 'Erreur serveur: ' + err.message });
   }
 });
 
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
+    console.log('[Login] Request for username:', username);
     if (!username || !password) {
       return res.status(400).json({ error: 'Identifiant et mot de passe requis' });
     }
     const user = await db.getUserByUsername(username);
     if (!user) {
+      console.log('[Login] User not found:', username);
       return res.status(401).json({ error: 'Identifiant ou mot de passe incorrect' });
     }
+    console.log('[Login] User found, comparing password');
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
+      console.log('[Login] Wrong password for:', username);
       return res.status(401).json({ error: 'Identifiant ou mot de passe incorrect' });
     }
     req.session.userId = user.id;
+    console.log('[Login] Success:', username, 'id:', user.id);
     res.json({ user: { id: user.id, username: user.username, display_name: user.display_name, created_at: user.created_at } });
   } catch (err) {
-    console.error('Login error:', err);
-    res.status(500).json({ error: 'Erreur serveur' });
+    console.error('[Login] Error:', err.message, err.stack);
+    res.status(500).json({ error: 'Erreur serveur: ' + err.message });
   }
 });
 
@@ -143,4 +151,7 @@ app.delete('/api/account', requireAuth, async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`PlayPad server running on http://localhost:${PORT}`);
+  console.log('[Server] SUPABASE_URL:', process.env.SUPABASE_URL ? 'defined' : 'MISSING');
+  console.log('[Server] SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'defined' : 'MISSING');
+  console.log('[Server] SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'defined' : 'MISSING');
 });

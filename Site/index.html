@@ -51,8 +51,11 @@ const API = {
   async request(method, url, body) {
     const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
     if (body) opts.body = JSON.stringify(body);
+    console.log(`[API] ${method} ${url}`, body || '');
     const res = await fetch(url, opts);
+    console.log(`[API] Response ${res.status}`, res.statusText);
     const data = await res.json();
+    console.log(`[API] Data`, data);
     if (!res.ok) throw new Error(data.error || 'Erreur serveur');
     return data;
   },
@@ -489,8 +492,10 @@ function AuthPage({ onLoginSuccess }) {
         showToast("Compte cr\u00e9\u00e9 avec succ\u00e8s !");
       }
       const data = await API.login(username, password);
+      console.log('[Auth] Login success', data);
       onLoginSuccess(data.user);
     } catch (err) {
+      console.error('[Auth] Login/Register error:', err.message);
       setError(err.message);
     }
     setLoading(false);
@@ -552,16 +557,21 @@ function App() {
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
   useEffect(() => {
+    console.log('[App] Checking session...');
     API.me().then(data => {
+      console.log('[App] Session found:', data.user);
       setUser(data.user);
       return Promise.all([API.getGames(), API.getWishlist(), API.getTopThree()]);
     }).then(([gData, wData, tData]) => {
+      console.log('[App] Data loaded:', gData.games.length, 'games,', wData.wishlist.length, 'wishlist');
       setGames(gData.games);
       setWishlistIds(new Set(wData.wishlist));
       const t = tData.topThree || [];
       setTopThree(t);
       setTopThreeIds(new Set(t.map(g => g.game_id)));
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch((err) => {
+      console.log('[App] No session (expected if not logged in):', err?.message);
+    }).finally(() => setLoading(false));
   }, []);
 
   const loadData = async () => {

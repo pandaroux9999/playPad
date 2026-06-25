@@ -1,14 +1,21 @@
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables');
+if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
+  console.error('Missing Supabase environment variables. Required: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY');
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+if (!supabaseUrl.startsWith('https://') || !supabaseUrl.endsWith('.supabase.co')) {
+  console.error('SUPABASE_URL must start with https:// and end with .supabase.co');
+  process.exit(1);
+}
+
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
+const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
 
 function checkResult({ data, error }) {
   if (error) throw new Error(error.message);
@@ -16,7 +23,7 @@ function checkResult({ data, error }) {
 }
 
 async function createUser(username, displayName, hashedPassword) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('users')
     .insert({ username, display_name: displayName, password: hashedPassword })
     .select('id')
@@ -26,7 +33,7 @@ async function createUser(username, displayName, hashedPassword) {
 }
 
 async function getUserByUsername(username) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('users')
     .select('*')
     .eq('username', username)
@@ -36,7 +43,7 @@ async function getUserByUsername(username) {
 }
 
 async function getUserById(id) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('users')
     .select('id, username, display_name, created_at')
     .eq('id', id)
@@ -46,7 +53,7 @@ async function getUserById(id) {
 }
 
 async function getGames(userId) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('games')
     .select('*')
     .eq('user_id', userId);
@@ -55,7 +62,7 @@ async function getGames(userId) {
 }
 
 async function upsertGame(userId, game) {
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('games')
     .upsert({
       user_id: userId,
@@ -76,7 +83,7 @@ async function upsertGame(userId, game) {
 }
 
 async function updateGameStatus(userId, gameId, status) {
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('games')
     .update({ status })
     .eq('user_id', userId)
@@ -86,7 +93,7 @@ async function updateGameStatus(userId, gameId, status) {
 
 async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic) {
   const hasReview = reviewText && reviewText.trim().length > 0;
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('games')
     .update({
       user_rating: rating,
@@ -100,7 +107,7 @@ async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic
 }
 
 async function getWishlist(userId) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('wishlist')
     .select('game_id')
     .eq('user_id', userId);
@@ -109,7 +116,7 @@ async function getWishlist(userId) {
 }
 
 async function toggleWishlist(userId, gameId) {
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseAdmin
     .from('wishlist')
     .select('id')
     .eq('user_id', userId)
@@ -117,14 +124,14 @@ async function toggleWishlist(userId, gameId) {
     .maybeSingle();
 
   if (existing) {
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from('wishlist')
       .delete()
       .eq('id', existing.id);
     if (error) throw new Error(error.message);
     return false;
   } else {
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from('wishlist')
       .insert({ user_id: userId, game_id: gameId });
     if (error) throw new Error(error.message);
@@ -133,7 +140,7 @@ async function toggleWishlist(userId, gameId) {
 }
 
 async function getTopThree(userId) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('top_three')
     .select(`
       position,
@@ -146,7 +153,7 @@ async function getTopThree(userId) {
 }
 
 async function setTopThree(userId, gameId, position) {
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseAdmin
     .from('top_three')
     .select('id')
     .eq('user_id', userId)
@@ -154,12 +161,12 @@ async function setTopThree(userId, gameId, position) {
     .maybeSingle();
 
   if (existing) {
-    await supabase.from('top_three').delete().eq('id', existing.id);
+    await supabaseAdmin.from('top_three').delete().eq('id', existing.id);
   }
 
   if (position !== null) {
-    await supabase.from('top_three').delete().eq('user_id', userId).eq('position', position);
-    const { error } = await supabase
+    await supabaseAdmin.from('top_three').delete().eq('user_id', userId).eq('position', position);
+    const { error } = await supabaseAdmin
       .from('top_three')
       .insert({ user_id: userId, game_id: gameId, position });
     if (error) throw new Error(error.message);
@@ -167,10 +174,10 @@ async function setTopThree(userId, gameId, position) {
 }
 
 async function deleteUserAccount(userId) {
-  await supabase.from('top_three').delete().eq('user_id', userId);
-  await supabase.from('wishlist').delete().eq('user_id', userId);
-  await supabase.from('games').delete().eq('user_id', userId);
-  await supabase.from('users').delete().eq('id', userId);
+  await supabaseAdmin.from('top_three').delete().eq('user_id', userId);
+  await supabaseAdmin.from('wishlist').delete().eq('user_id', userId);
+  await supabaseAdmin.from('games').delete().eq('user_id', userId);
+  await supabaseAdmin.from('users').delete().eq('id', userId);
 }
 
 module.exports = {

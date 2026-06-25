@@ -592,7 +592,8 @@ function App() {
       await loadData();
       showToast(`"${game.title}" ajout\u00e9 \u00e0 ta biblioth\u00e8que`);
     } catch (e) {
-      showToast("Erreur lors de l'ajout");
+      console.error('[Library] Add game error:', e.message);
+      showToast("Erreur lors de l'ajout: " + e.message);
     }
   };
 

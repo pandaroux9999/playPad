@@ -103,10 +103,16 @@ app.post('/api/games/sync', requireAuth, async (req, res) => {
   if (!Array.isArray(games)) {
     return res.status(400).json({ error: 'Format invalide' });
   }
-  for (const game of games) {
-    await db.upsertGame(req.session.userId, game);
+  try {
+    for (const game of games) {
+      console.log('[Sync] Upserting game:', game.game_id, game.title);
+      await db.upsertGame(req.session.userId, game);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Sync] Error:', err.message, err.stack);
+    res.status(500).json({ error: err.message });
   }
-  res.json({ ok: true });
 });
 
 app.post('/api/games/status', requireAuth, async (req, res) => {

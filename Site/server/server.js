@@ -393,7 +393,7 @@ app.post('/api/platform/steam/connect', requireAuth, async (req, res) => {
               review_text: '',
               review_public: true,
               has_review: 0,
-            }));
+            })));
           } catch (e) { reject(e); }
         });
       }).on('error', reject);

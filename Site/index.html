@@ -101,6 +101,8 @@ const API = {
   getSuggestions: () => API.request('GET', '/api/suggestions'),
   dismissSuggestion: (id) => API.request('DELETE', `/api/suggestions/${id}`),
   getCatalog: () => API.request('GET', '/api/catalog'),
+  disconnectPlatform: (platform) => API.request('DELETE', `/api/games/platform/${platform}`),
+  heartbeat: () => API.request('POST', '/api/heartbeat'),
 };
 
 function Icon(paths, viewBox = "0 0 24 24") {
@@ -138,6 +140,7 @@ const UserX = Icon(["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 7a4 4 0 1 0
 const Send = Icon(["M22 2 11 13", "M22 2l-7 20-4-9-9-4 20-7z"]);
 const ChevronRight = Icon(["M9 18l6-6-6-6"]);
 const Upload = Icon(["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M17 8l-5-5-5 5", "M12 3v12"]);
+const Trash2 = Icon(["M3 6h18", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"]);
 
 
 
@@ -152,6 +155,11 @@ const PLATFORM_CONFIG = {
   nintendo: { label: "Nintendo", color: "#e60012", text: "#ffffff", name: "Nintendo Switch" },
   xbox:     { label: "Xbox",     color: "#107c10", text: "#ffffff", name: "Xbox"            },
 };
+
+function isOnline(lastSeen) {
+  if (!lastSeen) return false;
+  return Date.now() - new Date(lastSeen).getTime() < 300000;
+}
 
 const STATUS_CONFIG = {
   playing:    { label: "En cours",    color: "#22c55e" },
@@ -388,7 +396,10 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
               h('p', { className: "text-[9px] text-muted-foreground" }, isConnected ? `${gameCount} jeux \u00b7 ${lastSync}` : "Non connect\u00e9")
             ),
             isConnected
-              ? h('button', { onClick: () => syncFromBridge(platform), disabled: syncing === platform, className: "p-1.5 rounded-lg", style: { background: `${P1}15` } }, syncing === platform ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
+              ? h('div', { className: "flex items-center gap-1" },
+                  h('button', { onClick: () => syncFromBridge(platform), disabled: syncing === platform, className: "p-1.5 rounded-lg", style: { background: `${P1}15` } }, syncing === platform ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } })),
+                  h('button', { onClick: async () => { if (!confirm(`Supprimer tous les jeux ${cfg.name} de votre bibliothèque ?`)) return; await API.disconnectPlatform(platform); setConnected(c => ({ ...c, [platform]: false })); onSyncComplete?.(); showToast(`Jeux ${cfg.name} retirés`); }, className: "p-1.5 rounded-lg hover:opacity-80", style: { background: "rgba(239,68,68,0.15)" } }, h(Trash2, { size: 10, style: { color: "#ef4444" } }))
+                )
               : platform === "steam"
                 ? h('div', { className: "flex items-center gap-1" },
                     h('button', { onClick: () => setSteamInputOpen(true), disabled: steamConnecting, className: "px-2 py-0.5 text-[9px] font-bold rounded-md text-white whitespace-nowrap", style: { background: GRAD } }, "Connecter"),
@@ -397,7 +408,30 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
                       h('button', { onClick: handleSteamConnect, disabled: !steamInput || steamConnecting, className: "px-2 py-1 text-[9px] font-bold rounded-lg text-white", style: { background: GRAD } }, "OK")
                     )
                   )
-                : h('button', { onClick: () => setConnected(p => ({ ...p, [platform]: true })), className: "px-2 py-0.5 text-[9px] font-bold rounded-md text-white", style: { background: GRAD } }, "+")
+                : h('div', { className: "flex items-center gap-1" },
+                    h('label', { className: "px-2 py-0.5 text-[9px] font-bold rounded-md text-white cursor-pointer flex items-center gap-1", style: { background: GRAD } },
+                      h(Upload, { size: 9 }), "JSON",
+                      h('input', { type: "file", accept: ".json", style: { display: "none" }, onChange: async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const text = await file.text();
+                          const data = JSON.parse(text);
+                          const importGames = (data.games || []).map(g => ({
+                            game_id: g.game_id || (platform + '-' + (g.gameId || g.id || Math.random().toString(36).slice(2))),
+                            title: g.title || g.name, platform, playtime: g.playtime || 0,
+                            status: g.status || 'not_started', cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
+                            user_rating: g.user_rating || 0, review_text: g.review_text || '', review_public: true, has_review: 0,
+                          }));
+                          await API.syncGames(importGames);
+                          setConnected(p => ({ ...p, [platform]: true }));
+                          onSyncComplete?.();
+                          showToast(`${importGames.length} jeux ${cfg.name} importés`);
+                        } catch (err) { showToast('Erreur: ' + err.message); }
+                        e.target.value = '';
+                      } })
+                    )
+                  )
           );
         })),
         h('div', { className: "mt-2 pt-2 border-t border-border flex items-center gap-2" },
@@ -416,10 +450,12 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
         h('p', { className: "text-[10px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5", style: { color: "#c4b5fd" } }, h(Bell, { size: 10 }), "Notifications"),
         notifications.length === 0
           ? h('p', { className: "text-xs text-muted-foreground py-2" }, "Aucune notification")
-          : h('div', { className: "space-y-1.5" }, notifications.map(n => h('div', { key: n.id, onClick: () => onMarkAsRead?.(n.id, n.friendId), className: "flex items-start gap-2.5 py-1.5 cursor-pointer hover:opacity-80" },
-            h('div', { className: "w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0", style: { background: n.read ? "transparent" : P1, boxShadow: n.read ? "none" : `0 0 4px ${P1}80` } }),
-            h('p', { className: "text-[11px] text-foreground/80 leading-snug flex-1" }, n.text),
-            h('span', { className: "text-[9px] text-muted-foreground flex-shrink-0" }, "a l'instant")
+          : h('div', { className: "space-y-1.5" }, notifications.map(n => h('div', { key: n.id, className: "flex items-start gap-2.5 py-1.5" },
+            h('div', { onClick: () => onMarkAsRead?.(n.id, n.friendId), className: "flex-1 flex items-start gap-2 cursor-pointer hover:opacity-80" },
+              h('div', { className: "w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0", style: { background: n.read ? "transparent" : P1, boxShadow: n.read ? "none" : `0 0 4px ${P1}80` } }),
+              h('p', { className: "text-[11px] text-foreground/80 leading-snug flex-1" }, n.text)
+            ),
+            h('button', { onClick: () => onMarkAsRead?.(n.id, n.friendId), className: "p-1 rounded hover:opacity-80 flex-shrink-0", style: { color: "#8888aa" } }, h(X, { size: 10 }))
           )))
       ),
       h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
@@ -513,7 +549,10 @@ function CommunityView({ onSelectFriend, onSelectGame }) {
       requests.length > 0 && h('div', { className: "rounded-2xl p-3", style: { background: `${P1}08`, border: `1px solid ${P1}20` } },
         h('p', { className: "text-[10px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5", style: { color: "#fbbf24" } }, h(UserPlus, { size: 10 }), "Demandes en attente"),
         requests.map(r => h('div', { key: r.id, className: "flex items-center gap-2.5 py-1.5" },
-          h('div', { className: "w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0", style: { background: GRAD } }, initials(r.display_name)),
+          h('div', { className: "relative w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0", style: { background: GRAD } },
+            r.avatar_url ? h('img', { src: r.avatar_url, alt: "", className: "w-full h-full object-cover rounded-xl" }) : initials(r.display_name),
+            h('div', { className: "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border", style: { background: isOnline(r.last_seen) ? "#4ade80" : "#444466", borderColor: "#1a1a2e" } })
+          ),
           h('span', { className: "text-xs font-bold text-foreground flex-1", style: { fontFamily: "'Rajdhani', sans-serif" } }, r.display_name),
           h('button', { onClick: async () => { await API.acceptFriendRequest(r.id); load(); }, className: "px-2.5 py-1 text-[10px] font-bold rounded-lg text-white", style: { background: GRAD } }, "Accepter")
         ))
@@ -525,7 +564,10 @@ function CommunityView({ onSelectFriend, onSelectGame }) {
       searchResults.length > 0 && h('div', { className: "space-y-1.5" }, searchResults.map(u => {
         const st = friendStatuses[u.id];
         return h('div', { key: u.id, className: "flex items-center gap-2.5 py-1.5" },
-          h('div', { className: "w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0", style: { background: GRAD } }, initials(u.display_name)),
+          h('div', { className: "relative w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0", style: { background: GRAD } },
+            u.avatar_url ? h('img', { src: u.avatar_url, alt: "", className: "w-full h-full object-cover rounded-xl" }) : initials(u.display_name),
+            h('div', { className: "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border", style: { background: isOnline(u.last_seen) ? "#4ade80" : "#444466", borderColor: "#1a1a2e" } })
+          ),
           h('div', { className: "flex-1 min-w-0" },
             h('p', { className: "text-xs font-bold text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, u.display_name),
             h('p', { className: "text-[9px] text-muted-foreground" }, "@", u.username)
@@ -543,7 +585,10 @@ function CommunityView({ onSelectFriend, onSelectGame }) {
           h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Mes amis"),
         ),
         friends.map(friend => h('div', { key: friend.id, onClick: () => onSelectFriend?.(friend), className: "bg-card border border-border rounded-2xl p-4 flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" },
-          h('div', { className: "relative w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black text-white flex-shrink-0", style: { background: GRAD } }, initials(friend.display_name)),
+          h('div', { className: "relative w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black text-white flex-shrink-0", style: { background: GRAD } },
+            friend.avatar_url ? h('img', { src: friend.avatar_url, alt: "", className: "w-full h-full object-cover rounded-2xl" }) : initials(friend.display_name),
+            h('div', { className: "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2", style: { background: isOnline(friend.last_seen) ? "#4ade80" : "#444466", borderColor: "#1a1a2e", boxShadow: isOnline(friend.last_seen) ? "0 0 6px #4ade8080" : "none" } })
+          ),
           h('div', { className: "flex-1 min-w-0" },
             h('p', { className: "text-sm font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, friend.display_name),
             h('p', { className: "text-[10px] text-muted-foreground mt-0.5" }, "@", friend.username)
@@ -1026,6 +1071,12 @@ function App() {
     }).catch((err) => {
       console.log('[App] No session (expected if not logged in):', err?.message);
     }).finally(() => setLoading(false));
+  }, []);
+  const [lastHeartbeat, setLastHeartbeat] = useState(0);
+  useEffect(() => {
+    API.heartbeat().catch(() => {});
+    const interval = setInterval(() => { API.heartbeat().catch(() => {}); }, 120000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {

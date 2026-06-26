@@ -117,6 +117,7 @@ app.post('/api/games/sync', requireAuth, async (req, res) => {
     for (const game of games) {
       console.log('[Sync] Upserting game:', game.game_id, game.title);
       await db.upsertGame(req.session.userId, game);
+      await db.ensureCatalogGame(game);
     }
     res.json({ ok: true });
   } catch (err) {
@@ -242,6 +243,26 @@ app.get('/api/catalog', async (req, res) => {
     res.json({ catalog });
   } catch (err) {
     console.error('[Catalog] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/games/platform/:platform', requireAuth, async (req, res) => {
+  try {
+    await db.deletePlatformGames(req.session.userId, req.params.platform);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[PlatformDelete] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/heartbeat', requireAuth, async (req, res) => {
+  try {
+    await db.updateLastSeen(req.session.userId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Heartbeat] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

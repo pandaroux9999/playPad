@@ -244,7 +244,7 @@ async function getGameAvgRatings() {
 async function searchUsers(query, currentUserId) {
   let builder = supabaseAdmin
     .from('users')
-    .select('id, username, display_name')
+    .select('id, username, display_name, avatar_url, last_seen')
     .neq('id', currentUserId)
     .limit(50);
   if (query && query.trim()) {
@@ -285,21 +285,21 @@ async function removeFriend(userId, friendId) {
 async function getFriends(userId) {
   const { data, error } = await supabaseAdmin
     .from('friends')
-    .select(`friend_id, users!friends_friend_id_fkey(id, username, display_name)`)
+    .select(`friend_id, users!friends_friend_id_fkey(id, username, display_name, avatar_url, last_seen)`)
     .eq('user_id', userId)
     .eq('status', 'accepted');
   if (error) throw new Error(error.message);
-  return (data || []).map(r => ({ id: r.users.id, username: r.users.username, display_name: r.users.display_name }));
+  return (data || []).map(r => ({ id: r.users.id, username: r.users.username, display_name: r.users.display_name, avatar_url: r.users.avatar_url, last_seen: r.users.last_seen }));
 }
 
 async function getPendingRequests(userId) {
   const { data, error } = await supabaseAdmin
     .from('friends')
-    .select(`user_id, users!friends_user_id_fkey(id, username, display_name)`)
+    .select(`user_id, users!friends_user_id_fkey(id, username, display_name, avatar_url, last_seen)`)
     .eq('friend_id', userId)
     .eq('status', 'pending');
   if (error) throw new Error(error.message);
-  return (data || []).map(r => ({ id: r.users.id, username: r.users.username, display_name: r.users.display_name }));
+  return (data || []).map(r => ({ id: r.users.id, username: r.users.username, display_name: r.users.display_name, avatar_url: r.users.avatar_url, last_seen: r.users.last_seen }));
 }
 
 async function getFriendGames(friendId) {
@@ -382,6 +382,23 @@ async function getCatalog() {
   return data || [];
 }
 
+async function deletePlatformGames(userId, platform) {
+  const { error } = await supabaseAdmin
+    .from('games')
+    .delete()
+    .eq('user_id', userId)
+    .eq('platform', platform);
+  if (error) throw new Error(error.message);
+}
+
+async function updateLastSeen(userId) {
+  const { error } = await supabaseAdmin
+    .from('users')
+    .update({ last_seen: new Date().toISOString() })
+    .eq('id', userId);
+  if (error) throw new Error(error.message);
+}
+
 module.exports = {
   createUser,
   getUserByUsername,
@@ -413,4 +430,6 @@ module.exports = {
   removeGameSuggestion,
   ensureCatalogGame,
   getCatalog,
+  deletePlatformGames,
+  updateLastSeen,
 };

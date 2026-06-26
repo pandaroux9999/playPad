@@ -77,6 +77,7 @@ const API = {
   me: () => API.request('GET', '/api/me'),
   getGames: () => API.request('GET', '/api/games'),
   syncGames: (games) => API.request('POST', '/api/games/sync', { games }),
+  connectSteam: (steamId) => API.request('POST', '/api/platform/steam/connect', { steamId }),
   setStatus: (gameId, status) => API.request('POST', '/api/games/status', { gameId, status }),
   saveReview: (gameId, rating, reviewText, reviewPublic, gameTitle, gameCover) => API.request('POST', '/api/games/review', { gameId, rating, reviewText, reviewPublic, gameTitle, gameCover }),
   getWishlist: () => API.request('GET', '/api/wishlist'),
@@ -293,6 +294,33 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const unread = notifications.filter(n => !n.read).length;
   const [bridgeUrl, setBridgeUrl] = useState(() => localStorage.getItem('playnite_bridge_url') || 'http://localhost:3456');
   const [showBridgeConfig, setShowBridgeConfig] = useState(false);
+  const [steamConnecting, setSteamConnecting] = useState(false);
+  const [steamInput, setSteamInput] = useState("");
+  const [steamInputOpen, setSteamInputOpen] = useState(false);
+  const handleSteamConnect = async () => {
+    setSteamConnecting(true); setSteamInputOpen(false);
+    try { const d = await API.connectSteam(steamInput); setConnected(c => ({ ...c, steam: true })); showToast(`${d.count} jeux Steam importés`); onSyncComplete?.(); }
+    catch(e) { showToast('Erreur Steam: ' + e.message); }
+    setSteamConnecting(false);
+  };
+  const handleFileImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const importGames = (data.games || []).map(g => ({
+        game_id: g.game_id || (g.platform + '-' + (g.gameId || g.id)),
+        title: g.title || g.name, platform: g.platform, playtime: g.playtime || 0,
+        status: g.status || 'not_started', cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
+        user_rating: g.user_rating || 0, review_text: g.review_text || '', review_public: true, has_review: 0,
+      }));
+      await API.syncGames(importGames);
+      onSyncComplete?.();
+      showToast(`Importé : ${importGames.length} jeux`);
+    } catch (err) { showToast('Erreur fichier : ' + err.message); }
+    e.target.value = '';
+  };
 
   const syncFromBridge = async (platformFilter) => {
     try {
@@ -360,7 +388,15 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
             ),
             isConnected
               ? h('button', { onClick: () => syncFromBridge(platform), disabled: syncing === platform, className: "p-1.5 rounded-lg", style: { background: `${P1}15` } }, syncing === platform ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
-              : h('button', { onClick: () => setConnected(p => ({ ...p, [platform]: true })), className: "px-2 py-0.5 text-[9px] font-bold rounded-md text-white", style: { background: GRAD } }, "+")
+              : platform === "steam"
+                ? h('div', { className: "flex items-center gap-1" },
+                    h('button', { onClick: () => setSteamInputOpen(true), disabled: steamConnecting, className: "px-2 py-0.5 text-[9px] font-bold rounded-md text-white whitespace-nowrap", style: { background: GRAD } }, "Connecter"),
+                    steamInputOpen && h('div', { className: "absolute z-30 mt-1 p-2 rounded-xl flex items-center gap-1.5", style: { background: "#1a1a2e", border: "1px solid #333", right: 0, top: "100%" } },
+                      h('input', { value: steamInput, onChange: e => setSteamInput(e.target.value), placeholder: "Steam ID", className: "w-24 bg-secondary/60 border border-border rounded-lg px-2 py-1 text-[10px] text-foreground placeholder-muted-foreground outline-none" }),
+                      h('button', { onClick: handleSteamConnect, disabled: !steamInput || steamConnecting, className: "px-2 py-1 text-[9px] font-bold rounded-lg text-white", style: { background: GRAD } }, "OK")
+                    )
+                  )
+                : h('button', { onClick: () => setConnected(p => ({ ...p, [platform]: true })), className: "px-2 py-0.5 text-[9px] font-bold rounded-md text-white", style: { background: GRAD } }, "+")
           );
         })),
         h('div', { className: "mt-2 pt-2 border-t border-border flex items-center gap-2" },
@@ -371,34 +407,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
           h('label', { className: "flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" },
             h(Upload, { size: 10, style: { color: `${P1}aa` } }),
             h('span', { className: "text-[9px] font-medium", style: { color: `${P1}aa` } }, "Importer un fichier JSON (export Playnite)"),
-            h('input', { type: "file", accept: ".json", style: { display: "none" }, onChange: async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              try {
-                const text = await file.text();
-                const data = JSON.parse(text);
-                const importGames = (data.games || []).map(g => ({
-                  game_id: g.game_id || (g.platform + '-' + (g.gameId || g.id)),
-                  title: g.title || g.name,
-                  platform: g.platform,
-                  playtime: g.playtime || 0,
-                  status: g.status || 'not_started',
-                  cover: g.cover || '',
-                  genre: g.genre || '',
-                  year: g.year || 0,
-                  user_rating: g.user_rating || 0,
-                  review_text: g.review_text || '',
-                  review_public: true,
-                  has_review: 0,
-                }));
-                await API.syncGames(importGames);
-                onSyncComplete?.();
-                showToast(`Importé : ${importGames.length} jeux`);
-              } catch (err) {
-                showToast('Erreur fichier : ' + err.message);
-              }
-              e.target.value = '';
-            }}
+            h('input', { type: "file", accept: ".json", style: { display: "none" }, onChange: handleFileImport })
           )
         )
       ),

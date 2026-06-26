@@ -362,6 +362,53 @@ app.delete('/api/suggestions/:id', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/platform/steam/connect', requireAuth, async (req, res) => {
+  const { steamId } = req.body;
+  if (!steamId) return res.status(400).json({ error: 'steamId requis' });
+  const apiKey = process.env.STEAM_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'STEAM_API_KEY non configurée sur le serveur' });
+
+  try {
+    const https = require('https');
+    const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${apiKey}&steamid=${steamId}&include_appinfo=true&format=json`;
+
+    const games = await new Promise((resolve, reject) => {
+      https.get(url, (resp) => {
+        let data = '';
+        resp.on('data', c => data += c);
+        resp.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            const list = json?.response?.games || [];
+            resolve(list.map(g => ({
+              game_id: 'steam-' + g.appid,
+              title: g.name || 'Unknown',
+              platform: 'steam',
+              playtime: Math.round((g.playtime_forever || 0) / 60),
+              cover: g.img_icon_url ? `https://media.steampowered.com/steamcommunity/public/images/apps/${g.appid}/${g.img_icon_url}.jpg` : '',
+              genre: '',
+              year: 0,
+              status: g.playtime_forever > 0 ? 'playing' : 'not_started',
+              user_rating: 0,
+              review_text: '',
+              review_public: true,
+              has_review: 0,
+            }));
+          } catch (e) { reject(e); }
+        });
+      }).on('error', reject);
+    });
+
+    for (const game of games) {
+      await db.upsertGame(req.session.userId, game);
+    }
+    res.json({ ok: true, count: games.length });
+  } catch (err) {
+    console.error('[SteamConnect] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`PlayPad server running on http://localhost:${PORT}`);
   console.log('[Server] SUPABASE_URL:', process.env.SUPABASE_URL ? 'defined' : 'MISSING');

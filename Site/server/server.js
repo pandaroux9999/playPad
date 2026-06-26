@@ -236,6 +236,16 @@ app.get('/api/games/ratings', async (req, res) => {
   }
 });
 
+app.get('/api/catalog', async (req, res) => {
+  try {
+    const catalog = await db.getCatalog();
+    res.json({ catalog });
+  } catch (err) {
+    console.error('[Catalog] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/users/search', requireAuth, async (req, res) => {
   try {
     const { q } = req.query;
@@ -401,6 +411,7 @@ app.post('/api/platform/steam/connect', requireAuth, async (req, res) => {
 
     for (const game of games) {
       await db.upsertGame(req.session.userId, game);
+      await db.ensureCatalogGame(game);
     }
     res.json({ ok: true, count: games.length });
   } catch (err) {

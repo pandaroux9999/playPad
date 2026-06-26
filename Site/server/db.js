@@ -363,6 +363,25 @@ async function removeGameSuggestion(id) {
   if (error) throw new Error(error.message);
 }
 
+async function ensureCatalogGame(game) {
+  const { game_id, title, platform, cover, genre, year } = game;
+  if (!game_id || !title) return;
+  const { error } = await supabaseAdmin
+    .from('catalog')
+    .upsert({ game_id, title, platform: platform || '', cover: cover || '', genre: genre || '', year: year || 0 },
+      { onConflict: 'game_id', ignoreDuplicates: false });
+  if (error && error.code !== '23505') throw new Error(error.message);
+}
+
+async function getCatalog() {
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .order('title');
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
 module.exports = {
   createUser,
   getUserByUsername,
@@ -392,4 +411,6 @@ module.exports = {
   sendGameSuggestion,
   getGameSuggestions,
   removeGameSuggestion,
+  ensureCatalogGame,
+  getCatalog,
 };

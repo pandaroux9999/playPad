@@ -75,3 +75,15 @@ CREATE TABLE IF NOT EXISTS game_suggestions (
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT '';
+
+-- Table catalogue partagé (tous les jeux connus, dédupliqués par game_id)
+CREATE TABLE IF NOT EXISTS catalog (
+  id SERIAL PRIMARY KEY,
+  game_id TEXT UNIQUE NOT NULL,
+  title TEXT NOT NULL,
+  platform TEXT DEFAULT '',
+  cover TEXT DEFAULT '',
+  genre TEXT DEFAULT '',
+  year INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);

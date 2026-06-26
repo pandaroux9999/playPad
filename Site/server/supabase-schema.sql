@@ -62,3 +62,16 @@ CREATE TABLE IF NOT EXISTS friends (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, friend_id)
 );
+
+CREATE TABLE IF NOT EXISTS game_suggestions (
+  id SERIAL PRIMARY KEY,
+  from_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_id TEXT NOT NULL,
+  game_title TEXT DEFAULT '',
+  game_cover TEXT DEFAULT '',
+  message TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT '';

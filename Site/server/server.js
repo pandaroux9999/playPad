@@ -320,6 +320,48 @@ app.get('/api/friends/status/:id', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/account/avatar', requireAuth, async (req, res) => {
+  try {
+    const { avatarUrl } = req.body;
+    await db.updateAvatar(req.session.userId, avatarUrl || '');
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Avatar] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/suggestions', requireAuth, async (req, res) => {
+  try {
+    const { toUserId, gameId, gameTitle, gameCover, message } = req.body;
+    await db.sendGameSuggestion(req.session.userId, toUserId, gameId, gameTitle, gameCover, message);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Suggestion] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/suggestions', requireAuth, async (req, res) => {
+  try {
+    const suggestions = await db.getGameSuggestions(req.session.userId);
+    res.json({ suggestions });
+  } catch (err) {
+    console.error('[Suggestions] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/suggestions/:id', requireAuth, async (req, res) => {
+  try {
+    await db.removeGameSuggestion(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[SuggestionDelete] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`PlayPad server running on http://localhost:${PORT}`);
   console.log('[Server] SUPABASE_URL:', process.env.SUPABASE_URL ? 'defined' : 'MISSING');

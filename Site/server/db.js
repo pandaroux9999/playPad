@@ -45,7 +45,7 @@ async function getUserByUsername(username) {
 async function getUserById(id) {
   const { data, error } = await supabaseAdmin
     .from('users')
-    .select('id, username, display_name, created_at')
+    .select('id, username, display_name, avatar_url, created_at')
     .eq('id', id)
     .single();
   checkResult({ data, error });
@@ -179,10 +179,12 @@ async function setTopThree(userId, gameId, position) {
 }
 
 async function deleteUserAccount(userId) {
+  await supabaseAdmin.from('game_suggestions').delete().or(`from_user_id.eq.${userId},to_user_id.eq.${userId}`);
   await supabaseAdmin.from('community_reviews').delete().eq('user_id', userId);
   await supabaseAdmin.from('top_three').delete().eq('user_id', userId);
   await supabaseAdmin.from('wishlist').delete().eq('user_id', userId);
   await supabaseAdmin.from('games').delete().eq('user_id', userId);
+  await supabaseAdmin.from('friends').delete().or(`user_id.eq.${userId},friend_id.eq.${userId}`);
   await supabaseAdmin.from('users').delete().eq('id', userId);
 }
 
@@ -320,6 +322,47 @@ async function getFriendStatus(userId, friendId) {
   return data?.status || null;
 }
 
+async function updateAvatar(userId, avatarUrl) {
+  const { error } = await supabaseAdmin
+    .from('users')
+    .update({ avatar_url: avatarUrl })
+    .eq('id', userId);
+  if (error) throw new Error(error.message);
+}
+
+async function sendGameSuggestion(fromUserId, toUserId, gameId, gameTitle, gameCover, message) {
+  const { error } = await supabaseAdmin
+    .from('game_suggestions')
+    .insert({
+      from_user_id: fromUserId,
+      to_user_id: toUserId,
+      game_id: gameId,
+      game_title: gameTitle || '',
+      game_cover: gameCover || '',
+      message: message || '',
+    });
+  if (error) throw new Error(error.message);
+}
+
+async function getGameSuggestions(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('game_suggestions')
+    .select(`*, users!game_suggestions_from_user_id_fkey(id, username, display_name, avatar_url)`)
+    .eq('to_user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+async function removeGameSuggestion(id) {
+  const { error } = await supabaseAdmin
+    .from('game_suggestions')
+    .delete()
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 module.exports = {
   createUser,
   getUserByUsername,
@@ -345,4 +388,8 @@ module.exports = {
   getPendingRequests,
   getFriendGames,
   getFriendStatus,
+  updateAvatar,
+  sendGameSuggestion,
+  getGameSuggestions,
+  removeGameSuggestion,
 };

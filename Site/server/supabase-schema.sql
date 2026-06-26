@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS game_suggestions (
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE users ADD COLUMN IF NOT EXISTS steam_id TEXT DEFAULT '';
 
 -- Table catalogue partagé (tous les jeux connus, dédupliqués par game_id)
 CREATE TABLE IF NOT EXISTS catalog (

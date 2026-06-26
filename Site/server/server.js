@@ -3,6 +3,8 @@ const session = require('express-session');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const path = require('path');
+const https = require('https');
+const querystring = require('querystring');
 const db = require('./db');
 
 const app = express();
@@ -266,6 +268,70 @@ app.post('/api/heartbeat', requireAuth, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ============ PLATFORM AUTH ============
+const BASE_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
+
+// Steam OpenID
+app.get('/api/auth/steam', requireAuth, (req, res) => {
+  const callbackUrl = `${BASE_URL}/api/auth/steam/callback`;
+  const params = new URLSearchParams({
+    'openid.ns': 'http://specs.openid.net/auth/2.0',
+    'openid.mode': 'checkid_setup',
+    'openid.return_to': callbackUrl,
+    'openid.realm': BASE_URL,
+    'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
+    'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
+  });
+  res.redirect(`https://steamcommunity.com/openid/login?${params.toString()}`);
+});
+
+app.get('/api/auth/steam/callback', requireAuth, async (req, res) => {
+  try {
+    const claimedId = req.query['openid.claimed_id'];
+    const steamId = claimedId?.match(/\/(\d+)$/)?.[1];
+    if (!steamId) { res.redirect(`${BASE_URL}/?steam=error&msg=Steam ID non trouvé`); return; }
+
+    await db.setSteamId(req.session.userId, steamId);
+    const apiKey = process.env.STEAM_API_KEY;
+    let count = 0;
+    if (apiKey) {
+      const games = await fetchSteamGames(apiKey, steamId);
+      for (const game of games) {
+        await db.upsertGame(req.session.userId, game);
+        await db.ensureCatalogGame(game);
+      }
+      count = games.length;
+    }
+    res.redirect(`${BASE_URL}/?steam=ok&count=${count}`);
+  } catch (err) {
+    console.error('[SteamOpenID] Error:', err.message);
+    res.redirect(`${BASE_URL}/?steam=error&msg=${encodeURIComponent(err.message)}`);
+  }
+});
+
+async function fetchSteamGames(apiKey, steamId) {
+  const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${apiKey}&steamid=${steamId}&include_appinfo=true&format=json`;
+  const data = await new Promise((resolve, reject) => {
+    https.get(url, (resp) => {
+      let d = '';
+      resp.on('data', c => d += c);
+      resp.on('end', () => resolve(d));
+    }).on('error', reject);
+  });
+  const json = JSON.parse(data);
+  const list = json?.response?.games || [];
+  return list.map(g => ({
+    game_id: 'steam-' + g.appid,
+    title: g.name || 'Unknown',
+    platform: 'steam',
+    playtime: Math.round((g.playtime_forever || 0) / 60),
+    cover: g.img_icon_url ? `https://media.steampowered.com/steamcommunity/public/images/apps/${g.appid}/${g.img_icon_url}.jpg` : '',
+    genre: '', year: 0,
+    status: g.playtime_forever > 0 ? 'playing' : 'not_started',
+    user_rating: 0, review_text: '', review_public: true, has_review: 0,
+  }));
+}
 
 app.get('/api/users/search', requireAuth, async (req, res) => {
   try {

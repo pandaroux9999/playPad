@@ -32,6 +32,7 @@
     .game-card:active { transform: scale(0.94); }
     .pill-btn { transition: all 0.2s ease; }
     .pill-btn:hover { opacity: 0.85; }
+    .no-underline { text-decoration: none; }
     .review-card { transition: border-color 0.2s ease, transform 0.15s ease; cursor: pointer; }
     .review-card:hover { border-color: #8B5CF6 !important; transform: scale(1.01); }
     .review-card:active { transform: scale(0.98); }
@@ -288,7 +289,7 @@ const PLATFORM_SYNC_DATA = [
   { platform: "xbox",     gameCount: 0,  lastSync: "\u2014" },
 ];
 
-function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast }) {
+function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast, user }) {
   const filtered = useMemo(() => games.filter(g =>
     (activePlatform === "all" || g.platform === activePlatform) &&
     g.title.toLowerCase().includes(search.toLowerCase())
@@ -298,20 +299,11 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSync, setShowSync] = useState(false);
   const [syncing, setSyncing] = useState(null);
-  const [connected, setConnected] = useState({ ps5: true, steam: true, epic: true, nintendo: false, xbox: false });
+  const [connected, setConnected] = useState({ ps5: true, steam: !!(user?.steam_id), epic: true, nintendo: false, xbox: false });
   const connectedCount = Object.values(connected).filter(Boolean).length;
   const unread = notifications.filter(n => !n.read).length;
   const [bridgeUrl, setBridgeUrl] = useState(() => localStorage.getItem('playnite_bridge_url') || 'http://localhost:3456');
   const [showBridgeConfig, setShowBridgeConfig] = useState(false);
-  const [steamConnecting, setSteamConnecting] = useState(false);
-  const [steamInput, setSteamInput] = useState("");
-  const [steamInputOpen, setSteamInputOpen] = useState(false);
-  const handleSteamConnect = async () => {
-    setSteamConnecting(true); setSteamInputOpen(false);
-    try { const d = await API.connectSteam(steamInput); setConnected(c => ({ ...c, steam: true })); showToast(`${d.count} jeux Steam importés`); onSyncComplete?.(); }
-    catch(e) { showToast('Erreur Steam: ' + e.message); }
-    setSteamConnecting(false);
-  };
   const handleFileImport = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -397,16 +389,12 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
             ),
             isConnected
               ? h('div', { className: "flex items-center gap-1" },
-                  h('button', { onClick: () => syncFromBridge(platform), disabled: syncing === platform, className: "p-1.5 rounded-lg", style: { background: `${P1}15` } }, syncing === platform ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } })),
+                  h('a', { href: "/api/auth/steam", className: "p-1.5 rounded-lg inline-flex", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, style: { color: P1 } })),
                   h('button', { onClick: async () => { if (!confirm(`Supprimer tous les jeux ${cfg.name} de votre bibliothèque ?`)) return; await API.disconnectPlatform(platform); setConnected(c => ({ ...c, [platform]: false })); onSyncComplete?.(); showToast(`Jeux ${cfg.name} retirés`); }, className: "p-1.5 rounded-lg hover:opacity-80", style: { background: "rgba(239,68,68,0.15)" } }, h(Trash2, { size: 10, style: { color: "#ef4444" } }))
                 )
               : platform === "steam"
                 ? h('div', { className: "flex items-center gap-1" },
-                    h('button', { onClick: () => setSteamInputOpen(true), disabled: steamConnecting, className: "px-2 py-0.5 text-[9px] font-bold rounded-md text-white whitespace-nowrap", style: { background: GRAD } }, "Connecter"),
-                    steamInputOpen && h('div', { className: "absolute z-30 mt-1 p-2 rounded-xl flex items-center gap-1.5", style: { background: "#1a1a2e", border: "1px solid #333", right: 0, top: "100%" } },
-                      h('input', { value: steamInput, onChange: e => setSteamInput(e.target.value), placeholder: "Steam ID", className: "w-24 bg-secondary/60 border border-border rounded-lg px-2 py-1 text-[10px] text-foreground placeholder-muted-foreground outline-none" }),
-                      h('button', { onClick: handleSteamConnect, disabled: !steamInput || steamConnecting, className: "px-2 py-1 text-[9px] font-bold rounded-lg text-white", style: { background: GRAD } }, "OK")
-                    )
+                    h('a', { href: "/api/auth/steam", className: "px-2 py-0.5 text-[9px] font-bold rounded-md text-white whitespace-nowrap no-underline", style: { background: GRAD } }, "Se connecter")
                   )
                 : h('div', { className: "flex items-center gap-1" },
                     h('label', { className: "px-2 py-0.5 text-[9px] font-bold rounded-md text-white cursor-pointer flex items-center gap-1", style: { background: GRAD } },
@@ -1070,7 +1058,13 @@ function App() {
       setRatings(rData.ratings || {});
     }).catch((err) => {
       console.log('[App] No session (expected if not logged in):', err?.message);
-    }).finally(() => setLoading(false));
+    }).finally(() => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('steam') === 'ok') { showToast(`${params.get('count') || 0} jeux Steam importés`); }
+      else if (params.get('steam') === 'error') { showToast('Erreur Steam: ' + (params.get('msg') || '?')); }
+      if (params.has('steam')) { window.history.replaceState({}, '', window.location.pathname); }
+      setLoading(false);
+    });
   }, []);
   const [lastHeartbeat, setLastHeartbeat] = useState(0);
   useEffect(() => {
@@ -1186,7 +1180,7 @@ function App() {
     h('div', { className: "app-content relative flex flex-col h-screen bg-background mx-auto" },
       h('div', { className: "flex-1 overflow-hidden" },
         h('div', { className: "h-full overflow-y-auto" },
-          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData }),
+          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user }),
           view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame }),
           view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id); if (e) setSelectedGame(e); else { setSelectedGame({ ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); API.syncGames([{ ...game, user_rating: 0, review_text: "", review_public: 1, has_review: 0, status: "not_started", playtime: 0 }]).then(() => loadData()).catch(() => {}); } }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),

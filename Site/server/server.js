@@ -18,7 +18,11 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'playpad-secret-key-change-in-production',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 },
+  cookie: {
+    secure: process.env.NODE_ENV === 'production' || !!process.env.PUBLIC_URL,
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: 'lax',
+  },
 }));
 
 app.use(express.static(path.join(__dirname, '..')));

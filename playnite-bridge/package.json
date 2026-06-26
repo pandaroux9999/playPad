@@ -1,0 +1,14 @@
+{
+  "name": "playnite-bridge",
+  "version": "1.0.0",
+  "description": "Local bridge server that reads Playnite's SQLite database and exposes it via HTTP to PlayPad",
+  "scripts": {
+    "start": "node playnite-server.js",
+    "export": "node playnite-reader.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "express": "^4.21.0",
+    "cors": "^2.8.5"
+  }
+}

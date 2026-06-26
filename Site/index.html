@@ -55,7 +55,7 @@
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script>
-const { useState, useEffect, useMemo, createElement: h } = React;
+const { useState, useEffect, useMemo, useCallback, createElement: h } = React;
 
 const n = g => g && { ...g, hasReview: g.has_review ?? g.hasReview, userRating: g.user_rating ?? g.userRating, reviewText: g.review_text || g.reviewText || '', reviewPublic: g.review_public ?? g.reviewPublic };
 
@@ -95,6 +95,10 @@ const API = {
   getPendingRequests: () => API.request('GET', '/api/friends/requests'),
   getFriendGames: (friendId) => API.request('GET', `/api/friends/${friendId}/games`),
   getFriendStatus: (friendId) => API.request('GET', `/api/friends/status/${friendId}`),
+  updateAvatar: (avatarUrl) => API.request('POST', '/api/account/avatar', { avatarUrl }),
+  sendSuggestion: (toUserId, gameId, gameTitle, gameCover, message) => API.request('POST', '/api/suggestions', { toUserId, gameId, gameTitle, gameCover, message }),
+  getSuggestions: () => API.request('GET', '/api/suggestions'),
+  dismissSuggestion: (id) => API.request('DELETE', `/api/suggestions/${id}`),
 };
 
 function Icon(paths, viewBox = "0 0 24 24") {
@@ -129,6 +133,9 @@ const MessageSquare = Icon(["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 
 const UserPlus = Icon(["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M19 8v6", "M22 11h-6"]);
 const UserCheck = Icon(["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "m19 16 2 2 4-4"]);
 const UserX = Icon(["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M17 8l4 4m0-4-4 4"]);
+const Send = Icon(["M22 2 11 13", "M22 2l-7 20-4-9-9-4 20-7z"]);
+const ChevronRight = Icon(["M9 18l6-6-6-6"]);
+const Upload = Icon(["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M17 8l-5-5-5 5", "M12 3v12"]);
 
 
 
@@ -271,7 +278,7 @@ const PLATFORM_SYNC_DATA = [
   { platform: "xbox",     gameCount: 0,  lastSync: "\u2014" },
 ];
 
-function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead }) {
+function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast }) {
   const filtered = useMemo(() => games.filter(g =>
     (activePlatform === "all" || g.platform === activePlatform) &&
     g.title.toLowerCase().includes(search.toLowerCase())
@@ -284,6 +291,39 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const [connected, setConnected] = useState({ ps5: true, steam: true, epic: true, nintendo: false, xbox: false });
   const connectedCount = Object.values(connected).filter(Boolean).length;
   const unread = notifications.filter(n => !n.read).length;
+  const [bridgeUrl, setBridgeUrl] = useState(() => localStorage.getItem('playnite_bridge_url') || 'http://localhost:3456');
+  const [showBridgeConfig, setShowBridgeConfig] = useState(false);
+
+  const syncFromBridge = async (platformFilter) => {
+    try {
+      const url = platformFilter ? `${bridgeUrl}/games/${platformFilter}` : `${bridgeUrl}/games`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Pont Playnite inaccessible');
+      const data = await res.json();
+      const playniteGames = (data.games || []).map(g => ({
+        game_id: g.platform + '-' + (g.gameId || g.id),
+        title: g.name,
+        platform: g.platform,
+        playtime: Math.round(g.playtime / 60),
+        status: g.playtime > 0 ? 'playing' : 'not_started',
+        cover: '',
+        genre: '',
+        year: 0,
+        user_rating: 0,
+        review_text: '',
+        review_public: true,
+        has_review: false,
+      }));
+      setSyncing(platformFilter || 'all');
+      await API.syncGames(playniteGames);
+      if (platformFilter) setConnected(c => ({ ...c, [platformFilter]: true }));
+      onSyncComplete?.();
+      showToast(`Sync terminé : ${playniteGames.length} jeux importés`);
+    } catch (err) {
+      showToast('Erreur : ' + err.message);
+    }
+    setSyncing(null);
+  };
 
   return h('div', { className: "flex flex-col h-full view-enter" },
     (showNotifications || showSync) && h('div', { onClick: () => { setShowNotifications(false); setShowSync(false); }, style: { position: "fixed", inset: 0, zIndex: 10, background: "rgba(0,0,0,0.5)" } }),
@@ -307,7 +347,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
       showSync && h('div', { className: "rounded-2xl p-3.5", style: { background: `${P1}08`, border: `1px solid ${P1}20`, position: "absolute", zIndex: 20, top: "100%", left: 16, right: 16 } },
         h('div', { className: "flex items-center justify-between mb-2" },
           h('div', { className: "flex items-center gap-2" }, h(Zap, { size: 12, style: { color: P1 } }), h('span', { className: "text-xs font-bold", style: { color: "#c4b5fd" } }, `${connectedCount} plateforme(s) connect\u00e9e(s)`)),
-          h('button', { onClick: () => {}, className: "sync-btn px-3 py-1 text-white text-[10px] font-bold rounded-lg flex items-center gap-1.5", style: { background: GRAD } }, h(RefreshCw, { size: 10 }), "Tout sync")
+          h('button', { onClick: () => syncFromBridge(), disabled: syncing === 'all', className: "sync-btn px-3 py-1 text-white text-[10px] font-bold rounded-lg flex items-center gap-1.5", style: { background: GRAD } }, syncing === 'all' ? h(Loader, { size: 10, className: "animate-spin" }) : h(RefreshCw, { size: 10 }), "Tout sync")
         ),
         h('div', { className: "space-y-1.5" }, PLATFORM_SYNC_DATA.map(({ platform, gameCount, lastSync }) => {
           const cfg = PLATFORM_CONFIG[platform];
@@ -319,10 +359,48 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
               h('p', { className: "text-[9px] text-muted-foreground" }, isConnected ? `${gameCount} jeux \u00b7 ${lastSync}` : "Non connect\u00e9")
             ),
             isConnected
-              ? h('button', { onClick: () => { setSyncing(platform); setTimeout(() => setSyncing(null), 2000); }, className: "p-1.5 rounded-lg", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, className: syncing === platform ? "animate-spin" : "", style: { color: P1 } }))
+              ? h('button', { onClick: () => syncFromBridge(platform), disabled: syncing === platform, className: "p-1.5 rounded-lg", style: { background: `${P1}15` } }, syncing === platform ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
               : h('button', { onClick: () => setConnected(p => ({ ...p, [platform]: true })), className: "px-2 py-0.5 text-[9px] font-bold rounded-md text-white", style: { background: GRAD } }, "+")
           );
-        }))
+        })),
+        h('div', { className: "mt-2 pt-2 border-t border-border flex items-center gap-2" },
+          h('button', { onClick: () => setShowBridgeConfig(!showBridgeConfig), className: "text-[9px] font-medium hover:opacity-80", style: { color: `${P1}aa` } }, showBridgeConfig ? "Masquer" : "Configurer le pont Playnite"),
+          showBridgeConfig && h('input', { value: bridgeUrl, onChange: e => { setBridgeUrl(e.target.value); localStorage.setItem('playnite_bridge_url', e.target.value); }, placeholder: "http://localhost:3456", className: "flex-1 bg-secondary/60 border border-border rounded-lg px-2 py-1 text-[10px] text-foreground placeholder-muted-foreground outline-none" })
+        ),
+        h('div', { className: "mt-2 pt-2 border-t border-border" },
+          h('label', { className: "flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" },
+            h(Upload, { size: 10, style: { color: `${P1}aa` } }),
+            h('span', { className: "text-[9px] font-medium", style: { color: `${P1}aa` } }, "Importer un fichier JSON (export Playnite)"),
+            h('input', { type: "file", accept: ".json", style: { display: "none" }, onChange: async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                const importGames = (data.games || []).map(g => ({
+                  game_id: g.game_id || (g.platform + '-' + (g.gameId || g.id)),
+                  title: g.title || g.name,
+                  platform: g.platform,
+                  playtime: g.playtime || 0,
+                  status: g.status || 'not_started',
+                  cover: g.cover || '',
+                  genre: g.genre || '',
+                  year: g.year || 0,
+                  user_rating: g.user_rating || 0,
+                  review_text: g.review_text || '',
+                  review_public: true,
+                  has_review: 0,
+                }));
+                await API.syncGames(importGames);
+                onSyncComplete?.();
+                showToast(`Importé : ${importGames.length} jeux`);
+              } catch (err) {
+                showToast('Erreur fichier : ' + err.message);
+              }
+              e.target.value = '';
+            }}
+          )
+        )
       ),
       showNotifications && h('div', { className: "rounded-2xl p-3", style: { background: `${P1}08`, border: `1px solid ${P1}20`, position: "absolute", zIndex: 30, top: "100%", left: 16, right: 16 } },
         h('p', { className: "text-[10px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5", style: { color: "#c4b5fd" } }, h(Bell, { size: 10 }), "Notifications"),
@@ -379,36 +457,40 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings }) {
   );
 }
 
-function CommunityView({ onSelectFriend }) {
+function CommunityView({ onSelectFriend, onSelectGame }) {
   const [publicReviews, setPublicReviews] = useState([]);
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [friendStatuses, setFriendStatuses] = useState({});
+  const [searchFocused, setSearchFocused] = useState(false);
   const [loading, setLoading] = useState(true);
   const load = () => Promise.all([
     API.getFriends().then(d => setFriends(d.friends || [])).catch(() => {}),
     API.getPendingRequests().then(d => setRequests(d.requests || [])).catch(() => {}),
     API.getReviewsFeed().then(d => setPublicReviews(d.reviews || [])).catch(() => {}),
+    API.getSuggestions().then(d => setSuggestions(d.suggestions || [])).catch(() => {}),
   ]).finally(() => setLoading(false));
   useEffect(() => { load(); }, []);
+  const doSearch = useCallback((q) => {
+    API.searchUsers(q).then(d => {
+      setSearchResults(d.users || []);
+      const ids = (d.users || []).map(u => u.id);
+      if (ids.length) Promise.all(ids.map(id => API.getFriendStatus(id).then(s => ({ id, status: s.status })).catch(() => null)))
+        .then(results => {
+          const m = {};
+          for (const r of results) if (r) m[r.id] = r.status;
+          setFriendStatuses(m);
+        }).catch(() => {});
+    }).catch(() => {});
+  }, []);
   useEffect(() => {
-    if (searchQ.length < 2) { setSearchResults([]); return; }
-    const t = setTimeout(() => {
-      API.searchUsers(searchQ).then(d => {
-        setSearchResults(d.users || []);
-        const ids = (d.users || []).map(u => u.id);
-        if (ids.length) Promise.all(ids.map(id => API.getFriendStatus(id).then(s => ({ id, status: s.status })).catch(() => null)))
-          .then(results => {
-            const m = {};
-            for (const r of results) if (r) m[r.id] = r.status;
-            setFriendStatuses(m);
-          }).catch(() => {});
-      }).catch(() => {});
-    }, 300);
+    if (!searchFocused) { setSearchResults([]); return; }
+    const t = setTimeout(() => doSearch(searchQ), 200);
     return () => clearTimeout(t);
-  }, [searchQ]);
+  }, [searchQ, searchFocused, doSearch]);
   const initials = (name) => (name?.charAt(0) || "?").toUpperCase();
   return h('div', { className: "flex flex-col h-full overflow-y-auto view-enter", style: { scrollbarWidth: "none" } },
     h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
@@ -426,7 +508,7 @@ function CommunityView({ onSelectFriend }) {
       ),
       h('div', { className: "relative" },
         h(Search, { size: 13, className: "absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" }),
-        h('input', { value: searchQ, onChange: e => setSearchQ(e.target.value), placeholder: "Rechercher un utilisateur\u2026", className: "w-full bg-secondary/60 border border-border rounded-xl pl-8 pr-4 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none" })
+        h('input', { value: searchQ, onFocus: () => setSearchFocused(true), onBlur: () => setTimeout(() => setSearchFocused(false), 200), onChange: e => setSearchQ(e.target.value), placeholder: "Rechercher un utilisateur\u2026", className: "w-full bg-secondary/60 border border-border rounded-xl pl-8 pr-4 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none" })
       ),
       searchResults.length > 0 && h('div', { className: "space-y-1.5" }, searchResults.map(u => {
         const st = friendStatuses[u.id];
@@ -457,6 +539,30 @@ function CommunityView({ onSelectFriend }) {
           h('button', { onClick: async (e) => { e.stopPropagation(); await API.removeFriend(friend.id); load(); }, className: "p-1.5 rounded-lg hover:opacity-70", style: { background: "rgba(239,68,68,0.1)" } }, h(UserX, { size: 12, style: { color: "#ef4444" } }))
         ))
       ),
+      suggestions.length > 0 && h('div', null,
+        h('div', { className: "flex items-center gap-2 mb-3 mt-4" },
+          h(Send, { size: 14, style: { color: P1 } }),
+          h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Suggestions recues"),
+        ),
+        suggestions.map(s => h('div', { key: s.id, className: "bg-card border border-border rounded-2xl p-3.5" },
+          h('div', { className: "flex items-center gap-2 mb-2" },
+            h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black text-white flex-shrink-0", style: { background: GRAD } },
+              (s.users?.display_name || "?").charAt(0).toUpperCase()
+            ),
+            h('div', { className: "flex-1 min-w-0" },
+              h('p', { className: "text-xs font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, s.users?.display_name || "Inconnu"),
+              h('p', { className: "text-[9px] text-muted-foreground" }, "a suggere ", s.game_title)
+            ),
+            h('button', { onClick: async () => { await API.dismissSuggestion(s.id); load(); }, className: "p-1 rounded-lg hover:opacity-70", style: { background: "rgba(239,68,68,0.1)" } }, h(X, { size: 12, style: { color: "#ef4444" } }))
+          ),
+          s.game_cover && h('div', { onClick: () => onSelectGame?.({ game_id: s.game_id, title: s.game_title, cover: s.game_cover }), className: "flex items-center gap-2 mt-1 p-2 rounded-xl cursor-pointer hover:opacity-80", style: { background: "rgba(0,0,0,0.3)" } },
+            h('div', { className: "w-8 h-11 rounded overflow-hidden flex-shrink-0" }, h('img', { src: s.game_cover, alt: "", className: "w-full h-full object-cover" })),
+            h('span', { className: "text-[11px] font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, s.game_title),
+            h(ChevronRight, { size: 12, className: "ml-auto text-muted-foreground" })
+          ),
+          s.message && h('p', { className: "text-[10px] text-muted-foreground mt-1.5 italic" }, "\u201c", s.message, "\u201d")
+        ))
+      ),
       publicReviews.length > 0 && h('div', null,
         h('div', { className: "flex items-center gap-2 mb-3 mt-4" },
           h(MessageSquare, { size: 14, style: { color: P1 } }),
@@ -484,6 +590,10 @@ function CommunityView({ onSelectFriend }) {
 function FriendProfileSheet({ friend, onClose }) {
   const [friendGames, setFriendGames] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestSearch, setSuggestSearch] = useState("");
+  const [suggestMsg, setSuggestMsg] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
   useEffect(() => {
     API.getFriendGames(friend.id).then(d => {
       setFriendGames((d.games || []).map(n));
@@ -492,6 +602,9 @@ function FriendProfileSheet({ friend, onClose }) {
   const completed = friendGames.filter(g => g.status === "completed").length;
   const playing = friendGames.filter(g => g.status === "playing").length;
   const initials = (friend.display_name?.charAt(0) || "?").toUpperCase();
+  const suggestFiltered = CATALOGUE.filter(g =>
+    g.title.toLowerCase().includes(suggestSearch.toLowerCase())
+  );
   return h('div', { className: "fixed inset-0 z-50" },
     h('div', { className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
     h('div', { className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-hidden flex flex-col", style: { maxHeight: "88%" } },
@@ -502,7 +615,23 @@ function FriendProfileSheet({ friend, onClose }) {
             h('h2', { className: "text-lg font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, friend.display_name),
             h('p', { className: "text-xs text-muted-foreground" }, `${friendGames.length} jeux \u00b7 ${completed} termines \u00b7 ${playing} en cours`)
           ),
-          h('button', { onClick: onClose, className: "ml-auto w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0", style: { background: "rgba(0,0,0,0.5)" } }, h(X, { size: 16, className: "text-white" }))
+          h('button', { onClick: () => setSuggestOpen(true), className: "mr-1.5 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-80 transition-opacity", style: { background: `${P1}20` } }, h(Send, { size: 14, style: { color: P1 } })),
+          h('button', { onClick: onClose, className: "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0", style: { background: "rgba(0,0,0,0.5)" } }, h(X, { size: 16, className: "text-white" }))
+        ),
+        suggestOpen && h('div', { className: "mt-3 p-3 rounded-2xl", style: { background: `${P1}08`, border: `1px solid ${P1}20` } },
+          h('p', { className: "text-[10px] font-bold mb-2 flex items-center gap-1.5", style: { color: "#c4b5fd" } }, h(Send, { size: 10 }), "Proposer un jeu \u00e0 ", friend.display_name),
+          h('div', { className: "relative mb-2" },
+            h(Search, { size: 11, className: "absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" }),
+            h('input', { value: suggestSearch, onChange: e => setSuggestSearch(e.target.value), placeholder: "Chercher un jeu...", className: "w-full bg-secondary/60 border border-border rounded-lg pl-7 pr-3 py-2 text-[11px] text-foreground placeholder-muted-foreground outline-none" })
+          ),
+          h('div', { className: "max-h-36 overflow-y-auto space-y-1", style: { scrollbarWidth: "none" } }, suggestFiltered.slice(0, 20).map(game =>
+            h('div', { key: game.game_id, className: "flex items-center gap-2 py-1.5 px-1 rounded-lg cursor-pointer hover:opacity-80 transition-opacity", style: { background: "transparent" } },
+              h('div', { className: "w-6 h-8 rounded overflow-hidden flex-shrink-0" }, h('img', { src: game.cover, alt: "", className: "w-full h-full object-cover" })),
+              h('span', { className: "text-[11px] font-bold text-foreground flex-1 truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
+              h('button', { onClick: async () => { setSuggesting(true); await API.sendSuggestion(friend.id, game.game_id, game.title, game.cover, suggestMsg); setSuggesting(false); setSuggestOpen(false); setSuggestSearch(""); setSuggestMsg(""); }, disabled: suggesting, className: "px-2 py-1 text-[9px] font-bold rounded-lg text-white whitespace-nowrap", style: { background: GRAD } }, suggesting ? "..." : "Proposer")
+            )
+          )),
+          h('input', { value: suggestMsg, onChange: e => setSuggestMsg(e.target.value), placeholder: "Message optionnel...", className: "w-full bg-secondary/60 border border-border rounded-lg px-3 py-2 text-[11px] text-foreground placeholder-muted-foreground outline-none mt-2" })
         )
       ),
       h('div', { className: "overflow-y-auto flex-1", style: { scrollbarWidth: "none" } },
@@ -547,7 +676,10 @@ function ReviewsView({ games, onSelect }) {
   );
 }
 
-function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount }) {
+function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar }) {
+  const [avatarModal, setAvatarModal] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || "");
+  const [avatarSaving, setAvatarSaving] = useState(false);
   const completed  = games.filter(g => g.status === "completed").length;
   const playing    = games.filter(g => g.status === "playing").length;
   const backlog    = games.filter(g => g.status === "backlog").length;
@@ -563,11 +695,25 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   return h('div', { className: "flex flex-col h-full overflow-y-auto view-enter", style: { scrollbarWidth: "none" } },
     h('div', { className: "px-4 pt-4 pb-4" },
       h('div', { className: "flex items-center gap-4" },
-        h('div', { className: "w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black text-white flex-shrink-0", style: { background: GRAD, boxShadow: "0 8px 24px rgba(139,92,246,0.35)" } }, initials),
+        h('div', { onClick: () => setAvatarModal(true), className: "w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black text-white flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden", style: { background: GRAD, boxShadow: "0 8px 24px rgba(139,92,246,0.35)" } },
+          user?.avatar_url ? h('img', { src: user.avatar_url, alt: "", className: "w-full h-full object-cover" }) : initials
+        ),
         h('div', null,
           h('h1', { className: "text-lg font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, user?.display_name || "Joueur"),
           h('p', { className: "text-xs text-muted-foreground" }, `@${user?.username || "joueur"} \u00b7 PlayPad`),
           h('div', { className: "flex items-center gap-1.5 mt-1" }, h(Star, { size: 11, fill: "#f59e0b", stroke: "#f59e0b" }), h('span', { className: "text-xs font-bold text-amber-400" }, avgRating.toFixed(1)), h('span', { className: "text-xs text-muted-foreground" }, "note moyenne"))
+        )
+      ),
+      avatarModal && h('div', { className: "fixed inset-0 z-50 flex items-center justify-center" },
+        h('div', { className: "absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: () => setAvatarModal(false) }),
+        h('div', { className: "relative bg-card border border-border rounded-2xl p-5 w-80", style: { zIndex: 1 } },
+          h('p', { className: "text-sm font-black text-foreground mb-3", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Modifier l'avatar"),
+          h('input', { value: avatarUrl, onChange: e => setAvatarUrl(e.target.value), placeholder: "URL de l'image...", className: "w-full bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none mb-3" }),
+          avatarUrl && h('div', { className: "w-20 h-20 rounded-xl mx-auto mb-3 overflow-hidden" }, h('img', { src: avatarUrl, alt: "preview", className: "w-full h-full object-cover", onError: e => e.target.style.display = "none" })),
+          h('div', { className: "flex gap-2" },
+            h('button', { onClick: () => setAvatarModal(false), className: "flex-1 py-2 text-xs font-bold rounded-lg", style: { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, "Annuler"),
+            h('button', { onClick: async () => { setAvatarSaving(true); await onUpdateAvatar?.(avatarUrl); setAvatarSaving(false); setAvatarModal(false); }, disabled: avatarSaving, className: "flex-1 py-2 text-xs font-bold rounded-lg text-white", style: { background: GRAD } }, avatarSaving ? "..." : "Sauvegarder")
+          )
         )
       ),
       h('div', { className: "flex items-center gap-2 mt-4 pt-3 border-t border-border" },
@@ -943,6 +1089,11 @@ function App() {
     handleLogout();
   };
 
+  const handleUpdateAvatar = async (avatarUrl) => {
+    await API.updateAvatar(avatarUrl);
+    setUser(prev => ({ ...prev, avatar_url: avatarUrl }));
+  };
+
   if (loading) {
     return h('div', { className: "min-h-screen flex items-center justify-center", style: { background: "#030308" } },
       h('div', { className: "flex flex-col items-center gap-3" },
@@ -962,11 +1113,11 @@ function App() {
     h('div', { className: "app-content relative flex flex-col h-screen bg-background mx-auto" },
       h('div', { className: "flex-1 overflow-hidden" },
         h('div', { className: "h-full overflow-y-auto" },
-          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead }),
-          view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend }),
+          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData }),
+          view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame }),
           view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id); if (e) setSelectedGame(e); else { setSelectedGame({ ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); API.syncGames([{ ...game, user_rating: 0, review_text: "", review_public: 1, has_review: 0, status: "not_started", playtime: 0 }]).then(() => loadData()).catch(() => {}); } }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
-          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount })
+          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar })
         )
       ),
       h(BottomNav, { view, setView }),

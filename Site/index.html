@@ -57,6 +57,8 @@
   <script>
 const { useState, useEffect, useMemo, createElement: h } = React;
 
+const n = g => g && { ...g, hasReview: g.has_review ?? g.hasReview, userRating: g.user_rating ?? g.userRating, reviewText: g.review_text || g.reviewText || '', reviewPublic: g.review_public ?? g.reviewPublic };
+
 const API = {
   async request(method, url, body) {
     const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
@@ -598,9 +600,9 @@ function App() {
       return Promise.all([API.getGames(), API.getWishlist(), API.getTopThree()]);
     }).then(([gData, wData, tData]) => {
       console.log('[App] Data loaded:', gData.games.length, 'games,', wData.wishlist.length, 'wishlist');
-      setGames(gData.games);
+      setGames(gData.games.map(n));
       setWishlistIds(new Set(wData.wishlist));
-      const t = tData.topThree || [];
+      const t = (tData.topThree || []).map(n);
       setTopThree(t);
       setTopThreeIds(new Set(t.map(g => g.game_id)));
     }).catch((err) => {
@@ -610,9 +612,9 @@ function App() {
 
   const loadData = async () => {
     const [gData, wData, tData] = await Promise.all([API.getGames(), API.getWishlist(), API.getTopThree()]);
-    setGames(gData.games);
+    setGames(gData.games.map(n));
     setWishlistIds(new Set(wData.wishlist));
-    const t = tData.topThree || [];
+    const t = (tData.topThree || []).map(n);
     setTopThree(t);
     setTopThreeIds(new Set(t.map(g => g.game_id)));
   };
@@ -656,10 +658,10 @@ function App() {
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
-    API.getGames().then(d => setGames(d.games)).catch(() => {});
+    API.getGames().then(d => setGames((d.games || []).map(n))).catch(() => {});
     API.getWishlist().then(d => setWishlistIds(new Set(d.wishlist))).catch(() => {});
     API.getTopThree().then(d => {
-      const t = d.topThree || [];
+      const t = (d.topThree || []).map(n);
       setTopThree(t);
       setTopThreeIds(new Set(t.map(g => g.game_id)));
     }).catch(() => {});

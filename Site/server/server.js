@@ -216,6 +216,16 @@ app.delete('/api/account', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/games/ratings', async (req, res) => {
+  try {
+    const ratings = await db.getGameAvgRatings();
+    res.json({ ratings });
+  } catch (err) {
+    console.error('[Ratings] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`PlayPad server running on http://localhost:${PORT}`);
   console.log('[Server] SUPABASE_URL:', process.env.SUPABASE_URL ? 'defined' : 'MISSING');

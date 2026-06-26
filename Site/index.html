@@ -84,6 +84,7 @@ const API = {
   getTopThree: () => API.request('GET', '/api/topthree'),
   setTopThree: (gameId, position) => API.request('POST', '/api/topthree', { gameId, position }),
   getGameReviews: (gameId) => API.request('GET', `/api/games/reviews?gameId=${gameId}`),
+  getGameRatings: () => API.request('GET', '/api/games/ratings'),
   deleteAccount: () => API.request('DELETE', '/api/account'),
 };
 
@@ -115,6 +116,9 @@ const Users = Icon(["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 3a4 4 0 1 0
 const LogOut = Icon(["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "M16 17l5-5-5-5", "M21 12H9"]);
 const Briefcase = Icon(["M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16", "M4 10v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10", "M2 10h20"]);
 const Loader = Icon(["M12 2v4", "m16.2 7.8 2.9-2.9", "M18 12h4", "m16.2 16.2 2.9 2.9", "M12 18v4", "m4.9 19.1 2.9-2.9", "M2 12h4", "m4.9 4.9 2.9 2.9"]);
+const RefreshCw = Icon(["M23 4v6h-6", "M1 20v-6h6", "M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"]);
+const Zap = Icon(["M13 2 3 14h9l-1 8 10-12h-9l1-8z"]);
+const Bell = Icon(["M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9", "M13.73 21a2 2 0 0 1-3.46 0"]);
 
 const P1 = "#8B5CF6";
 const P2 = "#3B82F6";
@@ -217,13 +221,57 @@ const CATALOGUE = [
   { game_id: "c135", title: "Monster Hunter: World",      platform: "steam",    genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/582010/library_600x900.jpg",   year: 2018 },
 ];
 
-function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform }) {
+const FRIENDS = [
+  { id: "f1", initials: "AX", name: "Lucas Auchard", online: true, games: [
+    { id: "g1", game_id: "c105", title: "The Witcher 3: Wild Hunt", platform: "steam", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/292030/library_600x900.jpg", year: 2015, genre: "RPG", status: "completed", playtime: 220, userRating: 5, hasReview: true, reviewText: "Chef-d'oeuvre absolu.", reviewPublic: true },
+    { id: "g2", game_id: "c106", title: "Cyberpunk 2077", platform: "steam", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1091500/library_600x900.jpg", year: 2020, genre: "RPG", status: "playing", playtime: 80, userRating: 4, hasReview: true, reviewText: "Beaucoup mieux apres les patchs.", reviewPublic: true },
+    { id: "g3", game_id: "c111", title: "Elden Ring", platform: "ps5", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1245620/library_600x900.jpg", year: 2022, genre: "Action RPG", status: "playing", playtime: 150, userRating: 5, hasReview: true, reviewText: "Une claque monumentale.", reviewPublic: true },
+    { id: "g4", game_id: "c113", title: "Red Dead Redemption 2", platform: "epic", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1174180/library_600x900.jpg", year: 2018, genre: "Open World", status: "completed", playtime: 180, userRating: 5, hasReview: false, reviewText: "", reviewPublic: true },
+    { id: "g5", game_id: "c109", title: "Horizon Forbidden West", platform: "ps5", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2420110/library_600x900.jpg", year: 2022, genre: "Action RPG", status: "completed", playtime: 90, userRating: 4, hasReview: true, reviewText: "Tres beau, bon gameplay.", reviewPublic: true },
+  ]},
+  { id: "f2", initials: "PW", name: "PixelWizard", online: true, games: [
+    { id: "g6", game_id: "c107", title: "Dark Souls III", platform: "steam", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/374320/library_600x900.jpg", year: 2016, genre: "Action RPG", status: "completed", playtime: 300, userRating: 5, hasReview: true, reviewText: "Le meilleur des trois.", reviewPublic: true },
+    { id: "g7", game_id: "c114", title: "Hollow Knight", platform: "steam", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/367520/library_600x900.jpg", year: 2017, genre: "Metroidvania", status: "completed", playtime: 65, userRating: 5, hasReview: true, reviewText: "Un bijou d'animation.", reviewPublic: true },
+  ]},
+  { id: "f3", initials: "NR", name: "NeonRider", online: false, games: [
+    { id: "g8", game_id: "c108", title: "Sekiro: Shadows Die Twice", platform: "ps5", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/814380/library_600x900.jpg", year: 2019, genre: "Action-Aventure", status: "completed", playtime: 70, userRating: 4, hasReview: true, reviewText: "Difficile mais gratifiant.", reviewPublic: true },
+  ]},
+  { id: "f4", initials: "CC", name: "CosmicCoyote", online: true, games: [
+    { id: "g9", game_id: "c110", title: "Grand Theft Auto V", platform: "epic", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/271590/library_600x900.jpg", year: 2013, genre: "Open World", status: "completed", playtime: 400, userRating: 4, hasReview: true, reviewText: "Un classique intemporel.", reviewPublic: true },
+    { id: "g10", game_id: "c116", title: "DOOM Eternal", platform: "steam", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/782330/library_600x900.jpg", year: 2020, genre: "FPS", status: "playing", playtime: 40, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true },
+  ]},
+];
+
+const NOTIFICATIONS = [
+  { id: "n1", text: "PixelWizard a termine Dark Souls III", read: false, friendId: "f2" },
+  { id: "n2", text: "NeonRider a ajoute Sekiro a sa bibliotheque", read: false, friendId: "f3" },
+  { id: "n3", text: "CosmicCoyote joue a DOOM Eternal", read: false, friendId: "f4" },
+  { id: "n4", text: "Lucas Auchard a complete The Witcher 3", read: true, friendId: "f1" },
+  { id: "n5", text: "PixelWizard a mis a jour sa critique", read: true, friendId: "f2" },
+  { id: "n6", text: "NeonRider est en ligne", read: true, friendId: "f3" },
+];
+
+const PLATFORM_SYNC_DATA = [
+  { platform: "ps5",      gameCount: 12, lastSync: "il y a 5 min" },
+  { platform: "steam",    gameCount: 34, lastSync: "il y a 15 min" },
+  { platform: "epic",     gameCount: 8,  lastSync: "il y a 2h" },
+  { platform: "nintendo", gameCount: 0,  lastSync: "\u2014" },
+  { platform: "xbox",     gameCount: 0,  lastSync: "\u2014" },
+];
+
+function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead }) {
   const filtered = useMemo(() => games.filter(g =>
     (activePlatform === "all" || g.platform === activePlatform) &&
     g.title.toLowerCase().includes(search.toLowerCase())
   ), [games, activePlatform, search]);
   const totalHours = games.reduce((s, g) => s + g.playtime, 0);
   const platforms = ["all", "ps5", "steam", "epic", "nintendo", "xbox"];
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showSync, setShowSync] = useState(false);
+  const [syncing, setSyncing] = useState(null);
+  const [connected, setConnected] = useState({ ps5: true, steam: true, epic: true, nintendo: false, xbox: false });
+  const connectedCount = Object.values(connected).filter(Boolean).length;
+  const unread = notifications.filter(n => !n.read).length;
 
   return h('div', { className: "flex flex-col h-full view-enter" },
     h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
@@ -232,11 +280,46 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
         h('div', null,
           h('h1', { className: "text-xl font-black text-foreground leading-none", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Ma Biblioth\u00e8que"),
           h('p', { className: "text-xs text-muted-foreground mt-0.5" }, h('span', { className: "font-bold", style: { color: P1 } }, games.length), " jeux \u00b7 ", h('span', { className: "font-bold", style: { color: P2 } }, `${totalHours}h`), " jou\u00e9es")
+        ),
+        h('button', { onClick: () => { setShowSync(!showSync); setShowNotifications(false); }, className: "ml-auto p-1.5 rounded-lg hover:opacity-80 transition-opacity", style: { background: showSync ? `${P1}20` : "transparent" } }, h(Zap, { size: 14, style: { color: connectedCount > 0 ? P1 : "#8888aa" } })),
+        h('button', { onClick: () => { setShowNotifications(!showNotifications); setShowSync(false); }, className: "relative p-1.5 rounded-lg hover:opacity-80 transition-opacity", style: { background: showNotifications ? `${P1}20` : "transparent" } },
+          h(Bell, { size: 14, style: { color: unread > 0 ? P1 : "#8888aa" } }),
+          unread > 0 && h('span', { className: "absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-black text-white", style: { background: "#ef4444" } }, unread)
         )
       ),
       h('div', { className: "relative mb-3" },
         h(Search, { size: 13, className: "absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" }),
         h('input', { value: search, onChange: e => setSearch(e.target.value), placeholder: "Rechercher un jeu\u2026", className: "w-full bg-secondary/60 border border-border rounded-xl pl-8 pr-4 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none" })
+      ),
+      showSync && h('div', { className: "rounded-2xl p-3.5 mb-3 mt-1", style: { background: `${P1}08`, border: `1px solid ${P1}20` } },
+        h('div', { className: "flex items-center justify-between mb-2" },
+          h('div', { className: "flex items-center gap-2" }, h(Zap, { size: 12, style: { color: P1 } }), h('span', { className: "text-xs font-bold", style: { color: "#c4b5fd" } }, `${connectedCount} plateforme(s) connect\u00e9e(s)`)),
+          h('button', { onClick: () => {}, className: "sync-btn px-3 py-1 text-white text-[10px] font-bold rounded-lg flex items-center gap-1.5", style: { background: GRAD } }, h(RefreshCw, { size: 10 }), "Tout sync")
+        ),
+        h('div', { className: "space-y-1.5" }, PLATFORM_SYNC_DATA.map(({ platform, gameCount, lastSync }) => {
+          const cfg = PLATFORM_CONFIG[platform];
+          const isConnected = connected[platform];
+          return h('div', { key: platform, className: "flex items-center gap-2.5 py-1.5" },
+            h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0", style: { background: cfg.color + "20" } }, h(PlatformLogo, { platform, size: 16 })),
+            h('div', { className: "flex-1 min-w-0" },
+              h('div', { className: "flex items-center gap-1.5" }, h('span', { className: "text-[11px] font-bold text-foreground" }, cfg.name), h('div', { className: "w-1 h-1 rounded-full", style: { background: isConnected ? "#4ade80" : "#ef444450", boxShadow: isConnected ? "0 0 4px #4ade8080" : "none" } })),
+              h('p', { className: "text-[9px] text-muted-foreground" }, isConnected ? `${gameCount} jeux \u00b7 ${lastSync}` : "Non connect\u00e9")
+            ),
+            isConnected
+              ? h('button', { onClick: () => { setSyncing(platform); setTimeout(() => setSyncing(null), 2000); }, className: "p-1.5 rounded-lg", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, className: syncing === platform ? "animate-spin" : "", style: { color: P1 } }))
+              : h('button', { onClick: () => setConnected(p => ({ ...p, [platform]: true })), className: "px-2 py-0.5 text-[9px] font-bold rounded-md text-white", style: { background: GRAD } }, "+")
+          );
+        }))
+      ),
+      showNotifications && h('div', { className: "rounded-2xl p-3", style: { background: `${P1}08`, border: `1px solid ${P1}20` } },
+        h('p', { className: "text-[10px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5", style: { color: "#c4b5fd" } }, h(Bell, { size: 10 }), "Notifications"),
+        notifications.length === 0
+          ? h('p', { className: "text-xs text-muted-foreground py-2" }, "Aucune notification")
+          : h('div', { className: "space-y-1.5" }, notifications.map(n => h('div', { key: n.id, onClick: () => onMarkAsRead?.(n.id, n.friendId), className: "flex items-start gap-2.5 py-1.5 cursor-pointer hover:opacity-80" },
+            h('div', { className: "w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0", style: { background: n.read ? "transparent" : P1, boxShadow: n.read ? "none" : `0 0 4px ${P1}80` } }),
+            h('p', { className: "text-[11px] text-foreground/80 leading-snug flex-1" }, n.text),
+            h('span', { className: "text-[9px] text-muted-foreground flex-shrink-0" }, "a l'instant")
+          )))
       ),
       h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
         platforms.map(p => { const a = activePlatform === p; const c = p === "all" ? games.length : games.filter(g => g.platform === p).length; return h('button', { key: p, onClick: () => setActivePlatform(p), className: "pill-btn flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold", style: a ? { background: GRAD, color: "#fff", boxShadow: "0 4px 14px rgba(139,92,246,0.35)" } : { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, p !== "all" && h(PlatformLogo, { platform: p, size: 13 }), h('span', null, p === "all" ? "Tous" : PLATFORM_CONFIG[p].label), h('span', { style: { opacity: 0.6, fontSize: 10 } }, c)); })
@@ -250,7 +333,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   );
 }
 
-function CatalogueView({ onSelect, wishlistIds, onToggleWishlist }) {
+function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings }) {
   const [search, setSearch] = useState("");
   const [activePlatform, setActivePlatform] = useState("all");
   const [activeGenre, setActiveGenre] = useState("all");
@@ -278,7 +361,62 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist }) {
     h('div', { className: "flex-1 overflow-y-auto px-4 pb-4", style: { scrollbarWidth: "none" } },
       filtered.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
-        : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id, game, onClick: () => onSelect(game), wishlistIds, onWishlist: onToggleWishlist })))
+        : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id, game: { ...game, userRating: ratings?.[game.game_id] || 0 }, onClick: () => onSelect(game), wishlistIds, onWishlist: onToggleWishlist })))
+    )
+  );
+}
+
+function CommunityView({ friends, onSelectFriend }) {
+  return h('div', { className: "flex flex-col h-full overflow-y-auto view-enter", style: { scrollbarWidth: "none" } },
+    h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
+      h('h1', { className: "text-xl font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Communaute"),
+      h('p', { className: "text-xs text-muted-foreground mt-0.5" }, h('span', { className: "font-bold", style: { color: P1 } }, friends.length), " amis connectes")
+    ),
+    h('div', { className: "px-4 pb-6 space-y-3" },
+      friends.map(friend => {
+        const completedCount = friend.games.filter(g => g.status === "completed").length;
+        return h('div', { key: friend.id, onClick: () => onSelectFriend?.(friend), className: "bg-card border border-border rounded-2xl p-4 flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" },
+          h('div', { className: "relative w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black text-white flex-shrink-0", style: { background: GRAD } },
+            friend.initials,
+            friend.online && h('div', { className: "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-card", style: { background: "#22c55e", boxShadow: "0 0 8px rgba(34,197,94,0.6)" } })
+          ),
+          h('div', { className: "flex-1 min-w-0" },
+            h('p', { className: "text-sm font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, friend.name),
+            h('p', { className: "text-[10px] text-muted-foreground mt-0.5" }, `${friend.games.length} jeux \u00b7 ${completedCount} termines`)
+          ),
+          h('div', { className: "flex items-center gap-1" },
+            h('div', { className: "w-2 h-2 rounded-full", style: { background: friend.online ? "#22c55e" : "#444466", boxShadow: friend.online ? "0 0 8px rgba(34,197,94,0.6)" : "none" } }),
+            h('span', { className: "text-[10px] font-medium", style: { color: friend.online ? "#22c55e" : "#444466" } }, friend.online ? "En ligne" : "Hors ligne")
+          )
+        );
+      })
+    )
+  );
+}
+
+function FriendProfileSheet({ friend, onClose }) {
+  const completed = friend.games.filter(g => g.status === "completed").length;
+  const playing = friend.games.filter(g => g.status === "playing").length;
+  return h('div', { className: "fixed inset-0 z-50" },
+    h('div', { className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
+    h('div', { className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-hidden flex flex-col", style: { maxHeight: "88%" } },
+      h('div', { className: "px-4 pt-4 pb-3 flex-shrink-0 border-b border-border" },
+        h('div', { className: "flex items-center gap-3" },
+          h('div', { className: "w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black text-white flex-shrink-0", style: { background: GRAD } }, friend.initials),
+          h('div', null,
+            h('h2', { className: "text-lg font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, friend.name),
+            h('p', { className: "text-xs text-muted-foreground" }, `${friend.games.length} jeux \u00b7 ${completed} termines \u00b7 ${playing} en cours`)
+          ),
+          h('button', { onClick: onClose, className: "ml-auto w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0", style: { background: "rgba(0,0,0,0.5)" } }, h(X, { size: 16, className: "text-white" }))
+        )
+      ),
+      h('div', { className: "overflow-y-auto flex-1", style: { scrollbarWidth: "none" } },
+        h('div', { className: "px-4 pt-4 pb-8" },
+          h('div', { className: "grid grid-cols-2 md:grid-cols-3 gap-3" },
+            friend.games.map(game => h(GameCard, { key: game.id, game, onClick: onClose }))
+          )
+        )
+      )
     )
   );
 }
@@ -312,7 +450,7 @@ function ReviewsView({ games, onSelect }) {
   );
 }
 
-function ProfileView({ user, games, wishlistIds, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount }) {
+function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount }) {
   const completed  = games.filter(g => g.status === "completed").length;
   const playing    = games.filter(g => g.status === "playing").length;
   const backlog    = games.filter(g => g.status === "backlog").length;
@@ -370,10 +508,16 @@ function ProfileView({ user, games, wishlistIds, onToggleWishlist, onSelect, top
     h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Distribution des notes"), h('div', { className: "bg-card border border-border rounded-2xl p-4" }, ratingDist.map(({ score, count }) => h('div', { key: score, className: "flex items-center gap-2 mb-1.5 last:mb-0" }, h('div', { className: "flex gap-px w-14 flex-shrink-0" }, Array.from({ length: score }).map((_, i) => h(Star, { key: i, size: 9, fill: "#f59e0b", stroke: "#f59e0b" }))), h('div', { className: "flex-1 h-2 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full bg-amber-500", style: { width: `${(count / maxCount) * 100}%` } })), h('span', { className: "text-xs text-muted-foreground w-4 text-right font-mono" }, count))))),
     h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Par plateforme"), h('div', { className: "bg-card border border-border rounded-2xl p-4 flex flex-wrap gap-4" }, ["ps5","steam","epic","nintendo","xbox"].map(p => h('div', { key: p, className: "flex items-center gap-2" }, h(PlatformLogo, { platform: p, size: 16 }), h('span', { className: "text-xs font-bold text-foreground" }, PLATFORM_CONFIG[p].label), h('span', { className: "text-xs font-black font-mono", style: { color: p === "steam" ? "#c2dbf0" : PLATFORM_CONFIG[p].color } }, games.filter(g => g.platform === p).length))))),
     h('div', { className: "px-4 mb-4" }, h('button', { onClick: onDeleteAccount, className: "text-[10px] font-medium flex items-center gap-1.5 hover:opacity-80 transition-opacity", style: { color: "#ef444488" } }, "Supprimer mon compte")),
+    h('div', { className: "px-4 mb-6" },
+      h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5" }, h(Heart, { size: 11, fill: "#ef4444", stroke: "#ef4444", strokeWidth: 2 }), "Liste de souhaits (", wishlistIds.size, ")"),
+      wishlistIds.size === 0
+        ? h('div', { className: "bg-card border border-border rounded-2xl p-5 text-center" }, h(Heart, { size: 24, className: "mx-auto mb-2 opacity-20 text-muted-foreground" }), h('p', { className: "text-xs text-muted-foreground" }, "Aucun jeu dans ta liste"))
+        : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, CATALOGUE.filter(g => wishlistIds.has(g.game_id)).map(game => h(GameCard, { key: game.game_id, game: { ...game, userRating: ratings?.[game.game_id] || 0 }, onClick: () => onSelect?.(game), wishlistIds, onWishlist: onToggleWishlist })))
+    )
   );
 }
 
-function GameDetailSheet({ game, onClose, onSaveReview, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, userId }) {
+function GameDetailSheet({ game, onClose, onSaveReview, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, userId, ratings }) {
   const [editing, setEditing] = useState(false);
   const [draftRating, setDraftRating] = useState(game.userRating);
   const [draftReview, setDraftReview] = useState(game.review_text || game.reviewText || "");
@@ -382,6 +526,7 @@ function GameDetailSheet({ game, onClose, onSaveReview, wishlistIds, onToggleWis
   const [saving, setSaving] = useState(false);
   const [communityReviews, setCommunityReviews] = useState([]);
   const gameId = game.game_id || game.id;
+  const globalRating = ratings?.[gameId];
 
   useEffect(() => {
     API.getGameReviews(gameId).then(data => {
@@ -456,6 +601,9 @@ function GameDetailSheet({ game, onClose, onSaveReview, wishlistIds, onToggleWis
               })
             )
           ),
+          h('div', { className: "grid grid-cols-4 gap-1.5 mb-5" },
+            [{ icon: h(Clock, { size: 11, style: { color: P2 } }), val: `${game.playtime || 0}h`, sub: "jou\u00e9es" },{ icon: h(Trophy, { size: 11, className: "text-amber-400" }), val: String(game.year || "\u2014"), sub: "sortie" },{ icon: h(Star, { size: 11, fill: "#f59e0b", stroke: "#f59e0b" }), val: game.userRating ? `${game.userRating}/5` : "\u2014", sub: "ta note" },{ icon: h(Star, { size: 11, fill: globalRating ? "#8B5CF6" : "none", stroke: "#8B5CF6" }), val: globalRating ? globalRating.toFixed(1) : "\u2014", sub: "globale" }].map(({ icon, val, sub }) => h('div', { key: sub, className: "bg-secondary/50 rounded-xl p-2 text-center" }, h('div', { className: "flex justify-center mb-0.5" }, icon), h('p', { className: "text-xs font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, val), h('p', { className: "text-[9px] text-muted-foreground" }, sub)))
+          ),
           h('div', { className: "border-t border-border pt-4" },
             h('div', { className: "flex items-center justify-between mb-4" }, h('h3', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Ma Critique"), !editing && h('button', { onClick: () => setEditing(true), className: "flex items-center gap-1.5 text-xs font-bold hover:opacity-80", style: { color: P1 } }, h(Edit3, { size: 12 }), game.hasReview ? "Modifier" : "R\u00e9diger")),
             editing
@@ -473,14 +621,18 @@ function GameDetailSheet({ game, onClose, onSaveReview, wishlistIds, onToggleWis
                 : h('div', { className: "py-8 text-center" }, h(Edit3, { size: 28, className: "text-muted-foreground/20 mx-auto mb-2.5" }), h('p', { className: "text-xs text-muted-foreground" }, "Aucune critique r\u00e9dig\u00e9e"), h('p', { className: "text-xs mt-1", style: { color: "rgba(136,136,170,0.45)" } }, "Appuie sur \"R\u00e9diger\" pour partager ton avis"))
   ),
   communityReviews.length > 0 && h('div', { className: "border-t border-border pt-4 mt-4" },
-    h('h3', { className: "text-sm font-black text-foreground mb-4", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Critiques de la communaut\u00e9"),
-    communityReviews.map((review, i) => h('div', { key: i, className: "bg-secondary/40 rounded-xl p-3.5 mb-3" },
-      h('div', { className: "flex items-center justify-between mb-2" },
-        h('span', { className: "text-xs font-bold text-foreground" }, review.users?.display_name || review.users?.username || "Anonyme"),
-        h(StarRating, { rating: review.rating || 0, size: 14 })
-      ),
-      review.review_text ? h('p', { className: "text-xs text-foreground/70 leading-relaxed" }, review.review_text) : h('p', { className: "text-[10px] text-muted-foreground/50 italic" }, "Aucun texte")
-    ))
+    h('h3', { className: "text-sm font-black text-foreground mb-4", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Avis de la communaut\u00e9"),
+    h('div', { className: "space-y-2.5" }, communityReviews.map((review, i) => {
+      const positive = review.rating >= 4;
+      return h('div', { key: i, className: "rounded-xl p-3", style: { background: positive ? "rgba(34,197,94,0.06)" : "rgba(239,68,68,0.06)", border: `1px solid ${positive ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)"}` } },
+        h('div', { className: "flex items-center justify-between mb-1.5" },
+          h('div', { className: "flex items-center gap-1.5" }, h('div', { className: "w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-black text-white", style: { background: positive ? "#22c55e" : "#ef4444" } }, (review.users?.display_name || review.users?.username || "A")[0]), h('span', { className: "text-[10px] font-bold text-foreground" }, review.users?.display_name || review.users?.username || "Anonyme")),
+          h(StarRating, { rating: review.rating || 0, size: 8 })
+        ),
+        review.review_text ? h('p', { className: "text-[10px] text-muted-foreground leading-relaxed" }, review.review_text) : h('p', { className: "text-[10px] text-muted-foreground/50 italic" }, "Aucun texte"),
+        h('div', { className: "flex items-center gap-1 mt-1.5" }, h('span', { className: `text-[8px] font-bold ${positive ? "text-green-400" : "text-red-400"}` }, positive ? "Recommand\u00e9" : "D\u00e9conseill\u00e9"))
+      );
+    }))
   )
         )
       )
@@ -488,20 +640,17 @@ function GameDetailSheet({ game, onClose, onSaveReview, wishlistIds, onToggleWis
   );
 }
 
-function BottomNav({ view, setView, games }) {
-  const reviewed = games.filter(g => g.hasReview).length;
+function BottomNav({ view, setView }) {
   const items = [
-    { id: "library",   label: "Biblio",     Icon: Gamepad2, badge: null },
-    { id: "catalogue", label: "Catalogue",  Icon: Briefcase, badge: null },
-    { id: "reviews",   label: "Critiques",  Icon: Edit3, badge: reviewed > 0 ? reviewed : null },
-    { id: "profile",   label: "Profil",     Icon: User, badge: null },
+    { id: "library",   label: "Biblio",     Icon: Gamepad2 },
+    { id: "community", label: "Communaute", Icon: Users },
+    { id: "reviews",   label: "Critiques",  Icon: Edit3 },
+    { id: "catalogue", label: "Catalogue",  Icon: Briefcase },
+    { id: "profile",   label: "Profil",     Icon: User },
   ];
   return h('div', { className: "absolute bottom-0 left-0 right-0 h-20 flex items-start justify-around px-2 pt-3 pb-5 border-t border-border", style: { background: "rgba(15,15,28,0.96)", backdropFilter: "blur(20px)" } },
-    items.map(({ id, label, Icon, badge }) => h('button', { key: id, onClick: () => setView(id), className: "nav-btn flex flex-col items-center gap-1 transition-all relative", style: { color: view === id ? P1 : "#8888aa" } },
-      h('div', { className: "p-1.5 rounded-xl", style: { background: view === id ? `${P1}20` : "transparent" } },
-        h(Icon, { size: 20 }),
-        badge != null && h('span', { className: "absolute top-0 right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black text-white", style: { background: "#ef4444" } }, badge)
-      ),
+    items.map(({ id, label, Icon }) => h('button', { key: id, onClick: () => setView(id), className: "nav-btn flex flex-col items-center gap-1 transition-all relative", style: { color: view === id ? P1 : "#8888aa" } },
+      h('div', { className: "p-1.5 rounded-xl", style: { background: view === id ? `${P1}20` : "transparent" } }, h(Icon, { size: 20 })),
       h('span', { className: "text-[9px] font-bold tracking-wide uppercase", style: { fontFamily: "'JetBrains Mono', monospace" } }, label)
     ))
   );
@@ -588,6 +737,9 @@ function App() {
   const [selectedGame, setSelectedGame] = useState(null);
   const [search, setSearch] = useState("");
   const [activePlatform, setActivePlatform] = useState("all");
+  const [ratings, setRatings] = useState({});
+  const [selectedFriend, setSelectedFriend] = useState(null);
+  const [notifications, setNotifications] = useState(NOTIFICATIONS);
   const [toast, setToast] = useState(null);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
@@ -597,26 +749,28 @@ function App() {
     API.me().then(data => {
       console.log('[App] Session found:', data.user);
       setUser(data.user);
-      return Promise.all([API.getGames(), API.getWishlist(), API.getTopThree()]);
-    }).then(([gData, wData, tData]) => {
+      return Promise.all([API.getGames(), API.getWishlist(), API.getTopThree(), API.getGameRatings()]);
+    }).then(([gData, wData, tData, rData]) => {
       console.log('[App] Data loaded:', gData.games.length, 'games,', wData.wishlist.length, 'wishlist');
       setGames(gData.games.map(n));
       setWishlistIds(new Set(wData.wishlist));
       const t = (tData.topThree || []).map(n);
       setTopThree(t);
       setTopThreeIds(new Set(t.map(g => g.game_id)));
+      setRatings(rData.ratings || {});
     }).catch((err) => {
       console.log('[App] No session (expected if not logged in):', err?.message);
     }).finally(() => setLoading(false));
   }, []);
 
   const loadData = async () => {
-    const [gData, wData, tData] = await Promise.all([API.getGames(), API.getWishlist(), API.getTopThree()]);
+    const [gData, wData, tData, rData] = await Promise.all([API.getGames(), API.getWishlist(), API.getTopThree(), API.getGameRatings()]);
     setGames(gData.games.map(n));
     setWishlistIds(new Set(wData.wishlist));
     const t = (tData.topThree || []).map(n);
     setTopThree(t);
     setTopThreeIds(new Set(t.map(g => g.game_id)));
+    setRatings(rData.ratings || {});
   };
 
   const handleAddToLibrary = async (game) => {
@@ -665,6 +819,7 @@ function App() {
       setTopThree(t);
       setTopThreeIds(new Set(t.map(g => g.game_id)));
     }).catch(() => {});
+    API.getGameRatings().then(d => setRatings(d.ratings || {})).catch(() => {});
   };
 
   const handleLogout = async () => {
@@ -675,6 +830,14 @@ function App() {
     setTopThree([]);
     setTopThreeIds(new Set());
     setView("library");
+  };
+
+  const markAsRead = (id, friendId) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    if (friendId) {
+      const friend = FRIENDS.find(f => f.id === friendId);
+      if (friend) { setSelectedFriend(friend); setView("community"); }
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -702,13 +865,14 @@ function App() {
     h('div', { className: "app-content relative flex flex-col h-screen bg-background mx-auto" },
       h('div', { className: "flex-1 overflow-hidden" },
         h('div', { className: "h-full overflow-y-auto" },
-          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform }),
-          view === "catalogue" && h(CatalogueView, { onSelect: handleAddToLibrary, wishlistIds, onToggleWishlist: handleToggleWishlist }),
+          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead }),
+          view === "community" && h(CommunityView, { friends: FRIENDS, onSelectFriend: setSelectedFriend }),
+          view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id); if (e) setSelectedGame(e); else { setSelectedGame({ ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); API.syncGames([{ ...game, user_rating: 0, review_text: "", review_public: 1, has_review: 0, status: "not_started", playtime: 0 }]).then(() => loadData()).catch(() => {}); } }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
-          view === "profile" && h(ProfileView, { user, games, wishlistIds, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount })
+          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount })
         )
       ),
-      h(BottomNav, { view, setView, games }),
+      h(BottomNav, { view, setView }),
       selectedGame && h(GameDetailSheet, {
         key: selectedGame.game_id || selectedGame.id,
         game: selectedGame,
@@ -719,7 +883,9 @@ function App() {
         topThreeIds,
         onToggleTopThree: handleToggleTopThree,
         userId: user?.id,
+        ratings,
       }),
+      selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => setSelectedFriend(null) }),
       toast && h('div', { className: "toast", style: { background: GRAD } }, toast)
     )
   );

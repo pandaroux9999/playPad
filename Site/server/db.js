@@ -208,6 +208,25 @@ async function getGameReviews(gameId) {
   return data || [];
 }
 
+async function getGameAvgRatings() {
+  const { data, error } = await supabaseAdmin
+    .from('community_reviews')
+    .select('game_id, rating')
+    .not('rating', 'is', null);
+  if (error) throw new Error(error.message);
+  const map = {};
+  const counts = {};
+  for (const r of data || []) {
+    map[r.game_id] = (map[r.game_id] || 0) + r.rating;
+    counts[r.game_id] = (counts[r.game_id] || 0) + 1;
+  }
+  const result = {};
+  for (const id of Object.keys(map)) {
+    result[id] = Math.round(map[id] / counts[id]);
+  }
+  return result;
+}
+
 module.exports = {
   createUser,
   getUserByUsername,
@@ -218,6 +237,7 @@ module.exports = {
   updateGameRating,
   savePublicReview,
   getGameReviews,
+  getGameAvgRatings,
   getWishlist,
   toggleWishlist,
   getTopThree,

@@ -273,7 +273,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const unread = notifications.filter(n => !n.read).length;
 
   return h('div', { className: "flex flex-col h-full view-enter" },
-    h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
+    h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0", style: { position: "relative", overflow: "visible" } },
       h('div', { className: "flex items-center gap-2.5 mb-3" },
         h('img', { src: "logo_hackaton.png", alt: "PlayPad", className: "w-9 h-9 object-contain" }),
         h('div', null,
@@ -290,7 +290,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
         h(Search, { size: 13, className: "absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" }),
         h('input', { value: search, onChange: e => setSearch(e.target.value), placeholder: "Rechercher un jeu\u2026", className: "w-full bg-secondary/60 border border-border rounded-xl pl-8 pr-4 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none" })
       ),
-      showSync && h('div', { className: "rounded-2xl p-3.5 mb-3 mt-1", style: { background: `${P1}08`, border: `1px solid ${P1}20` } },
+      showSync && h('div', { className: "rounded-2xl p-3.5", style: { background: `${P1}08`, border: `1px solid ${P1}20`, position: "absolute", zIndex: 20, top: "100%", left: 16, right: 16 } },
         h('div', { className: "flex items-center justify-between mb-2" },
           h('div', { className: "flex items-center gap-2" }, h(Zap, { size: 12, style: { color: P1 } }), h('span', { className: "text-xs font-bold", style: { color: "#c4b5fd" } }, `${connectedCount} plateforme(s) connect\u00e9e(s)`)),
           h('button', { onClick: () => {}, className: "sync-btn px-3 py-1 text-white text-[10px] font-bold rounded-lg flex items-center gap-1.5", style: { background: GRAD } }, h(RefreshCw, { size: 10 }), "Tout sync")
@@ -310,7 +310,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
           );
         }))
       ),
-      showNotifications && h('div', { className: "rounded-2xl p-3", style: { background: `${P1}08`, border: `1px solid ${P1}20` } },
+      showNotifications && h('div', { className: "rounded-2xl p-3", style: { background: `${P1}08`, border: `1px solid ${P1}20`, position: "absolute", zIndex: 30, top: "100%", left: 16, right: 16 } },
         h('p', { className: "text-[10px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5", style: { color: "#c4b5fd" } }, h(Bell, { size: 10 }), "Notifications"),
         notifications.length === 0
           ? h('p', { className: "text-xs text-muted-foreground py-2" }, "Aucune notification")

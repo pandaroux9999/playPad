@@ -239,8 +239,7 @@ app.get('/api/games/ratings', async (req, res) => {
 app.get('/api/users/search', requireAuth, async (req, res) => {
   try {
     const { q } = req.query;
-    if (!q || q.length < 1) return res.json({ users: [] });
-    const users = await db.searchUsers(q, req.session.userId);
+    const users = await db.searchUsers(q || '', req.session.userId);
     res.json({ users });
   } catch (err) {
     console.error('[UserSearch] Error:', err.message);

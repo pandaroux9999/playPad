@@ -240,12 +240,16 @@ async function getGameAvgRatings() {
 }
 
 async function searchUsers(query, currentUserId) {
-  const { data, error } = await supabaseAdmin
+  let builder = supabaseAdmin
     .from('users')
     .select('id, username, display_name')
     .neq('id', currentUserId)
-    .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
-    .limit(20);
+    .limit(50);
+  if (query && query.trim()) {
+    const q = `%${query.trim()}%`;
+    builder = builder.or(`username.ilike.${q},display_name.ilike.${q}`);
+  }
+  const { data, error } = await builder;
   if (error) throw new Error(error.message);
   return data || [];
 }

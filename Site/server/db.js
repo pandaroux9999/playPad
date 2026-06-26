@@ -179,10 +179,33 @@ async function setTopThree(userId, gameId, position) {
 }
 
 async function deleteUserAccount(userId) {
+  await supabaseAdmin.from('community_reviews').delete().eq('user_id', userId);
   await supabaseAdmin.from('top_three').delete().eq('user_id', userId);
   await supabaseAdmin.from('wishlist').delete().eq('user_id', userId);
   await supabaseAdmin.from('games').delete().eq('user_id', userId);
   await supabaseAdmin.from('users').delete().eq('id', userId);
+}
+
+async function savePublicReview(userId, gameId, rating, reviewText) {
+  const { error } = await supabaseAdmin
+    .from('community_reviews')
+    .upsert({
+      user_id: userId,
+      game_id: gameId,
+      rating,
+      review_text: reviewText,
+    }, { onConflict: 'user_id, game_id' });
+  if (error) throw new Error(error.message);
+}
+
+async function getGameReviews(gameId) {
+  const { data, error } = await supabaseAdmin
+    .from('community_reviews')
+    .select(`*, users(display_name, username)`)
+    .eq('game_id', gameId)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data || [];
 }
 
 module.exports = {
@@ -193,6 +216,8 @@ module.exports = {
   upsertGame,
   updateGameStatus,
   updateGameRating,
+  savePublicReview,
+  getGameReviews,
   getWishlist,
   toggleWishlist,
   getTopThree,

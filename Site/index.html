@@ -38,6 +38,16 @@
     .sheet-close-btn { transition: background 0.2s ease; }
     .sheet-close-btn:hover { background: rgba(0,0,0,0.7) !important; }
     .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 999; padding: 10px 24px; border-radius: 12px; font-size: 13px; font-weight: 600; color: #fff; animation: fadeSlideIn 0.3s ease-out; pointer-events: none; }
+    @media (min-width: 768px) {
+      .game-card:hover { transform: scale(1.03); }
+      .nav-btn { transition: all 0.2s ease; }
+      .nav-btn:hover { opacity: 0.8; transform: translateY(-2px); }
+      .sheet-panel { max-width: 480px !important; left: 50% !important; right: auto !important; top: 50% !important; bottom: auto !important; transform: translate(-50%, -50%) !important; border-radius: 28px !important; max-height: 90vh !important; box-shadow: 0 25px 60px rgba(0,0,0,0.6); }
+      .sheet-overlay { background: rgba(0,0,0,0.7) !important; }
+    }
+    @media (min-width: 1024px) {
+      .app-content { max-width: 1200px !important; margin: 0 auto !important; }
+    }
   </style>
 </head>
 <body>
@@ -71,6 +81,7 @@ const API = {
   toggleWishlist: (gameId) => API.request('POST', '/api/wishlist/toggle', { gameId }),
   getTopThree: () => API.request('GET', '/api/topthree'),
   setTopThree: (gameId, position) => API.request('POST', '/api/topthree', { gameId, position }),
+  getGameReviews: (gameId) => API.request('GET', `/api/games/reviews?gameId=${gameId}`),
   deleteAccount: () => API.request('DELETE', '/api/account'),
 };
 
@@ -232,7 +243,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
     h('div', { className: "flex-1 overflow-y-auto px-4 pb-4", style: { scrollbarWidth: "none" } },
       filtered.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
-        : h('div', { className: "grid grid-cols-2 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: () => onSelect(game) })))
+        : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: () => onSelect(game) })))
     )
   );
 }
@@ -265,7 +276,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist }) {
     h('div', { className: "flex-1 overflow-y-auto px-4 pb-4", style: { scrollbarWidth: "none" } },
       filtered.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
-        : h('div', { className: "grid grid-cols-2 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id, game, onClick: () => onSelect(game), wishlistIds, onWishlist: onToggleWishlist })))
+        : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id, game, onClick: () => onSelect(game), wishlistIds, onWishlist: onToggleWishlist })))
     )
   );
 }
@@ -345,7 +356,7 @@ function ProfileView({ user, games, wishlistIds, onToggleWishlist, onSelect, top
         })
       )
     ),
-    h('div', { className: "px-4 grid grid-cols-2 gap-3 mb-4" },
+    h('div', { className: "px-4 grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" },
       [{ label: "Jeux totaux", value: games.length, color: P1, Icon: Gamepad2 },{ label: "Heures jou\u00e9es", value: `${totalHours}h`, color: P2, Icon: Clock },{ label: "Termin\u00e9s", value: completed, color: "#22c55e", Icon: Trophy },{ label: "Critiques", value: reviewed, color: "#f59e0b", Icon: Edit3 }].map(({ label, value, color, Icon }) =>
         h('div', { key: label, className: "bg-card border border-border rounded-2xl p-3.5" }, h('div', { className: "flex items-center gap-1.5 mb-2" }, h(Icon, { size: 13, style: { color } }), h('span', { className: "text-xs font-medium text-muted-foreground" }, label)), h('span', { className: "text-2xl font-black", style: { fontFamily: "'Rajdhani', sans-serif", color } }, value))
       )
@@ -360,23 +371,37 @@ function ProfileView({ user, games, wishlistIds, onToggleWishlist, onSelect, top
   );
 }
 
-function GameDetailSheet({ game, onClose, onSaveReview, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree }) {
+function GameDetailSheet({ game, onClose, onSaveReview, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, userId }) {
   const [editing, setEditing] = useState(false);
   const [draftRating, setDraftRating] = useState(game.userRating);
   const [draftReview, setDraftReview] = useState(game.review_text || game.reviewText || "");
   const [draftPublic, setDraftPublic] = useState(game.review_public !== undefined ? game.review_public : (game.reviewPublic !== false));
   const [status, setStatus] = useState(game.status);
   const [saving, setSaving] = useState(false);
+  const [communityReviews, setCommunityReviews] = useState([]);
   const gameId = game.game_id || game.id;
+
+  useEffect(() => {
+    API.getGameReviews(gameId).then(data => {
+      setCommunityReviews(data.reviews?.filter(r => Number(r.user_id) !== Number(userId)) || []);
+    }).catch(() => {});
+  }, [gameId]);
   const statusCfg = status ? STATUS_CONFIG[status] : STATUS_CONFIG.not_started;
   const inWishlist = wishlistIds?.has(gameId);
   const inTopThree = topThreeIds?.has(gameId);
+
+  const refreshCommunityReviews = () => {
+    API.getGameReviews(gameId).then(data => {
+      setCommunityReviews(data.reviews?.filter(r => Number(r.user_id) !== Number(userId)) || []);
+    }).catch(() => {});
+  };
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await onSaveReview(gameId, draftRating, draftReview, draftPublic);
       setEditing(false);
+      refreshCommunityReviews();
     } catch (e) {}
     setSaving(false);
   };
@@ -444,7 +469,17 @@ function GameDetailSheet({ game, onClose, onSaveReview, wishlistIds, onToggleWis
               : game.hasReview
                 ? h('div', { className: "space-y-3" }, h(StarRating, { rating: game.userRating, size: 18 }), h('div', { className: "bg-secondary/40 rounded-xl p-3.5" }, h('p', { className: "text-xs text-foreground/80 leading-relaxed" }, game.review_text || game.reviewText)), h('div', { className: "flex items-center gap-2" }, (game.review_public || game.reviewPublic) ? h(Globe, { size: 12, className: "text-green-400" }) : h(Lock, { size: 12, className: "text-amber-400" }), h('span', { className: `text-xs font-bold ${(game.review_public || game.reviewPublic) ? "text-green-400" : "text-amber-400"}` }, (game.review_public || game.reviewPublic) ? "Critique publique" : "Critique priv\u00e9e")))
                 : h('div', { className: "py-8 text-center" }, h(Edit3, { size: 28, className: "text-muted-foreground/20 mx-auto mb-2.5" }), h('p', { className: "text-xs text-muted-foreground" }, "Aucune critique r\u00e9dig\u00e9e"), h('p', { className: "text-xs mt-1", style: { color: "rgba(136,136,170,0.45)" } }, "Appuie sur \"R\u00e9diger\" pour partager ton avis"))
-          )
+  ),
+  communityReviews.length > 0 && h('div', { className: "border-t border-border pt-4 mt-4" },
+    h('h3', { className: "text-sm font-black text-foreground mb-4", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Critiques de la communaut\u00e9"),
+    communityReviews.map((review, i) => h('div', { key: i, className: "bg-secondary/40 rounded-xl p-3.5 mb-3" },
+      h('div', { className: "flex items-center justify-between mb-2" },
+        h('span', { className: "text-xs font-bold text-foreground" }, review.users?.display_name || review.users?.username || "Anonyme"),
+        h(StarRating, { rating: review.rating || 0, size: 14 })
+      ),
+      review.review_text ? h('p', { className: "text-xs text-foreground/70 leading-relaxed" }, review.review_text) : h('p', { className: "text-[10px] text-muted-foreground/50 italic" }, "Aucun texte")
+    ))
+  )
         )
       )
     )
@@ -506,8 +541,7 @@ function AuthPage({ onLoginSuccess }) {
       h('div', { className: "absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full blur-3xl", style: { background: `${P1}07` } }),
       h('div', { className: "absolute bottom-1/4 right-1/3 w-64 h-64 rounded-full blur-3xl", style: { background: `${P2}07` } })
     ),
-    h('div', { className: "relative overflow-hidden bg-background flex flex-col items-center justify-center p-8", style: { width: 390, height: 844, borderRadius: 50, border: "1px solid rgba(255,255,255,0.09)", boxShadow: "0 40px 80px -10px rgba(0,0,0,0.9)" } },
-      h('div', { className: "absolute top-3 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-full z-20" }),
+    h('div', { className: "relative bg-background flex flex-col items-center justify-center p-8 w-full max-w-sm mx-auto" },
       h('img', { src: "logo_hackaton.png", alt: "PlayPad", className: "w-14 h-14 object-contain mb-3" }),
       h('h1', { className: "text-2xl font-black mb-1", style: { fontFamily: "'Rajdhani', sans-serif", color: "#fff" } },
         h('span', null, "PLAY"), h('span', { style: { background: GRAD, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" } }, "pad")
@@ -658,24 +692,14 @@ function App() {
 
   if (!user) return h(AuthPage, { onLoginSuccess: handleLoginSuccess });
 
-  return h('div', { className: "min-h-screen flex items-center justify-center", style: { background: "#030308" } },
+  return h('div', { className: "min-h-screen", style: { background: "#030308" } },
     h('div', { className: "fixed inset-0 pointer-events-none overflow-hidden" },
       h('div', { className: "absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full blur-3xl", style: { background: `${P1}07` } }),
       h('div', { className: "absolute bottom-1/4 right-1/3 w-64 h-64 rounded-full blur-3xl", style: { background: `${P2}07` } })
     ),
-    h('div', { className: "relative overflow-hidden bg-background", style: { width: 390, height: 844, borderRadius: 50, border: "1px solid rgba(255,255,255,0.09)", boxShadow: "0 40px 80px -10px rgba(0,0,0,0.9)" } },
-      h('div', { className: "absolute top-3 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-full z-20" }),
-      h('div', { className: "relative z-10 flex justify-between items-center px-8 pt-3 pb-1 h-11" },
-        h('span', { className: "text-[11px] font-bold text-foreground/60", style: { fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: "tabular-nums" } }, "9:41"),
-        h('div', { className: "w-28" }),
-        h('div', { className: "flex items-center gap-1.5" },
-          h(Wifi, { size: 11, className: "text-foreground/60" }),
-          h('div', { className: "flex items-end gap-px h-3" }, [3,5,7,9].map((val, i) => h('div', { key: i, className: "w-1 rounded-sm", style: { height: val, background: "rgba(238,238,245,0.55)" } }))),
-          h('div', { className: "w-5 h-2.5 rounded-sm flex items-center p-px", style: { border: "1px solid rgba(238,238,245,0.45)" } }, h('div', { className: "w-4/5 h-full rounded-sm", style: { background: "rgba(238,238,245,0.65)" } }))
-        )
-      ),
-      h('div', { className: "absolute", style: { top: 44, bottom: 80, left: 0, right: 0, overflow: "hidden" } },
-        h('div', { className: "h-full", style: { scrollbarWidth: "none" } },
+    h('div', { className: "app-content relative flex flex-col h-screen bg-background mx-auto" },
+      h('div', { className: "flex-1 overflow-hidden" },
+        h('div', { className: "h-full overflow-y-auto" },
           view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform }),
           view === "catalogue" && h(CatalogueView, { onSelect: handleAddToLibrary, wishlistIds, onToggleWishlist: handleToggleWishlist }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
@@ -692,6 +716,7 @@ function App() {
         onToggleWishlist: handleToggleWishlist,
         topThreeIds,
         onToggleTopThree: handleToggleTopThree,
+        userId: user?.id,
       }),
       toast && h('div', { className: "toast", style: { background: GRAD } }, toast)
     )

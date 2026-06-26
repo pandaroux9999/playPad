@@ -139,10 +139,26 @@ app.post('/api/games/status', requireAuth, async (req, res) => {
 app.post('/api/games/review', requireAuth, async (req, res) => {
   try {
     const { gameId, rating, reviewText, reviewPublic } = req.body;
-    await db.updateGameRating(req.session.userId, gameId, rating || 0, reviewText || '', reviewPublic !== false);
+    const isPublic = reviewPublic !== false;
+    await db.updateGameRating(req.session.userId, gameId, rating || 0, reviewText || '', isPublic);
+    if (isPublic) {
+      await db.savePublicReview(req.session.userId, gameId, rating || 0, reviewText || '');
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error('[Review] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/games/reviews', requireAuth, async (req, res) => {
+  try {
+    const { gameId } = req.query;
+    if (!gameId) return res.status(400).json({ error: 'gameId requis' });
+    const reviews = await db.getGameReviews(gameId);
+    res.json({ reviews });
+  } catch (err) {
+    console.error('[GameReviews] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

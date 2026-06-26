@@ -41,3 +41,13 @@ CREATE TABLE IF NOT EXISTS top_three (
   position INTEGER CHECK(position IN (1,2,3)),
   UNIQUE(user_id, position)
 );
+
+CREATE TABLE IF NOT EXISTS community_reviews (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_id TEXT NOT NULL,
+  rating INTEGER DEFAULT 0,
+  review_text TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, game_id)
+);

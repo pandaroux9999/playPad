@@ -10,6 +10,10 @@ const db = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Stockage temporaire des tokens Steam OpenID (userId → token)
+const steamAuthTokens = new Map();
+const crypto = require('crypto');
+
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
@@ -280,7 +284,13 @@ const BASE_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 
 // Steam OpenID — login officiel sans mot de passe
 app.get('/api/auth/steam', requireAuth, (req, res) => {
-  const callbackUrl = `${BASE_URL}/api/auth/steam/callback`;
+  const token = crypto.randomBytes(16).toString('hex');
+  steamAuthTokens.set(token, { userId: req.session.userId, createdAt: Date.now() });
+  // Nettoie les tokens expirés (> 5 min)
+  for (const [k, v] of steamAuthTokens) {
+    if (Date.now() - v.createdAt > 300000) steamAuthTokens.delete(k);
+  }
+  const callbackUrl = `${BASE_URL}/api/auth/steam/callback?token=${token}`;
   const params = querystring.stringify({
     'openid.ns': 'http://specs.openid.net/auth/2.0',
     'openid.mode': 'checkid_setup',
@@ -293,12 +303,24 @@ app.get('/api/auth/steam', requireAuth, (req, res) => {
 });
 
 // Callback Steam OpenID — validation + récupération jeux
-app.get('/api/auth/steam/callback', requireAuth, async (req, res) => {
+app.get('/api/auth/steam/callback', async (req, res) => {
   const redirectError = (msg) => res.redirect(`${BASE_URL}/?steam=error&msg=${encodeURIComponent(msg)}`);
+
+  // Récupérer l'utilisateur via le token (pas de session — Steam perd les cookies)
+  const token = req.query.token;
+  const tokenData = token ? steamAuthTokens.get(token) : null;
+  if (!tokenData) {
+    console.error('[SteamOpenID] Token invalide ou expiré');
+    redirectError('Session expirée, reconnecte-toi');
+    return;
+  }
+  const userId = tokenData.userId;
+  steamAuthTokens.delete(token);
 
   // Étape 1 : valider la réponse OpenID via check_authentication
   try {
-    const q = req.query;
+    const q = { ...req.query };
+    delete q.token;
     const validationParams = querystring.stringify({ ...q, 'openid.mode': 'check_authentication' });
     const body = await new Promise((resolve, reject) => {
       const opts = {
@@ -338,13 +360,13 @@ app.get('/api/auth/steam/callback', requireAuth, async (req, res) => {
 
   // Étape 3 : sauvegarder et importer les jeux
   try {
-    await db.setSteamId(req.session.userId, steamId);
+    await db.setSteamId(userId, steamId);
     const apiKey = process.env.STEAM_API_KEY;
     let count = 0;
     if (apiKey) {
       const games = await fetchSteamGames(apiKey, steamId);
       for (const game of games) {
-        await db.upsertGame(req.session.userId, game);
+        await db.upsertGame(userId, game);
         await db.ensureCatalogGame(game);
       }
       count = games.length;

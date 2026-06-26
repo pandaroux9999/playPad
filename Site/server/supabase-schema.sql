@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS community_reviews (
   id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   game_id TEXT NOT NULL,
+  game_title TEXT DEFAULT '',
+  game_cover TEXT DEFAULT '',
   rating INTEGER DEFAULT 0,
   review_text TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW(),

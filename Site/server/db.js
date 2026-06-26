@@ -186,12 +186,14 @@ async function deleteUserAccount(userId) {
   await supabaseAdmin.from('users').delete().eq('id', userId);
 }
 
-async function savePublicReview(userId, gameId, rating, reviewText) {
+async function savePublicReview(userId, gameId, rating, reviewText, gameTitle, gameCover) {
   const { error } = await supabaseAdmin
     .from('community_reviews')
     .upsert({
       user_id: userId,
       game_id: gameId,
+      game_title: gameTitle || '',
+      game_cover: gameCover || '',
       rating,
       review_text: reviewText,
     }, { onConflict: 'user_id, game_id' });
@@ -204,6 +206,16 @@ async function getGameReviews(gameId) {
     .select(`*, users(display_name, username)`)
     .eq('game_id', gameId)
     .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+async function getAllPublicReviews() {
+  const { data, error } = await supabaseAdmin
+    .from('community_reviews')
+    .select(`*, users(display_name, username)`)
+    .order('created_at', { ascending: false })
+    .limit(50);
   if (error) throw new Error(error.message);
   return data || [];
 }
@@ -237,6 +249,7 @@ module.exports = {
   updateGameRating,
   savePublicReview,
   getGameReviews,
+  getAllPublicReviews,
   getGameAvgRatings,
   getWishlist,
   toggleWishlist,

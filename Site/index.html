@@ -78,13 +78,14 @@ const API = {
   getGames: () => API.request('GET', '/api/games'),
   syncGames: (games) => API.request('POST', '/api/games/sync', { games }),
   setStatus: (gameId, status) => API.request('POST', '/api/games/status', { gameId, status }),
-  saveReview: (gameId, rating, reviewText, reviewPublic) => API.request('POST', '/api/games/review', { gameId, rating, reviewText, reviewPublic }),
+  saveReview: (gameId, rating, reviewText, reviewPublic, gameTitle, gameCover) => API.request('POST', '/api/games/review', { gameId, rating, reviewText, reviewPublic, gameTitle, gameCover }),
   getWishlist: () => API.request('GET', '/api/wishlist'),
   toggleWishlist: (gameId) => API.request('POST', '/api/wishlist/toggle', { gameId }),
   getTopThree: () => API.request('GET', '/api/topthree'),
   setTopThree: (gameId, position) => API.request('POST', '/api/topthree', { gameId, position }),
   getGameReviews: (gameId) => API.request('GET', `/api/games/reviews?gameId=${gameId}`),
   getGameRatings: () => API.request('GET', '/api/games/ratings'),
+  getReviewsFeed: () => API.request('GET', '/api/reviews/feed'),
   deleteAccount: () => API.request('DELETE', '/api/account'),
 };
 
@@ -116,6 +117,7 @@ const Users = Icon(["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 3a4 4 0 1 0
 const LogOut = Icon(["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "M16 17l5-5-5-5", "M21 12H9"]);
 const Briefcase = Icon(["M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16", "M4 10v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10", "M2 10h20"]);
 const Loader = Icon(["M12 2v4", "m16.2 7.8 2.9-2.9", "M18 12h4", "m16.2 16.2 2.9 2.9", "M12 18v4", "m4.9 19.1 2.9-2.9", "M2 12h4", "m4.9 4.9 2.9 2.9"]);
+const MessageSquare = Icon(["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"]);
 
 
 
@@ -367,6 +369,10 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings }) {
 }
 
 function CommunityView({ friends, onSelectFriend }) {
+  const [publicReviews, setPublicReviews] = useState([]);
+  useEffect(() => {
+    API.getReviewsFeed().then(data => setPublicReviews(data.reviews || [])).catch(() => {});
+  }, []);
   return h('div', { className: "flex flex-col h-full overflow-y-auto view-enter", style: { scrollbarWidth: "none" } },
     h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
       h('h1', { className: "text-xl font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Communaute"),
@@ -389,7 +395,27 @@ function CommunityView({ friends, onSelectFriend }) {
             h('span', { className: "text-[10px] font-medium", style: { color: friend.online ? "#22c55e" : "#444466" } }, friend.online ? "En ligne" : "Hors ligne")
           )
         );
-      })
+      }),
+      publicReviews.length > 0 && h('div', null,
+        h('div', { className: "flex items-center gap-2 mb-3 mt-6" },
+          h(MessageSquare, { size: 14, style: { color: P1 } }),
+          h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Dernieres critiques"),
+        ),
+        publicReviews.map(r => h('div', { key: r.id, className: "bg-card border border-border rounded-2xl p-3.5" },
+          h('div', { className: "flex items-center gap-2 mb-2" },
+            h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black text-white flex-shrink-0", style: { background: GRAD } },
+              (r.users?.display_name || "??").charAt(0).toUpperCase()
+            ),
+            h('span', { className: "text-xs font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, r.users?.display_name || "Inconnu"),
+            r.game_title && h('span', { className: "text-[10px] text-muted-foreground ml-auto truncate" }, "sur ", r.game_title)
+          ),
+          h('div', { className: "flex items-center gap-1.5 mb-1.5" },
+            h(Star, { size: 11, style: { color: "#fbbf24", fill: "#fbbf24" } }),
+            h('span', { className: "text-[11px] font-bold text-foreground" }, r.rating, "/5")
+          ),
+          r.review_text && h('p', { className: "text-[11px] text-foreground/80 leading-relaxed" }, r.review_text)
+        ))
+      )
     )
   );
 }
@@ -546,7 +572,7 @@ function GameDetailSheet({ game, onClose, onSaveReview, wishlistIds, onToggleWis
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSaveReview(gameId, draftRating, draftReview, draftPublic);
+      await onSaveReview(gameId, draftRating, draftReview, draftPublic, game.title, game.cover);
       setEditing(false);
       refreshCommunityReviews();
     } catch (e) {}
@@ -804,8 +830,8 @@ function App() {
     await loadData();
   };
 
-  const handleSaveReview = async (gameId, rating, reviewText, reviewPublic) => {
-    await API.saveReview(gameId, rating, reviewText, reviewPublic);
+  const handleSaveReview = async (gameId, rating, reviewText, reviewPublic, gameTitle, gameCover) => {
+    await API.saveReview(gameId, rating, reviewText, reviewPublic, gameTitle, gameCover);
     await loadData();
     showToast("Critique sauvegard\u00e9e !");
   };

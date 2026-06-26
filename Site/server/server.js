@@ -236,6 +236,91 @@ app.get('/api/games/ratings', async (req, res) => {
   }
 });
 
+app.get('/api/users/search', requireAuth, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.length < 1) return res.json({ users: [] });
+    const users = await db.searchUsers(q, req.session.userId);
+    res.json({ users });
+  } catch (err) {
+    console.error('[UserSearch] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/friends/request', requireAuth, async (req, res) => {
+  try {
+    const { friendId } = req.body;
+    await db.sendFriendRequest(req.session.userId, friendId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[FriendRequest] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/friends/accept', requireAuth, async (req, res) => {
+  try {
+    const { friendId } = req.body;
+    await db.acceptFriendRequest(req.session.userId, friendId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[FriendAccept] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/friends/remove', requireAuth, async (req, res) => {
+  try {
+    const { friendId } = req.body;
+    await db.removeFriend(req.session.userId, friendId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[FriendRemove] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/friends', requireAuth, async (req, res) => {
+  try {
+    const friends = await db.getFriends(req.session.userId);
+    res.json({ friends });
+  } catch (err) {
+    console.error('[Friends] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/friends/requests', requireAuth, async (req, res) => {
+  try {
+    const requests = await db.getPendingRequests(req.session.userId);
+    res.json({ requests });
+  } catch (err) {
+    console.error('[FriendRequests] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/friends/:id/games', requireAuth, async (req, res) => {
+  try {
+    const games = await db.getFriendGames(req.params.id);
+    res.json({ games: games || [] });
+  } catch (err) {
+    console.error('[FriendGames] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/friends/status/:id', requireAuth, async (req, res) => {
+  try {
+    const status = await db.getFriendStatus(req.session.userId, req.params.id);
+    res.json({ status: status || 'none' });
+  } catch (err) {
+    console.error('[FriendStatus] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`PlayPad server running on http://localhost:${PORT}`);
   console.log('[Server] SUPABASE_URL:', process.env.SUPABASE_URL ? 'defined' : 'MISSING');

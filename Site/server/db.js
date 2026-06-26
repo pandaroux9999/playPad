@@ -239,6 +239,83 @@ async function getGameAvgRatings() {
   return result;
 }
 
+async function searchUsers(query, currentUserId) {
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select('id, username, display_name')
+    .neq('id', currentUserId)
+    .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
+    .limit(20);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+async function sendFriendRequest(userId, friendId) {
+  const { error } = await supabaseAdmin
+    .from('friends')
+    .insert({ user_id: userId, friend_id: friendId, status: 'pending' });
+  if (error) throw new Error(error.message);
+}
+
+async function acceptFriendRequest(userId, friendId) {
+  const { error: e1 } = await supabaseAdmin
+    .from('friends')
+    .update({ status: 'accepted' })
+    .eq('user_id', friendId)
+    .eq('friend_id', userId)
+    .eq('status', 'pending');
+  if (e1) throw new Error(e1.message);
+  const { error: e2 } = await supabaseAdmin
+    .from('friends')
+    .insert({ user_id: userId, friend_id: friendId, status: 'accepted' });
+  if (e2) throw new Error(e2.message);
+}
+
+async function removeFriend(userId, friendId) {
+  await supabaseAdmin.from('friends').delete().eq('user_id', userId).eq('friend_id', friendId);
+  await supabaseAdmin.from('friends').delete().eq('user_id', friendId).eq('friend_id', userId);
+}
+
+async function getFriends(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('friends')
+    .select(`friend_id, users!friends_friend_id_fkey(id, username, display_name)`)
+    .eq('user_id', userId)
+    .eq('status', 'accepted');
+  if (error) throw new Error(error.message);
+  return (data || []).map(r => ({ id: r.users.id, username: r.users.username, display_name: r.users.display_name }));
+}
+
+async function getPendingRequests(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('friends')
+    .select(`user_id, users!friends_user_id_fkey(id, username, display_name)`)
+    .eq('friend_id', userId)
+    .eq('status', 'pending');
+  if (error) throw new Error(error.message);
+  return (data || []).map(r => ({ id: r.users.id, username: r.users.username, display_name: r.users.display_name }));
+}
+
+async function getFriendGames(friendId) {
+  const { data, error } = await supabaseAdmin
+    .from('games')
+    .select('*')
+    .eq('user_id', friendId);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+async function getFriendStatus(userId, friendId) {
+  const { data, error } = await supabaseAdmin
+    .from('friends')
+    .select('status')
+    .eq('user_id', userId)
+    .eq('friend_id', friendId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.status || null;
+}
+
 module.exports = {
   createUser,
   getUserByUsername,
@@ -256,4 +333,12 @@ module.exports = {
   getTopThree,
   setTopThree,
   deleteUserAccount,
+  searchUsers,
+  sendFriendRequest,
+  acceptFriendRequest,
+  removeFriend,
+  getFriends,
+  getPendingRequests,
+  getFriendGames,
+  getFriendStatus,
 };

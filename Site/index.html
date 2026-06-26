@@ -87,6 +87,14 @@ const API = {
   getGameRatings: () => API.request('GET', '/api/games/ratings'),
   getReviewsFeed: () => API.request('GET', '/api/reviews/feed'),
   deleteAccount: () => API.request('DELETE', '/api/account'),
+  searchUsers: (q) => API.request('GET', `/api/users/search?q=${encodeURIComponent(q)}`),
+  sendFriendRequest: (friendId) => API.request('POST', '/api/friends/request', { friendId }),
+  acceptFriendRequest: (friendId) => API.request('POST', '/api/friends/accept', { friendId }),
+  removeFriend: (friendId) => API.request('POST', '/api/friends/remove', { friendId }),
+  getFriends: () => API.request('GET', '/api/friends'),
+  getPendingRequests: () => API.request('GET', '/api/friends/requests'),
+  getFriendGames: (friendId) => API.request('GET', `/api/friends/${friendId}/games`),
+  getFriendStatus: (friendId) => API.request('GET', `/api/friends/status/${friendId}`),
 };
 
 function Icon(paths, viewBox = "0 0 24 24") {
@@ -118,6 +126,10 @@ const LogOut = Icon(["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "M16 17l5-5-5-5"
 const Briefcase = Icon(["M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16", "M4 10v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10", "M2 10h20"]);
 const Loader = Icon(["M12 2v4", "m16.2 7.8 2.9-2.9", "M18 12h4", "m16.2 16.2 2.9 2.9", "M12 18v4", "m4.9 19.1 2.9-2.9", "M2 12h4", "m4.9 4.9 2.9 2.9"]);
 const MessageSquare = Icon(["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"]);
+const UserPlus = Icon(["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M19 8v6", "M22 11h-6"]);
+const UserCheck = Icon(["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "m19 16 2 2 4-4"]);
+const UserX = Icon(["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M17 8l4 4m0-4-4 4"]);
+const User = Icon(["M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2", "M12 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"]);
 
 
 
@@ -368,43 +380,93 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings }) {
   );
 }
 
-function CommunityView({ friends, onSelectFriend }) {
+function CommunityView({ onSelectFriend }) {
   const [publicReviews, setPublicReviews] = useState([]);
+  const [friends, setFriends] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [friendStatuses, setFriendStatuses] = useState({});
+  const [loading, setLoading] = useState(true);
+  const load = () => Promise.all([
+    API.getFriends().then(d => setFriends(d.friends || [])).catch(() => {}),
+    API.getPendingRequests().then(d => setRequests(d.requests || [])).catch(() => {}),
+    API.getReviewsFeed().then(d => setPublicReviews(d.reviews || [])).catch(() => {}),
+  ]).finally(() => setLoading(false));
+  useEffect(() => { load(); }, []);
   useEffect(() => {
-    API.getReviewsFeed().then(data => setPublicReviews(data.reviews || [])).catch(() => {});
-  }, []);
+    if (searchQ.length < 2) { setSearchResults([]); return; }
+    const t = setTimeout(() => {
+      API.searchUsers(searchQ).then(d => {
+        setSearchResults(d.users || []);
+        const ids = (d.users || []).map(u => u.id);
+        if (ids.length) Promise.all(ids.map(id => API.getFriendStatus(id).then(s => ({ id, status: s.status })).catch(() => null)))
+          .then(results => {
+            const m = {};
+            for (const r of results) if (r) m[r.id] = r.status;
+            setFriendStatuses(m);
+          }).catch(() => {});
+      }).catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQ]);
+  const initials = (name) => (name?.charAt(0) || "?").toUpperCase();
   return h('div', { className: "flex flex-col h-full overflow-y-auto view-enter", style: { scrollbarWidth: "none" } },
     h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
       h('h1', { className: "text-xl font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Communaute"),
-      h('p', { className: "text-xs text-muted-foreground mt-0.5" }, h('span', { className: "font-bold", style: { color: P1 } }, friends.length), " amis connectes")
+      h('p', { className: "text-xs text-muted-foreground mt-0.5" }, h('span', { className: "font-bold", style: { color: P1 } }, friends.length), " amis")
     ),
     h('div', { className: "px-4 pb-6 space-y-3" },
-      friends.map(friend => {
-        const completedCount = friend.games.filter(g => g.status === "completed").length;
-        return h('div', { key: friend.id, onClick: () => onSelectFriend?.(friend), className: "bg-card border border-border rounded-2xl p-4 flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" },
-          h('div', { className: "relative w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black text-white flex-shrink-0", style: { background: GRAD } },
-            friend.initials,
-            friend.online && h('div', { className: "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-card", style: { background: "#22c55e", boxShadow: "0 0 8px rgba(34,197,94,0.6)" } })
-          ),
+      requests.length > 0 && h('div', { className: "rounded-2xl p-3", style: { background: `${P1}08`, border: `1px solid ${P1}20` } },
+        h('p', { className: "text-[10px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5", style: { color: "#fbbf24" } }, h(UserPlus, { size: 10 }), "Demandes en attente"),
+        requests.map(r => h('div', { key: r.id, className: "flex items-center gap-2.5 py-1.5" },
+          h('div', { className: "w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0", style: { background: GRAD } }, initials(r.display_name)),
+          h('span', { className: "text-xs font-bold text-foreground flex-1", style: { fontFamily: "'Rajdhani', sans-serif" } }, r.display_name),
+          h('button', { onClick: async () => { await API.acceptFriendRequest(r.id); load(); }, className: "px-2.5 py-1 text-[10px] font-bold rounded-lg text-white", style: { background: GRAD } }, "Accepter")
+        ))
+      ),
+      h('div', { className: "relative" },
+        h(Search, { size: 13, className: "absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" }),
+        h('input', { value: searchQ, onChange: e => setSearchQ(e.target.value), placeholder: "Rechercher un utilisateur\u2026", className: "w-full bg-secondary/60 border border-border rounded-xl pl-8 pr-4 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none" })
+      ),
+      searchResults.length > 0 && h('div', { className: "space-y-1.5" }, searchResults.map(u => {
+        const st = friendStatuses[u.id];
+        return h('div', { key: u.id, className: "flex items-center gap-2.5 py-1.5" },
+          h('div', { className: "w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0", style: { background: GRAD } }, initials(u.display_name)),
           h('div', { className: "flex-1 min-w-0" },
-            h('p', { className: "text-sm font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, friend.name),
-            h('p', { className: "text-[10px] text-muted-foreground mt-0.5" }, `${friend.games.length} jeux \u00b7 ${completedCount} termines`)
+            h('p', { className: "text-xs font-bold text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, u.display_name),
+            h('p', { className: "text-[9px] text-muted-foreground" }, "@", u.username)
           ),
-          h('div', { className: "flex items-center gap-1" },
-            h('div', { className: "w-2 h-2 rounded-full", style: { background: friend.online ? "#22c55e" : "#444466", boxShadow: friend.online ? "0 0 8px rgba(34,197,94,0.6)" : "none" } }),
-            h('span', { className: "text-[10px] font-medium", style: { color: friend.online ? "#22c55e" : "#444466" } }, friend.online ? "En ligne" : "Hors ligne")
-          )
+          !st || st === "none"
+            ? h('button', { onClick: async () => { await API.sendFriendRequest(u.id); setFriendStatuses(p => ({ ...p, [u.id]: "pending" })); }, className: "px-2.5 py-1 text-[10px] font-bold rounded-lg text-white", style: { background: GRAD } }, h(UserPlus, { size: 10 }))
+            : st === "pending"
+              ? h('span', { className: "text-[10px] text-amber-400 font-bold" }, "En attente")
+              : h('button', { onClick: async () => { await API.removeFriend(u.id); setSearchResults(p => p.filter(x => x.id !== u.id)); }, className: "px-2 py-1 text-[10px] font-bold rounded-lg", style: { background: "rgba(239,68,68,0.15)", color: "#ef4444" } }, h(UserX, { size: 10 }))
         );
-      }),
+      })),
+      friends.length > 0 && h('div', null,
+        h('div', { className: "flex items-center gap-2 mb-3 mt-4" },
+          h(User, { size: 14, style: { color: P1 } }),
+          h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Mes amis"),
+        ),
+        friends.map(friend => h('div', { key: friend.id, onClick: () => onSelectFriend?.(friend), className: "bg-card border border-border rounded-2xl p-4 flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" },
+          h('div', { className: "relative w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black text-white flex-shrink-0", style: { background: GRAD } }, initials(friend.display_name)),
+          h('div', { className: "flex-1 min-w-0" },
+            h('p', { className: "text-sm font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, friend.display_name),
+            h('p', { className: "text-[10px] text-muted-foreground mt-0.5" }, "@", friend.username)
+          ),
+          h('button', { onClick: async (e) => { e.stopPropagation(); await API.removeFriend(friend.id); load(); }, className: "p-1.5 rounded-lg hover:opacity-70", style: { background: "rgba(239,68,68,0.1)" } }, h(UserX, { size: 12, style: { color: "#ef4444" } }))
+        ))
+      ),
       publicReviews.length > 0 && h('div', null,
-        h('div', { className: "flex items-center gap-2 mb-3 mt-6" },
+        h('div', { className: "flex items-center gap-2 mb-3 mt-4" },
           h(MessageSquare, { size: 14, style: { color: P1 } }),
           h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Dernieres critiques"),
         ),
         publicReviews.map(r => h('div', { key: r.id, className: "bg-card border border-border rounded-2xl p-3.5" },
           h('div', { className: "flex items-center gap-2 mb-2" },
             h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black text-white flex-shrink-0", style: { background: GRAD } },
-              (r.users?.display_name || "??").charAt(0).toUpperCase()
+              initials(r.users?.display_name)
             ),
             h('span', { className: "text-xs font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, r.users?.display_name || "Inconnu"),
             r.game_title && h('span', { className: "text-[10px] text-muted-foreground ml-auto truncate" }, "sur ", r.game_title)
@@ -421,26 +483,36 @@ function CommunityView({ friends, onSelectFriend }) {
 }
 
 function FriendProfileSheet({ friend, onClose }) {
-  const completed = friend.games.filter(g => g.status === "completed").length;
-  const playing = friend.games.filter(g => g.status === "playing").length;
+  const [friendGames, setFriendGames] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    API.getFriendGames(friend.id).then(d => {
+      setFriendGames((d.games || []).map(n));
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [friend.id]);
+  const completed = friendGames.filter(g => g.status === "completed").length;
+  const playing = friendGames.filter(g => g.status === "playing").length;
+  const initials = (friend.display_name?.charAt(0) || "?").toUpperCase();
   return h('div', { className: "fixed inset-0 z-50" },
     h('div', { className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
     h('div', { className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-hidden flex flex-col", style: { maxHeight: "88%" } },
       h('div', { className: "px-4 pt-4 pb-3 flex-shrink-0 border-b border-border" },
         h('div', { className: "flex items-center gap-3" },
-          h('div', { className: "w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black text-white flex-shrink-0", style: { background: GRAD } }, friend.initials),
+          h('div', { className: "w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black text-white flex-shrink-0", style: { background: GRAD } }, initials),
           h('div', null,
-            h('h2', { className: "text-lg font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, friend.name),
-            h('p', { className: "text-xs text-muted-foreground" }, `${friend.games.length} jeux \u00b7 ${completed} termines \u00b7 ${playing} en cours`)
+            h('h2', { className: "text-lg font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, friend.display_name),
+            h('p', { className: "text-xs text-muted-foreground" }, `${friendGames.length} jeux \u00b7 ${completed} termines \u00b7 ${playing} en cours`)
           ),
           h('button', { onClick: onClose, className: "ml-auto w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0", style: { background: "rgba(0,0,0,0.5)" } }, h(X, { size: 16, className: "text-white" }))
         )
       ),
       h('div', { className: "overflow-y-auto flex-1", style: { scrollbarWidth: "none" } },
         h('div', { className: "px-4 pt-4 pb-8" },
-          h('div', { className: "grid grid-cols-2 md:grid-cols-3 gap-3" },
-            friend.games.map(game => h(GameCard, { key: game.id, game, onClick: onClose }))
-          )
+          loading
+            ? h('div', { className: "flex items-center justify-center py-10" }, h(Loader, { size: 24, className: "animate-spin", style: { color: P1 } }))
+            : friendGames.length === 0
+              ? h('div', { className: "flex flex-col items-center justify-center py-10 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu dans la bibliotheque"))
+              : h('div', { className: "grid grid-cols-2 md:grid-cols-3 gap-3" }, friendGames.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: onClose })))
         )
       )
     )
@@ -892,7 +964,7 @@ function App() {
       h('div', { className: "flex-1 overflow-hidden" },
         h('div', { className: "h-full overflow-y-auto" },
           view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead }),
-          view === "community" && h(CommunityView, { friends: FRIENDS, onSelectFriend: setSelectedFriend }),
+          view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend }),
           view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id); if (e) setSelectedGame(e); else { setSelectedGame({ ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); API.syncGames([{ ...game, user_rating: 0, review_text: "", review_public: 1, has_review: 0, status: "not_started", playtime: 0 }]).then(() => loadData()).catch(() => {}); } }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
           view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount })

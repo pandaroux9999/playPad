@@ -53,3 +53,12 @@ CREATE TABLE IF NOT EXISTS community_reviews (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, game_id)
 );
+
+CREATE TABLE IF NOT EXISTS friends (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  friend_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, friend_id)
+);

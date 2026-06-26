@@ -273,6 +273,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const unread = notifications.filter(n => !n.read).length;
 
   return h('div', { className: "flex flex-col h-full view-enter" },
+    (showNotifications || showSync) && h('div', { onClick: () => { setShowNotifications(false); setShowSync(false); }, style: { position: "fixed", inset: 0, zIndex: 10, background: "rgba(0,0,0,0.5)" } }),
     h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0", style: { position: "relative", overflow: "visible" } },
       h('div', { className: "flex items-center gap-2.5 mb-3" },
         h('img', { src: "logo_hackaton.png", alt: "PlayPad", className: "w-9 h-9 object-contain" }),

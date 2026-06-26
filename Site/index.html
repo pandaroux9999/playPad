@@ -56,7 +56,7 @@
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script>
-const { useState, useEffect, useMemo, useCallback, createElement: h } = React;
+const { useState, useEffect, useMemo, useCallback, useRef, createElement: h } = React;
 
 const n = g => g && { ...g, hasReview: g.has_review ?? g.hasReview, userRating: g.user_rating ?? g.userRating, reviewText: g.review_text || g.reviewText || '', reviewPublic: g.review_public ?? g.reviewPublic };
 

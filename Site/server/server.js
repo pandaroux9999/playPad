@@ -489,14 +489,18 @@ async function fetchXboxGames(apiKey, gamertag) {
 
     const gamesUrl = `https://xbl.io/api/v2/player/${xuid}/games`;
     const gamesData = await xboxApiGet(apiKey, gamesUrl);
-    results.games = gamesData;
+    console.log('[XboxAPI] Games FULL response:', JSON.stringify(gamesData));
     if (gamesData?.code === 'ERROR') {
       console.error('[XboxAPI] Games API error:', JSON.stringify(gamesData).slice(0, 500));
       return [];
     }
-    const titles = gamesData?.titles || [];
-    console.log('[XboxAPI] Titles found:', titles.length, 'sample:', titles[0] ? JSON.stringify(titles[0]).slice(0, 200) : 'none');
-    if (!titles.length) return [];
+    // Essayer plusieurs formats de réponse possibles
+    const titles = gamesData?.titles || gamesData?.data?.titles || gamesData?.games || gamesData?.data || [];
+    console.log('[XboxAPI] Titles found:', Array.isArray(titles) ? titles.length : 'not array', 'type:', typeof titles);
+    if (!Array.isArray(titles) || !titles.length) {
+      console.log('[XboxAPI] No titles array, response keys:', Object.keys(gamesData || {}));
+      return [];
+    }
 
     return titles.map(t => {
       const titleId = t.titleId || t.id || '';
@@ -533,9 +537,14 @@ function xboxApiGet(apiKey, url) {
       let d = '';
       resp.on('data', c => d += c);
       resp.on('end', () => {
-        console.log('[xboxApiGet]', url.split('?')[0].slice(0, 60), 'status:', resp.statusCode, 'body:', d.slice(0, 300));
+        console.log('[xboxApiGet]', url.split('?')[0].slice(-40), 'status:', resp.statusCode, 'body length:', d.length);
+        if (resp.statusCode !== 200) {
+          console.error('[xboxApiGet] HTTP error:', resp.statusCode, d.slice(0, 500));
+          resolve(JSON.parse(d));
+          return;
+        }
         try { resolve(JSON.parse(d)); }
-        catch (e) { console.error('[xboxApiGet] JSON parse error:', e.message, 'body:', d.slice(0, 200)); reject(e); }
+        catch (e) { console.error('[xboxApiGet] JSON parse error:', e.message, 'body:', d.slice(0, 500)); reject(e); }
       });
     }).on('error', (err) => {
       console.error('[xboxApiGet] HTTP error:', err.message);

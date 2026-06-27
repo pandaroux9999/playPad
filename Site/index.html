@@ -382,7 +382,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
       showSync && h('div', { className: "rounded-2xl p-3.5", style: { background: "#1a1a2e", border: `1px solid ${P1}30`, position: "absolute", zIndex: 20, top: "100%", left: 16, right: 16 } },
         h('div', { className: "flex items-center justify-between mb-2" },
           h('div', { className: "flex items-center gap-2" }, h(Zap, { size: 12, style: { color: P1 } }), h('span', { className: "text-xs font-bold", style: { color: "#c4b5fd" } }, `${connectedCount} plateforme(s) connect\u00e9e(s)`)),
-          h('button', { onClick: () => syncFromBridge(), disabled: syncing === 'all', className: "sync-btn px-3 py-1 text-white text-[10px] font-bold rounded-lg flex items-center gap-1.5", style: { background: GRAD } }, syncing === 'all' ? h(Loader, { size: 10, className: "animate-spin" }) : h(RefreshCw, { size: 10 }), "Tout sync")
+          h('button', { onClick: () => syncFromBridge(), disabled: !!syncing, className: "sync-btn px-3 py-1 text-white text-[10px] font-bold rounded-lg flex items-center gap-1.5", style: { background: GRAD, opacity: syncing ? 0.5 : 1 } }, syncing === 'all' ? h(Loader, { size: 10, className: "animate-spin" }) : h(RefreshCw, { size: 10 }), "Tout sync")
         ),
           h('div', { className: "space-y-1.5" }, PLATFORM_SYNC_DATA.map(({ platform, gameCount, lastSync }) => {
           const cfg = PLATFORM_CONFIG[platform];
@@ -408,7 +408,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
               h('div', { className: "flex items-center gap-1" },
                 platform === "steam"
                   ? (user?.steam_id
-                    ? h('button', { onClick: async (e) => { e.stopPropagation(); try { const r = await API.resyncSteam(); showToast(`${r.count} jeux Steam ajoutés à la bibliothèque et au catalogue`); onSyncComplete?.(); } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); } }, className: "p-1.5 rounded-lg inline-flex", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
+                    ? h('button', { onClick: async (e) => { e.stopPropagation(); if (syncing === 'steam') return; setSyncing('steam'); try { const r = await API.resyncSteam(); showToast(`${r.count} jeux Steam ajoutés à la bibliothèque et au catalogue`); onSyncComplete?.(); } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); } finally { setSyncing(null); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, syncing === 'steam' ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
                     : h('a', { href: "/api/auth/steam", className: "p-1.5 rounded-lg inline-flex", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
                   )
                   : null,
@@ -1160,7 +1160,14 @@ function App() {
   };
 
   const handleToggleTopThree = async (game) => {
-    await loadData();
+    const id = game.game_id || game.id;
+    const already = topThreeIds?.has(id);
+    if (already) {
+      setTopThreeIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+      setTopThree(prev => prev.filter(g => (g.game_id || g.id) !== id));
+    } else if ((topThreeIds?.size || 0) < 3) {
+      setTopThreeIds(prev => { const n = new Set(prev); n.add(id); return n; });
+    }
   };
 
   const handleDeleteGame = async (gameId) => {

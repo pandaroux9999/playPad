@@ -6,44 +6,44 @@ const memoryStore = new Map();
 
 class SupabaseSessionStore extends session.Store {
   get(sid, callback) {
+    const cb = typeof callback === 'function' ? callback : () => {};
     supabaseAdmin.from('sessions').select('session_data').eq('sid', sid).maybeSingle()
       .then(({ data, error }) => {
         if (error) {
-          // La table n'existe pas → fallback mémoire
           const mem = memoryStore.get(sid);
-          return callback(null, mem || null);
+          return cb(null, mem || null);
         }
-        if (!data) return callback(null, null);
-        try { callback(null, JSON.parse(data.session_data)); }
-        catch (e) { callback(e); }
+        if (!data) return cb(null, null);
+        try { cb(null, JSON.parse(data.session_data)); }
+        catch (e) { cb(e); }
       })
       .catch(() => {
         const mem = memoryStore.get(sid);
-        callback(null, mem || null);
+        cb(null, mem || null);
       });
   }
 
   set(sid, session, callback) {
-    // Toujours sauvegarder en mémoire (fallback)
     memoryStore.set(sid, session);
-
+    const cb = typeof callback === 'function' ? callback : () => {};
     const sessionData = { sid, session_data: JSON.stringify(session), expires: session.cookie?.expires || null };
     supabaseAdmin.from('sessions').upsert(sessionData, { onConflict: 'sid' })
       .then(({ error }) => {
         if (error) console.error('[SessionStore] Upsert error:', error.message);
-        callback(null);
+        cb(null);
       })
       .catch((err) => {
         console.error('[SessionStore] Upsert error:', err.message);
-        callback(null);
+        cb(null);
       });
   }
 
   destroy(sid, callback) {
     memoryStore.delete(sid);
+    const cb = typeof callback === 'function' ? callback : () => {};
     supabaseAdmin.from('sessions').delete().eq('sid', sid)
-      .then(({ error }) => callback(error || null))
-      .catch(() => callback(null));
+      .then(({ error }) => cb(error || null))
+      .catch(() => cb(null));
   }
 
   touch(sid, session, callback) {

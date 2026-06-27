@@ -9,9 +9,6 @@ const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Stockage temporaire des tokens Steam OpenID (userId → token)
-const steamAuthTokens = new Map();
 const crypto = require('crypto');
 
 app.use(cors({ origin: true, credentials: true }));
@@ -283,23 +280,24 @@ app.post('/api/heartbeat', requireAuth, async (req, res) => {
 const BASE_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 
 // Steam OpenID — login officiel sans mot de passe
-app.get('/api/auth/steam', requireAuth, (req, res) => {
-  const token = crypto.randomBytes(16).toString('hex');
-  steamAuthTokens.set(token, { userId: req.session.userId, createdAt: Date.now() });
-  // Nettoie les tokens expirés (> 5 min)
-  for (const [k, v] of steamAuthTokens) {
-    if (Date.now() - v.createdAt > 300000) steamAuthTokens.delete(k);
+app.get('/api/auth/steam', requireAuth, async (req, res) => {
+  try {
+    const token = crypto.randomBytes(16).toString('hex');
+    await db.saveSteamAuthToken(token, req.session.userId);
+    const callbackUrl = `${BASE_URL}/api/auth/steam/callback?token=${token}`;
+    const params = querystring.stringify({
+      'openid.ns': 'http://specs.openid.net/auth/2.0',
+      'openid.mode': 'checkid_setup',
+      'openid.return_to': callbackUrl,
+      'openid.realm': BASE_URL,
+      'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
+      'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
+    });
+    res.redirect(`https://steamcommunity.com/openid/login?${params}`);
+  } catch (err) {
+    console.error('[SteamOpenID] Erreur:', err.message);
+    res.status(500).json({ error: err.message });
   }
-  const callbackUrl = `${BASE_URL}/api/auth/steam/callback?token=${token}`;
-  const params = querystring.stringify({
-    'openid.ns': 'http://specs.openid.net/auth/2.0',
-    'openid.mode': 'checkid_setup',
-    'openid.return_to': callbackUrl,
-    'openid.realm': BASE_URL,
-    'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
-    'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
-  });
-  res.redirect(`https://steamcommunity.com/openid/login?${params}`);
 });
 
 // Callback Steam OpenID — validation + récupération jeux
@@ -308,14 +306,28 @@ app.get('/api/auth/steam/callback', async (req, res) => {
 
   // Récupérer l'utilisateur via le token (pas de session — Steam perd les cookies)
   const token = req.query.token;
-  const tokenData = token ? steamAuthTokens.get(token) : null;
-  if (!tokenData) {
-    console.error('[SteamOpenID] Token invalide ou expiré');
-    redirectError('Session expirée, reconnecte-toi');
-    return;
+  let userId = null;
+  if (token) {
+    try {
+      const tokenData = await db.getSteamAuthToken(token);
+      if (tokenData) {
+        userId = tokenData.user_id;
+        await db.deleteSteamAuthToken(token);
+      }
+    } catch (e) {
+      console.error('[SteamOpenID] Erreur lecture token:', e.message);
+    }
   }
-  const userId = tokenData.userId;
-  steamAuthTokens.delete(token);
+  if (!userId) {
+    console.error('[SteamOpenID] Token invalide ou expiré');
+    // Fallback : tenter avec la session
+    if (req.session?.userId) {
+      userId = req.session.userId;
+    } else {
+      redirectError('Session expirée, reconnecte-toi');
+      return;
+    }
+  }
 
   // Étape 1 : valider la réponse OpenID via check_authentication
   try {

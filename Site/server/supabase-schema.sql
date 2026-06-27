@@ -89,3 +89,12 @@ CREATE TABLE IF NOT EXISTS catalog (
   year INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Table tokens temporaires Steam OpenID (survit aux redémarrages du serveur)
+CREATE TABLE IF NOT EXISTS steam_auth_tokens (
+  id SERIAL PRIMARY KEY,
+  token TEXT UNIQUE NOT NULL,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_steam_auth_tokens_token ON steam_auth_tokens(token);

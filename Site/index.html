@@ -96,6 +96,7 @@ const API = {
   getFriends: () => API.request('GET', '/api/friends'),
   getPendingRequests: () => API.request('GET', '/api/friends/requests'),
   getFriendGames: (friendId) => API.request('GET', `/api/friends/${friendId}/games`),
+  getUserProfile: (userId) => API.request('GET', `/api/users/${userId}/profile`),
   getFriendStatus: (friendId) => API.request('GET', `/api/friends/status/${friendId}`),
   updateAvatar: (avatarUrl) => API.request('POST', '/api/account/avatar', { avatarUrl }),
   sendSuggestion: (toUserId, gameId, gameTitle, gameCover, message) => API.request('POST', '/api/suggestions', { toUserId, gameId, gameTitle, gameCover, message }),
@@ -536,7 +537,7 @@ function CommunityView({ onSelectFriend, onSelectGame }) {
     h('div', { className: "px-4 pb-6 space-y-3" },
       requests.length > 0 && h('div', { className: "rounded-2xl p-3", style: { background: `${P1}08`, border: `1px solid ${P1}20` } },
         h('p', { className: "text-[10px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5", style: { color: "#fbbf24" } }, h(UserPlus, { size: 10 }), "Demandes en attente"),
-        requests.map(r => h('div', { key: r.id, className: "flex items-center gap-2.5 py-1.5" },
+        requests.map(r => h('div', { key: r.id, onClick: () => onSelectFriend?.(r), className: "flex items-center gap-2.5 py-1.5 cursor-pointer hover:opacity-80 transition-opacity" },
           h('div', { className: "relative w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0", style: { background: GRAD } },
             r.avatar_url ? h('img', { src: r.avatar_url, alt: "", className: "w-full h-full object-cover rounded-xl" }) : initials(r.display_name),
             h('div', { className: "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border", style: { background: isOnline(r.last_seen) ? "#4ade80" : "#444466", borderColor: "#1a1a2e" } })
@@ -551,7 +552,7 @@ function CommunityView({ onSelectFriend, onSelectGame }) {
       ),
       searchResults.length > 0 && h('div', { className: "space-y-1.5" }, searchResults.map(u => {
         const st = friendStatuses[u.id];
-        return h('div', { key: u.id, className: "flex items-center gap-2.5 py-1.5" },
+        return h('div', { key: u.id, onClick: () => onSelectFriend?.(u), className: "flex items-center gap-2.5 py-1.5 cursor-pointer hover:opacity-80 transition-opacity" },
           h('div', { className: "relative w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0", style: { background: GRAD } },
             u.avatar_url ? h('img', { src: u.avatar_url, alt: "", className: "w-full h-full object-cover rounded-xl" }) : initials(u.display_name),
             h('div', { className: "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border", style: { background: isOnline(u.last_seen) ? "#4ade80" : "#444466", borderColor: "#1a1a2e" } })
@@ -632,21 +633,30 @@ function CommunityView({ onSelectFriend, onSelectGame }) {
   );
 }
 
-function FriendProfileSheet({ friend, onClose }) {
+function FriendProfileSheet({ friend, onClose, isOnline }) {
+  const [profile, setProfile] = useState(null);
+  const [topThree, setTopThree] = useState([]);
   const [friendGames, setFriendGames] = useState([]);
+  const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestSearch, setSuggestSearch] = useState("");
   const [suggestMsg, setSuggestMsg] = useState("");
   const [suggesting, setSuggesting] = useState(false);
+  const [activeTab, setActiveTab] = useState("games"); // games, reviews, top
   useEffect(() => {
-    API.getFriendGames(friend.id).then(d => {
+    setLoading(true);
+    API.getUserProfile(friend.id).then(d => {
+      if (d.user) setProfile(d.user);
+      setTopThree(d.topThree || []);
       setFriendGames((d.games || []).map(n));
+      setReviews(d.reviews || []);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [friend.id]);
   const completed = friendGames.filter(g => g.status === "completed").length;
   const playing = friendGames.filter(g => g.status === "playing").length;
-  const initials = (friend.display_name?.charAt(0) || "?").toUpperCase();
+  const initials = (profile?.display_name || friend.display_name || "?").charAt(0).toUpperCase();
+  const online = isOnline ? isOnline(profile?.last_seen || friend.last_seen) : false;
   const suggestFiltered = CATALOGUE.filter(g =>
     g.title.toLowerCase().includes(suggestSearch.toLowerCase())
   );
@@ -655,39 +665,84 @@ function FriendProfileSheet({ friend, onClose }) {
     h('div', { className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-hidden flex flex-col", style: { maxHeight: "88%" } },
       h('div', { className: "px-4 pt-4 pb-3 flex-shrink-0 border-b border-border" },
         h('div', { className: "flex items-center gap-3" },
-          h('div', { className: "w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black text-white flex-shrink-0", style: { background: GRAD } }, initials),
-          h('div', null,
-            h('h2', { className: "text-lg font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, friend.display_name),
-            h('p', { className: "text-xs text-muted-foreground" }, `${friendGames.length} jeux \u00b7 ${completed} termines \u00b7 ${playing} en cours`)
+          h('div', { className: "relative w-12 h-12 rounded-2xl overflow-hidden flex-shrink-0" },
+            profile?.avatar_url
+              ? h('img', { src: profile.avatar_url, className: "w-full h-full object-cover", onError: e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex" } })
+              : null,
+            h('div', { className: "w-full h-full flex items-center justify-center text-lg font-black text-white", style: { background: GRAD, display: profile?.avatar_url ? "none" : "flex" } }, initials),
+            online && h('div', { className: "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-card", style: { background: "#22c55e" } })
+          ),
+          h('div', { className: "flex-1 min-w-0" },
+            h('h2', { className: "text-lg font-black text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, profile?.display_name || friend.display_name),
+            h('p', { className: "text-xs text-muted-foreground" },
+              `${friendGames.length} jeux`,
+              topThree.length > 0 ? ` \u00b7 Top 3` : "",
+              reviews.length > 0 ? ` \u00b7 ${reviews.length} critique${reviews.length > 1 ? 's' : ''}` : ""
+            )
           ),
           h('button', { onClick: () => setSuggestOpen(true), className: "mr-1.5 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-80 transition-opacity", style: { background: `${P1}20` } }, h(Send, { size: 14, style: { color: P1 } })),
           h('button', { onClick: onClose, className: "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0", style: { background: "rgba(0,0,0,0.5)" } }, h(X, { size: 16, className: "text-white" }))
         ),
         suggestOpen && h('div', { className: "mt-3 p-3 rounded-2xl", style: { background: `${P1}08`, border: `1px solid ${P1}20` } },
-          h('p', { className: "text-[10px] font-bold mb-2 flex items-center gap-1.5", style: { color: "#c4b5fd" } }, h(Send, { size: 10 }), "Proposer un jeu \u00e0 ", friend.display_name),
+          h('p', { className: "text-[10px] font-bold mb-2 flex items-center gap-1.5", style: { color: "#c4b5fd" } }, h(Send, { size: 10 }), "Proposer un jeu \u00e0 ", profile?.display_name || friend.display_name),
           h('div', { className: "relative mb-2" },
             h(Search, { size: 11, className: "absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" }),
             h('input', { value: suggestSearch, onChange: e => setSuggestSearch(e.target.value), placeholder: "Chercher un jeu...", className: "w-full bg-secondary/60 border border-border rounded-lg pl-7 pr-3 py-2 text-[11px] text-foreground placeholder-muted-foreground outline-none" })
           ),
-          h('div', { className: "max-h-36 overflow-y-auto space-y-1", style: { scrollbarWidth: "none" } }, suggestFiltered.slice(0, 20).map(game =>
-            h('div', { key: game.game_id, className: "flex items-center gap-2 py-1.5 px-1 rounded-lg cursor-pointer hover:opacity-80 transition-opacity", style: { background: "transparent" } },
+          suggestFiltered.slice(0, 20).map(game =>
+            h('div', { key: game.game_id, className: "flex items-center gap-2 py-1.5 px-1 rounded-lg cursor-pointer hover:opacity-80 transition-opacity" },
               h('div', { className: "w-6 h-8 rounded overflow-hidden flex-shrink-0" }, h('img', { src: game.cover, alt: "", className: "w-full h-full object-cover" })),
               h('span', { className: "text-[11px] font-bold text-foreground flex-1 truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
               h('button', { onClick: async () => { setSuggesting(true); await API.sendSuggestion(friend.id, game.game_id, game.title, game.cover, suggestMsg); setSuggesting(false); setSuggestOpen(false); setSuggestSearch(""); setSuggestMsg(""); }, disabled: suggesting, className: "px-2 py-1 text-[9px] font-bold rounded-lg text-white whitespace-nowrap", style: { background: GRAD } }, suggesting ? "..." : "Proposer")
             )
-          )),
+          ),
           h('input', { value: suggestMsg, onChange: e => setSuggestMsg(e.target.value), placeholder: "Message optionnel...", className: "w-full bg-secondary/60 border border-border rounded-lg px-3 py-2 text-[11px] text-foreground placeholder-muted-foreground outline-none mt-2" })
         )
       ),
-      h('div', { className: "overflow-y-auto flex-1", style: { scrollbarWidth: "none" } },
-        h('div', { className: "px-4 pt-4 pb-8" },
-          loading
-            ? h('div', { className: "flex items-center justify-center py-10" }, h(Loader, { size: 24, className: "animate-spin", style: { color: P1 } }))
-            : friendGames.length === 0
-              ? h('div', { className: "flex flex-col items-center justify-center py-10 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu dans la bibliotheque"))
-              : h('div', { className: "grid grid-cols-2 md:grid-cols-3 gap-3" }, friendGames.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: onClose })))
-        )
-      )
+      loading
+        ? h('div', { className: "flex items-center justify-center py-10 flex-1" }, h(Loader, { size: 24, className: "animate-spin", style: { color: P1 } }))
+        : h('div', { className: "flex flex-col flex-1 overflow-hidden" },
+            h('div', { className: "flex gap-1 px-4 pt-3 pb-2 border-b border-border flex-shrink-0" },
+              h('button', { onClick: () => setActiveTab("games"), className: `px-3 py-1.5 text-[10px] font-bold rounded-lg transition-colors ${activeTab === "games" ? "text-white" : "text-muted-foreground hover:text-foreground"}`, style: activeTab === "games" ? { background: GRAD } : {} }, `Jeux (${friendGames.length})`),
+              topThree.length > 0 && h('button', { onClick: () => setActiveTab("top"), className: `px-3 py-1.5 text-[10px] font-bold rounded-lg transition-colors ${activeTab === "top" ? "text-white" : "text-muted-foreground hover:text-foreground"}`, style: activeTab === "top" ? { background: GRAD } : {} }, "Top 3"),
+              reviews.length > 0 && h('button', { onClick: () => setActiveTab("reviews"), className: `px-3 py-1.5 text-[10px] font-bold rounded-lg transition-colors ${activeTab === "reviews" ? "text-white" : "text-muted-foreground hover:text-foreground"}`, style: activeTab === "reviews" ? { background: GRAD } : {} }, `Critiques (${reviews.length})`)
+            ),
+            h('div', { className: "overflow-y-auto flex-1 px-4 pt-3 pb-8" },
+              activeTab === "games" && (friendGames.length === 0
+                ? h('div', { className: "flex flex-col items-center justify-center py-10 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu dans la bibliotheque"))
+                : h('div', { className: "grid grid-cols-2 md:grid-cols-3 gap-3" }, friendGames.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: onClose })))
+              ),
+              activeTab === "top" && h('div', { className: "space-y-2" },
+                topThree.sort((a, b) => (a.position || 0) - (b.position || 0)).map(t => {
+                  const game = friendGames.find(g => g.game_id === t.game_id) || t;
+                  return h('div', { key: t.game_id, className: "flex items-center gap-3 bg-secondary/30 rounded-2xl p-3 border border-border" },
+                    h('div', { className: `w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black ${t.position === 1 ? 'text-yellow-400' : t.position === 2 ? 'text-gray-300' : 'text-amber-600'} flex-shrink-0`, style: { background: `${t.position === 1 ? '#fbbf24' : t.position === 2 ? '#9ca3af' : '#b45309'}20` } }, `#${t.position}`),
+                    h('div', { className: "w-10 h-14 rounded-lg overflow-hidden flex-shrink-0" }, h('img', { src: game.cover || t.cover, className: "w-full h-full object-cover" })),
+                    h('div', { className: "flex-1 min-w-0" },
+                      h('p', { className: "text-sm font-bold text-foreground truncate" }, game.title || t.title),
+                      h('p', { className: "text-[10px] text-muted-foreground" }, game.genre || t.genre || "")
+                    )
+                  );
+                })
+              ),
+              activeTab === "reviews" && h('div', { className: "space-y-2" },
+                reviews.map(r => {
+                  const game = friendGames.find(g => g.game_id === r.game_id);
+                  return h('div', { key: r.id, className: "bg-secondary/30 rounded-2xl p-3 border border-border" },
+                    h('div', { className: "flex items-center gap-2 mb-2" },
+                      game && h('div', { className: "w-6 h-8 rounded overflow-hidden flex-shrink-0" }, h('img', { src: game.cover, className: "w-full h-full object-cover" })),
+                      h('div', { className: "flex-1 min-w-0" },
+                        h('p', { className: "text-xs font-bold text-foreground truncate" }, r.game_title || game?.title || "Jeu"),
+                        h('div', { className: "flex items-center gap-1 mt-0.5" }, [1,2,3,4,5].map(s => h('span', { key: s, className: `text-[10px] ${s <= (r.rating || 0) ? '' : 'opacity-20'}` }, "★")))
+                      ),
+                      h('span', { className: `text-[10px] font-bold px-2 py-0.5 rounded-full ${(r.rating || 0) >= 4 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}` }, (r.rating || 0) >= 4 ? "Recommande" : (r.rating || 0) >= 3 ? "Neutre" : "Deconseille")
+                    ),
+                    r.review_text && h('p', { className: "text-[10px] text-muted-foreground leading-relaxed" }, r.review_text)
+                  );
+                })
+              )
+            )
+          )
     )
   );
 }
@@ -1200,7 +1255,7 @@ function App() {
         userId: user?.id,
         ratings,
       }),
-      selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => setSelectedFriend(null) }),
+      selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => setSelectedFriend(null), isOnline }),
       toast && h('div', { className: "toast", style: { background: GRAD } }, toast)
     )
   );

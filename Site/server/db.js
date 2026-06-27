@@ -45,7 +45,7 @@ async function getUserByUsername(username) {
 async function getUserById(id) {
   const { data, error } = await supabaseAdmin
     .from('users')
-    .select('id, username, display_name, avatar_url, created_at, steam_id')
+    .select('id, username, display_name, avatar_url, created_at, steam_id, last_seen')
     .eq('id', id)
     .single();
   checkResult({ data, error });
@@ -215,9 +215,19 @@ async function getGameReviews(gameId) {
 async function getAllPublicReviews() {
   const { data, error } = await supabaseAdmin
     .from('community_reviews')
-    .select(`*, users(display_name, username)`)
+    .select(`*, users(display_name, username, avatar_url)`)
     .order('created_at', { ascending: false })
     .limit(50);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+async function getUserPublicReviews(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('community_reviews')
+    .select(`*`)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return data || [];
 }
@@ -419,6 +429,7 @@ module.exports = {
   savePublicReview,
   getGameReviews,
   getAllPublicReviews,
+  getUserPublicReviews,
   getGameAvgRatings,
   getWishlist,
   toggleWishlist,

@@ -540,6 +540,20 @@ app.post('/api/account/avatar', requireAuth, async (req, res) => {
   }
 });
 
+// Profil public d'un utilisateur
+app.get('/api/users/:id/profile', requireAuth, async (req, res) => {
+  try {
+    const user = await db.getUserById(req.params.id);
+    const games = await db.getFriendGames(req.params.id);
+    const topThree = await db.getTopThree(req.params.id);
+    const reviews = await db.getUserPublicReviews(req.params.id);
+    res.json({ user, games: (games || []).map(n), topThree, reviews });
+  } catch (err) {
+    console.error('[UserProfile] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/suggestions', requireAuth, async (req, res) => {
   try {
     const { toUserId, gameId, gameTitle, gameCover, message } = req.body;

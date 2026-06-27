@@ -45,7 +45,7 @@ async function getUserByUsername(username) {
 async function getUserById(id) {
   const { data, error } = await supabaseAdmin
     .from('users')
-    .select('id, username, display_name, avatar_url, created_at, steam_id, last_seen')
+    .select('id, username, display_name, avatar_url, created_at, steam_id, xbox_gamertag, last_seen')
     .eq('id', id)
     .single();
   checkResult({ data, error });
@@ -417,6 +417,14 @@ async function setSteamId(userId, steamId) {
   if (error) throw new Error(error.message);
 }
 
+async function setXboxGamertag(userId, gamertag) {
+  const { error } = await supabaseAdmin
+    .from('users')
+    .update({ xbox_gamertag: gamertag })
+    .eq('id', userId);
+  if (error) throw new Error(error.message);
+}
+
 module.exports = {
   supabaseAdmin,
   createUser,
@@ -453,4 +461,5 @@ module.exports = {
   deletePlatformGames,
   updateLastSeen,
   setSteamId,
+  setXboxGamertag,
 };

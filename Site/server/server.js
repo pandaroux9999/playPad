@@ -445,6 +445,38 @@ app.post('/api/platform/steam/connect', requireAuth, async (req, res) => {
   }
 });
 
+// Xbox — connexion manuelle via Gamertag
+app.post('/api/platform/xbox/connect', requireAuth, async (req, res) => {
+  let { gamertag } = req.body;
+  if (!gamertag) return res.status(400).json({ error: 'Gamertag requis' });
+  try {
+    await db.setXboxGamertag(req.session.userId, gamertag);
+    // Tente d'importer via xbl.io si la clé est configurée
+    const xblKey = process.env.XBL_API_KEY;
+    let count = 0;
+    if (xblKey) {
+      const games = await fetchXboxGames(xblKey, gamertag);
+      for (const game of games) {
+        await db.upsertGame(req.session.userId, game);
+        await db.ensureCatalogGame(game);
+      }
+      count = games.length;
+    }
+    res.json({ ok: true, count });
+  } catch (err) {
+    console.error('[XboxConnect] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Récupère les jeux Xbox via xbl.io
+async function fetchXboxGames(apiKey, gamertag) {
+  const url = `https://xbl.io/api/v2/account/999/gameclubs?gt=${encodeURIComponent(gamertag)}`;
+  // API alternative pour les jeux : https://xbl.io/api/v2/player/{xuid}/games
+  // Pour l'instant on retourne un tableau vide — sera implémenté quand une clé API Xbox sera configurée
+  return [];
+}
+
 app.get('/api/users/search', requireAuth, async (req, res) => {
   try {
     const { q } = req.query;

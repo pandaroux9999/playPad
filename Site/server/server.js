@@ -372,7 +372,11 @@ app.get('/api/auth/steam/callback', async (req, res) => {
 async function fetchSteamGames(apiKey, steamId) {
   // GetOwnedGames
   const ownedData = await steamApiGet(apiKey, 'IPlayerService', 'GetOwnedGames', { steamid: steamId, include_appinfo: true });
+  if (!ownedData?.response?.games) {
+    console.error('[SteamAPI] GetOwnedGames réponse inattendue:', JSON.stringify(ownedData).slice(0, 500));
+  }
   const list = ownedData?.response?.games || [];
+  console.log('[SteamAPI] GetOwnedGames OK —', list.length, 'jeux pour steamId', steamId);
 
   // Pour chaque jeu, tente de récupérer les achievements
   const gameResults = [];
@@ -419,6 +423,7 @@ app.post('/api/platform/steam/resync', requireAuth, async (req, res) => {
     if (!steamId) return res.status(400).json({ error: 'Aucun compte Steam connecté' });
     const apiKey = process.env.STEAM_API_KEY;
     if (!apiKey) return res.status(500).json({ error: 'STEAM_API_KEY non configurée sur le serveur' });
+    console.log('[SteamResync] steamId:', steamId, 'API key defined:', !!apiKey);
     const games = await fetchSteamGames(apiKey, steamId);
     for (const game of games) {
       await db.upsertGame(req.session.userId, game);

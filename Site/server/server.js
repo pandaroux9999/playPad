@@ -473,40 +473,116 @@ app.post('/api/platform/xbox/connect', requireAuth, async (req, res) => {
 
 // Récupère les jeux Xbox via xbl.io (clé gratuite sur https://xbl.io)
 async function fetchXboxGames(apiKey, gamertag) {
-  // Essayer plusieurs formats de recherche pour trouver le XUID
+  // Étape 1 : vérifier que la clé API est valide
+  let apiKeyValid = false;
+  for (const acctUrl of ['https://xbl.io/api/v2/account', 'https://api.xbl.io/api/v2/account']) {
+    try {
+      const accountData = await xboxApiGet(apiKey, acctUrl);
+      console.log('[XboxAPI] Account check', acctUrl.slice(0, 30), ':', JSON.stringify(accountData).slice(0, 200));
+      if (accountData?.xuid || accountData?.gamertag || accountData?.profileUsers) {
+        apiKeyValid = true;
+        break;
+      }
+      if (accountData?.code === 'ERROR') {
+        console.error('[XboxAPI] Account error on', acctUrl.slice(0, 30), ':', accountData?.message);
+      }
+    } catch (e) { console.error('[XboxAPI] Account check failed:', e.message); }
+  }
+  if (!apiKeyValid) {
+    console.error('[XboxAPI] Aucune réponse valide - XBL_API_KEY invalide ou expirée (va sur https://xbl.io)');
+    return [];
+  }
+
+  // Étape 2 : résoudre le Gamertag en XUID via plusieurs méthodes
   let xuid = null;
+  const gt = encodeURIComponent(gamertag);
+
+  // Méthode A : xbl.io player/gamertag endpoint (doc officielle, mars 2026)
+  // La doc montre https://api.xbl.io/api/v2/player/gamertag/:gt
+  // Réponse: { "xuid": "2533274843156789", "gamertag": "Major Nelson", ... }
   const searchUrls = [
-    `https://xbl.io/api/v2/player/search?gt=${encodeURIComponent(gamertag)}`,
-    `https://xbl.io/api/v2/player/search?q=${encodeURIComponent(gamertag)}`,
-    `https://xbl.io/api/v2/player/search?gamertag=${encodeURIComponent(gamertag)}`,
+    `https://api.xbl.io/api/v2/player/gamertag/${gt}`,
+    `https://xbl.io/v2/player/gamertag/${gt}`,
+    `https://xbl.io/api/v2/search/${gt}`,
+    `https://xbl.io/api/v2/friends/search/${gt}`,
+    `https://xbl.io/api/v2/player/search?gt=${gt}`,
+    `https://xbl.io/api/v2/player/search?q=${gt}`,
   ];
   for (const url of searchUrls) {
     try {
       const data = await xboxApiGet(apiKey, url);
-      if (data?.profileUsers?.length) {
-        const profile = data.profileUsers.find(p => p.gamertag?.toLowerCase() === gamertag.toLowerCase());
-        xuid = profile?.id || data?.xuid;
-        if (xuid) break;
-      }
+      // Nouveau format: xuid à la racine (player/gamertag endpoint)
+      if (data?.xuid) { xuid = data.xuid; console.log('[XboxAPI] XUID via root:', url, 'xuid:', xuid); break; }
+      // Ancien format: profileUsers array (account/search endpoint)
+      const user = data?.profileUsers?.[0] || data?.profileUser || data;
+      if (user?.xuid || user?.id) { xuid = user.xuid || user.id; console.log('[XboxAPI] XUID via profile:', url); break; }
+    } catch (e) { /* ignore */ }
+  }
+
+  // Méthode B : Microsoft Xbox Live API publique (profile) - sans auth, peut ne pas marcher
+  if (!xuid) {
+    try {
+      const msUrl = `https://profile.xboxlive.com/users/gt(${gt})/profile/settings`;
+      const msData = await new Promise((resolve, reject) => {
+        const opts = { headers: { 'x-xbl-contract-version': '2', 'Accept': 'application/json' } };
+        https.get(msUrl, opts, (resp) => {
+          let d = '';
+          resp.on('data', c => d += c);
+          resp.on('end', () => {
+            console.log('[XboxAPI] Microsoft profile status:', resp.statusCode, 'body:', d.slice(0, 300));
+            try { resolve(JSON.parse(d)); } catch { resolve(null); }
+          });
+        }).on('error', (err) => {
+          console.log('[XboxAPI] Microsoft request error:', err.message);
+          resolve(null);
+        });
+      });
+    } catch (e) { console.log('[XboxAPI] Microsoft API fallback échoué:', e.message); }
+  }
+
+  // Méthode C : Xbox Unity API (publique, sans clé)
+  if (!xuid) {
+    try {
+      const unityUrl = `https://xboxapi.unity.com/v1/player/${gt}`;
+      const data = await new Promise((resolve, reject) => {
+        https.get(unityUrl, { headers: { 'Accept': 'application/json' } }, (resp) => {
+          let d = '';
+          resp.on('data', c => d += c);
+          resp.on('end', () => {
+            console.log('[XboxAPI] Unity status:', resp.statusCode);
+            try { resolve(JSON.parse(d)); } catch { resolve(null); }
+          });
+        }).on('error', (err) => { resolve(null); });
+      });
+      if (data?.xuid) xuid = data.xuid;
     } catch (e) { /* ignore */ }
   }
 
   if (!xuid) {
-    console.error('[XboxAPI] XUID introuvable pour', gamertag, '- aucun format de recherche fonctionne');
+    console.error('[XboxAPI] XUID introuvable pour', gamertag);
     return [];
   }
 
   console.log('[XboxAPI] XUID found:', xuid);
-  const gamesUrl = `https://xbl.io/api/v2/player/${xuid}/games`;
-  const gamesData = await xboxApiGet(apiKey, gamesUrl);
-  console.log('[XboxAPI] Games FULL response:', JSON.stringify(gamesData));
+  const gamesUrls = [
+    `https://xbl.io/api/v2/player/titleHistory/${xuid}`,
+    `https://api.xbl.io/api/v2/player/titleHistory/${xuid}`,
+  ];
+  let gamesData = null;
+  for (const url of gamesUrls) {
+    try {
+      gamesData = await xboxApiGet(apiKey, url);
+      if (gamesData && gamesData?.code !== 'ERROR') break;
+    } catch (e) { /* ignore */ }
+  }
+  console.log('[XboxAPI] Games response:', JSON.stringify(gamesData).slice(0, 800));
   if (gamesData?.code === 'ERROR') {
     console.error('[XboxAPI] Games API error:', JSON.stringify(gamesData).slice(0, 500));
     return [];
   }
   const titles = gamesData?.titles || gamesData?.data?.titles || gamesData?.games || gamesData?.data || [];
   if (!Array.isArray(titles) || !titles.length) {
-    console.log('[XboxAPI] No titles array, response keys:', Object.keys(gamesData || {}));
+    console.log('[XboxAPI] No titles array, keys:', Object.keys(gamesData || {}));
     return [];
   }
 

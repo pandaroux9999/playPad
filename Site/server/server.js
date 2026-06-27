@@ -473,53 +473,54 @@ app.post('/api/platform/xbox/connect', requireAuth, async (req, res) => {
 
 // Récupère les jeux Xbox via xbl.io (clé gratuite sur https://xbl.io)
 async function fetchXboxGames(apiKey, gamertag) {
-  const results = { search: null, xuid: null, games: null, error: null };
-  try {
-    const searchUrl = `https://xbl.io/api/v2/player/search?gt=${encodeURIComponent(gamertag)}`;
-    const searchData = await xboxApiGet(apiKey, searchUrl);
-    results.search = searchData;
-    console.log('[XboxAPI] Search response full:', JSON.stringify(searchData).slice(0, 800));
-    const profile = searchData?.profileUsers?.find(p => p.gamertag?.toLowerCase() === gamertag.toLowerCase());
-    const xuid = profile?.id || searchData?.xuid;
-    results.xuid = xuid;
-    if (!xuid) {
-      console.error('[XboxAPI] XUID introuvable pour', gamertag, '- profileUsers:', JSON.stringify(searchData?.profileUsers));
-      return [];
-    }
+  // Essayer plusieurs formats de recherche pour trouver le XUID
+  let xuid = null;
+  const searchUrls = [
+    `https://xbl.io/api/v2/player/search?gt=${encodeURIComponent(gamertag)}`,
+    `https://xbl.io/api/v2/player/search?q=${encodeURIComponent(gamertag)}`,
+    `https://xbl.io/api/v2/player/search?gamertag=${encodeURIComponent(gamertag)}`,
+  ];
+  for (const url of searchUrls) {
+    try {
+      const data = await xboxApiGet(apiKey, url);
+      if (data?.profileUsers?.length) {
+        const profile = data.profileUsers.find(p => p.gamertag?.toLowerCase() === gamertag.toLowerCase());
+        xuid = profile?.id || data?.xuid;
+        if (xuid) break;
+      }
+    } catch (e) { /* ignore */ }
+  }
 
-    const gamesUrl = `https://xbl.io/api/v2/player/${xuid}/games`;
-    const gamesData = await xboxApiGet(apiKey, gamesUrl);
-    console.log('[XboxAPI] Games FULL response:', JSON.stringify(gamesData));
-    if (gamesData?.code === 'ERROR') {
-      console.error('[XboxAPI] Games API error:', JSON.stringify(gamesData).slice(0, 500));
-      return [];
-    }
-    // Essayer plusieurs formats de réponse possibles
-    const titles = gamesData?.titles || gamesData?.data?.titles || gamesData?.games || gamesData?.data || [];
-    console.log('[XboxAPI] Titles found:', Array.isArray(titles) ? titles.length : 'not array', 'type:', typeof titles);
-    if (!Array.isArray(titles) || !titles.length) {
-      console.log('[XboxAPI] No titles array, response keys:', Object.keys(gamesData || {}));
-      return [];
-    }
-
-    return titles.map(t => {
-      const titleId = t.titleId || t.id || '';
-      return {
-        game_id: 'xbox-' + titleId,
-        title: t.name || t.title || 'Unknown',
-        platform: 'xbox',
-        playtime: Math.round((t.playtime || 0) / 60),
-        cover: t.displayImage || t.images?.find(i => i.type === 'screenshot')?.url || '',
-        genre: t.genre || t.categories?.[0] || '',
-        year: t.releaseDate ? new Date(t.releaseDate).getFullYear() : 0,
-        status: t.progression?.completionPercentage === 100 ? 'completed' : (t.playtime > 0 ? 'playing' : 'not_started'),
-        user_rating: 0, review_text: '', review_public: true, has_review: 0,
-      };
-    });
-  } catch (err) {
-    console.error('[XboxAPI] Exception:', err.message, JSON.stringify(results).slice(0, 300));
+  if (!xuid) {
+    console.error('[XboxAPI] XUID introuvable pour', gamertag, '- aucun format de recherche fonctionne');
     return [];
   }
+
+  console.log('[XboxAPI] XUID found:', xuid);
+  const gamesUrl = `https://xbl.io/api/v2/player/${xuid}/games`;
+  const gamesData = await xboxApiGet(apiKey, gamesUrl);
+  console.log('[XboxAPI] Games FULL response:', JSON.stringify(gamesData));
+  if (gamesData?.code === 'ERROR') {
+    console.error('[XboxAPI] Games API error:', JSON.stringify(gamesData).slice(0, 500));
+    return [];
+  }
+  const titles = gamesData?.titles || gamesData?.data?.titles || gamesData?.games || gamesData?.data || [];
+  if (!Array.isArray(titles) || !titles.length) {
+    console.log('[XboxAPI] No titles array, response keys:', Object.keys(gamesData || {}));
+    return [];
+  }
+
+  return titles.map(t => ({
+    game_id: 'xbox-' + (t.titleId || t.id || ''),
+    title: t.name || t.title || 'Unknown',
+    platform: 'xbox',
+    playtime: Math.round((t.playtime || 0) / 60),
+    cover: t.displayImage || t.images?.find(i => i.type === 'screenshot')?.url || '',
+    genre: t.genre || t.categories?.[0] || '',
+    year: t.releaseDate ? new Date(t.releaseDate).getFullYear() : 0,
+    status: t.progression?.completionPercentage === 100 ? 'completed' : (t.playtime > 0 ? 'playing' : 'not_started'),
+    user_rating: 0, review_text: '', review_public: true, has_review: 0,
+  }));
 }
 
 // Helper appel API xbl.io

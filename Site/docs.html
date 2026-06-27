@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PlayPad &mdash; Documentation</title>
+  <script src="https://cdn.tailwindcss.com">
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #0f0f1a; color: #e2e8f0; line-height: 1.7; }
+    .gradient-text { background: linear-gradient(135deg, #8B5CF6, #3B82F6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .gradient-bg { background: linear-gradient(135deg, #8B5CF6, #3B82F6); }
+    .card { background: #1a1a2e; border: 1px solid #2a2a44; border-radius: 16px; padding: 1.5rem; margin-bottom: 1rem; }
+    .card:hover { border-color: #8B5CF640; }
+    pre { background: #0a0a16; border-radius: 12px; padding: 1rem; overflow-x: auto; font-size: 13px; border: 1px solid #2a2a44; margin: 0.5rem 0; }
+    code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    :not(pre) > code { background: #2a2a44; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+    h2 { font-family: 'Rajdhani', sans-serif; font-weight: 900; font-size: 1.5rem; margin: 2rem 0 0.75rem; }
+    h3 { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
+    nav a { transition: color 0.2s; }
+    nav a:hover { color: #a78bfa; }
+    .feature-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3a3a55; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <nav class="fixed top-0 left-0 right-0 z-50" style="background: #0f0f1ae8; backdrop-filter: blur(12px); border-bottom: 1px solid #2a2a44;">
+    <div class="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2 no-underline text-white">
+        <span class="text-xl font-black" style="font-family: 'Rajdhani', sans-serif;">
+          <span class="gradient-text">Play</span><span style="color: #e2e8f0;">Pad</span>
+        </span>
+      </a>
+      <div class="flex items-center gap-5 text-sm">
+        <a href="#intro" class="no-underline" style="color: #94a3b8;">Intro</a>
+        <a href="#features" class="no-underline" style="color: #94a3b8;">Fonctionnalités</a>
+        <a href="#architecture" class="no-underline" style="color: #94a3b8;">Architecture</a>
+        <a href="#code" class="no-underline" style="color: #94a3b8;">Code</a>
+        <a href="#setup" class="no-underline" style="color: #94a3b8;">Setup</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-4xl mx-auto px-4 pt-24 pb-16">
+    <h1 class="text-4xl font-black mb-2" style="font-family: 'Rajdhani', sans-serif;">
+      <span class="gradient-text">PlayPad</span>
+      <span style="color: #64748b;">Documentation</span>
+    </h1>
+    <p class="text-sm mb-8" style="color: #64748b;">
+      Application web de gestion de biblioth&egrave;que de jeux &mdash; Architecture, code, interfaces
+    </p>
+
+    <section id="intro">
+      <h2>Qu'est-ce que PlayPad ?</h2>
+      <div class="card">
+        <p>PlayPad est une application web qui permet de <strong>g&eacute;rer sa biblioth&egrave;que de jeux vid&eacute;o</strong> toutes plateformes confondues (Steam, PlayStation, Xbox, Nintendo, Epic Games).</p>
+        <p class="mt-3">Elle offre des fonctionnalit&eacute;s sociales : ajouter des amis, voir leur biblioth&egrave;que, leur proposer des jeux, poster des critiques publiques, et constituer un Top 3.</p>
+        <p class="mt-3">Les jeux Steam sont import&eacute;s automatiquement via l'API Steam (avec les succ&egrave;s). Un catalogue partag&eacute; permet de d&eacute;couvrir des jeux et de les ajouter en un clic.</p>
+      </div>
+
+      <h3>Capture d'&eacute;cran</h3>
+      <div class="card">
+        <img src="appli.png" alt="Aperçu de l'application" class="w-full rounded-xl" style="max-width: 800px;" onerror="this.style.display='none'">
+      </div>
+    </section>
+
+    <section id="features">
+      <h2>Fonctionnalit&eacute;s</h2>
+      <div class="grid gap-3" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+        <div class="card">
+          <div class="flex items-start gap-3">
+            <div class="feature-icon gradient-bg text-white text-xs font-black">B</div>
+            <div>
+              <h4 class="font-bold text-sm mb-1">Biblioth&egrave;que</h4>
+              <p class="text-xs" style="color: #94a3b8;">Liste de tous vos jeux, filtres par plateforme, statut (en cours, termin&eacute;, &agrave; jouer, abandonn&eacute;).</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="flex items-start gap-3">
+            <div class="feature-icon gradient-bg text-white text-xs font-black">C</div>
+            <div>
+              <h4 class="font-bold text-sm mb-1">Communaut&eacute;</h4>
+              <p class="text-xs" style="color: #94a3b8;">Recherche d'utilisateurs, demandes d'ami, liste d'amis, statut en ligne (point vert), suggestions de jeux.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="flex items-start gap-3">
+            <div class="feature-icon gradient-bg text-white text-xs font-black">R</div>
+            <div>
+              <h4 class="font-bold text-sm mb-1">Critiques</h4>
+              <p class="text-xs" style="color: #94a3b8;">Noter les jeux (1-5 &eacute;toiles), &eacute;crire des avis publics, consulter les critiques de la communaut&eacute;.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="flex items-start gap-3">
+            <div class="feature-icon gradient-bg text-white text-xs font-black">C</div>
+            <div>
+              <h4 class="font-bold text-sm mb-1">Catalogue</h4>
+              <p class="text-xs" style="color: #94a3b8;">Catalogue partag&eacute; aliment&eacute; par tous les utilisateurs. Ajoutez un jeu en un clic depuis le catalogue.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="flex items-start gap-3">
+            <div class="feature-icon gradient-bg text-white text-xs font-black">P</div>
+            <div>
+              <h4 class="font-bold text-sm mb-1">Profil</h4>
+              <p class="text-xs" style="color: #94a3b8;">Avatar (fichier ou URL), Top 3, wishlist, connexion Steam, &eacute;dition du profil.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="flex items-start gap-3">
+            <div class="feature-icon gradient-bg text-white text-xs font-black">S</div>
+            <div>
+              <h4 class="font-bold text-sm mb-1">Steam</h4>
+              <p class="text-xs" style="color: #94a3b8;">Connexion via Steam OpenID, import automatique des jeux et succ&egrave;s (achievements).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <h2>Architecture</h2>
+      <div class="card">
+        <p>L'application suit une architecture classique <strong>client-serveur</strong> :</p>
+        <pre>
+<span style="color: #8B5CF6;">Navigateur</span>
+  &darr; HTTPS
+<span style="color: #3B82F6;">Express (Node.js)</span>  &larr; Render.com
+  &darr; Service Role Key
+<span style="color: #22c55e;">Supabase (PostgreSQL)</span>  &larr; Base de donn&eacute;es</pre>
+        <p class="mt-3">Le frontend est une <strong>Single Page Application</strong> React (UMD, sans build). Le backend Express expose une API REST. Les sessions sont stock&eacute;es dans Supabase pour persister les connexions.</p>
+      </div>
+
+      <h3>Stack technique</h3>
+      <div class="grid gap-3" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));">
+        <div class="card">
+          <h4 class="font-bold text-sm mb-2" style="color: #a78bfa;">Frontend</h4>
+          <ul class="text-xs" style="color: #94a3b8; padding-left: 1rem;">
+            <li>React 18 (UMD, sans build)</li>
+            <li>Tailwind CSS (CDN)</li>
+            <li>Ic&ocirc;nes SVG inline</li>
+            <li>Pas de d&eacute;pendances npm frontend</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4 class="font-bold text-sm mb-2" style="color: #60a5fa;">Backend</h4>
+          <ul class="text-xs" style="color: #94a3b8; padding-left: 1rem;">
+            <li>Express.js</li>
+            <li>express-session + SupabaseStore</li>
+            <li>bcryptjs (hash mots de passe)</li>
+            <li>@supabase/supabase-js</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4 class="font-bold text-sm mb-2" style="color: #34d399;">Base de donn&eacute;es</h4>
+          <ul class="text-xs" style="color: #94a3b8; padding-left: 1rem;">
+            <li>Supabase (PostgreSQL)</li>
+            <li>9 tables + 2 index</li>
+            <li>Session store personnalis&eacute;</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4 class="font-bold text-sm mb-2" style="color: #f59e0b;">H&eacute;bergement</h4>
+          <ul class="text-xs" style="color: #94a3b8; padding-left: 1rem;">
+            <li>Render.com (Web Service)</li>
+            <li>Node.js 18+</li>
+            <li>D&eacute;ploiement Git automatis&eacute;</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>Flux de donn&eacute;es</h3>
+      <div class="card">
+        <pre>
+<span style="color: #94a3b8;">1.</span> Utilisateur ouvre l'application &rarr; <span style="color: #8B5CF6;">index.html</span> charg&eacute; (SSR React)
+<span style="color: #94a3b8;">2.</span> React monte &rarr; <span style="color: #f59e0b;">loadData()</span> appel&eacute;
+<span style="color: #94a3b8;">3.</span> GET <span style="color: #3B82F6;">/api/me</span> &rarr; v&eacute;rification session
+<span style="color: #94a3b8;">4.</span> GET <span style="color: #3B82F6;">/api/games</span>, <span style="color: #3B82F6;">/api/wishlist</span>, <span style="color: #3B82F6;">/api/topthree</span>
+<span style="color: #94a3b8;">5.</span> Toutes les 120s : POST <span style="color: #3B82F6;">/api/heartbeat</span>
+<span style="color: #94a3b8;">6.</span> Actions utilisateur &rarr; POST/PUT/DELETE mutent la DB via Supabase</pre>
+      </div>
+    </section>
+
+    <section id="code">
+      <h2>Structure du code</h2>
+      <div class="card">
+        <pre>
+<span style="color: #f59e0b;">Site/</span>
+  index.html           <span style="color: #64748b;"># Frontend React SPA complet (~1800 lignes)</span>
+  preview.html         <span style="color: #64748b;"># Maquette de design avec donn&eacute;es mock</span>
+  GameSheet.tsx        <span style="color: #64748b;"># Composant exp&eacute;rimental (TanStack)</span>
+  logo_hackaton.png    <span style="color: #64748b;"># Logo de l'application</span>
+
+<span style="color: #f59e0b;">Site/server/</span>
+  server.js            <span style="color: #64748b;"># Serveur Express (routes API, auth, Steam)</span>
+  db.js                <span style="color: #64748b;"># Couche d'acc&egrave;s Supabase (CRUD)</span>
+  session-store.js     <span style="color: #64748b;"># Stockage des sessions dans Supabase</span>
+  supabase-schema.sql  <span style="color: #64748b;"># Script SQL pour cr&eacute;er les tables</span>
+
+<span style="color: #f59e0b;">playnite-bridge/</span>
+  playnite-reader.js   <span style="color: #64748b;"># Lecteur base Playnite (SQLite locale)</span>
+  playnite-server.js   <span style="color: #64748b;"># Serveur local optionnel</span>
+  README.md            <span style="color: #64748b;"># Documentation Playnite Bridge</span></pre>
+      </div>
+
+      <h3>Sch&eacute;ma de la base de donn&eacute;es</h3>
+      <div class="card">
+        <pre><span style="color: #22c55e;">users</span> (id, username, display_name, password, avatar_url, steam_id, last_seen, created_at)
+  &uarr; 1:N
+<span style="color: #22c55e;">games</span> (id, user_id FK, game_id, title, platform, genre, cover, status, playtime, ...)
+<span style="color: #22c55e;">wishlist</span> (id, user_id FK, game_id)    <span style="color: #64748b;">-- Liste de souhaits</span>
+<span style="color: #22c55e;">top_three</span> (id, user_id FK, game_id, position)  <span style="color: #64748b;">-- Top 3 jeux</span>
+
+<span style="color: #22c55e;">community_reviews</span> (id, user_id FK, game_id, game_title, rating, review_text)
+<span style="color: #22c55e;">friends</span> (id, user_id FK, friend_id FK, status, created_at)
+<span style="color: #22c55e;">game_suggestions</span> (id, from_user_id FK, to_user_id FK, game_id, message)
+<span style="color: #22c55e;">catalog</span> (id, game_id UNIQUE, title, platform, cover, genre, year)
+<span style="color: #22c55e;">sessions</span> (sid PK, session_data JSONB, expires)</pre>
+      </div>
+
+      <h3>API REST &mdash; Routes principales</h3>
+      <div class="card">
+        <table class="w-full text-xs" style="border-collapse: collapse;">
+          <thead>
+            <tr style="border-bottom: 1px solid #2a2a44;">
+              <th class="text-left py-2 px-1 font-bold" style="color: #a78bfa;">M&eacute;thode</th>
+              <th class="text-left py-2 px-1 font-bold" style="color: #a78bfa;">Route</th>
+              <th class="text-left py-2 px-1 font-bold" style="color: #a78bfa;">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/register</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Inscription</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/login</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Connexion</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/me</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Profil de l'utilisateur connect&eacute;</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/games</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Jeux de l'utilisateur</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/games/sync</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Importer des jeux (Playnite, manuel)</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/games/status</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Changer le statut d'un jeu</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/games/review</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Publier/&eacute;diter une critique</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/auth/steam</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Connexion Steam OpenID</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/users/search</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Rechercher des utilisateurs</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/users/:id/profile</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Profil public d'un utilisateur</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/friends</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Liste d'amis</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/friends/request</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Envoyer une demande d'ami</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/catalog</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Catalogue partag&eacute;</td></tr>
+            <tr><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/heartbeat</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Mise &agrave; jour du statut en ligne</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Fonctionnalit&eacute; cl&eacute; : Connexion Steam</h3>
+      <div class="card">
+        <ol class="text-xs" style="color: #94a3b8; padding-left: 1rem;">
+          <li class="mb-2">L'utilisateur clique "Connecter Steam" (lien OpenID dans le panneau sync)</li>
+          <li class="mb-2">Le serveur redirige vers <code>steamcommunity.com/openid/login</code></li>
+          <li class="mb-2">L'utilisateur s'authentifie sur Steam (connexion officielle, pas de mot de passe partag&eacute;)</li>
+          <li class="mb-2">Steam redirige vers le callback <code>/api/auth/steam/callback</code></li>
+          <li class="mb-2">Le serveur valide la r&eacute;ponse OpenID via <code>check_authentication</code></li>
+          <li class="mb-2">Extraction du Steam ID depuis <code>openid.claimed_id</code></li>
+          <li class="mb-2">Appel &agrave; l'API Steam (<code>GetOwnedGames</code>) pour r&eacute;cup&eacute;rer les jeux</li>
+          <li class="mb-2">Pour chaque jeu : appel &agrave; <code>GetPlayerAchievements</code> pour les succ&egrave;s</li>
+          <li class="mb-2">Sauvegarde des jeux + ajout au catalogue partag&eacute;</li>
+        </ol>
+      </div>
+
+      <h3>Fonctionnalit&eacute; cl&eacute; : Sessions persistantes</h3>
+      <div class="card">
+        <p class="text-xs" style="color: #94a3b8;">Les sessions sont stock&eacute;es dans la table <code>sessions</code> de Supabase via un store personnalis&eacute; (<code>session-store.js</code>).</p>
+        <pre class="mt-2">// session-store.js &mdash; stocke les sessions dans Supabase
+get(sid)   &rarr; SELECT session_data FROM sessions WHERE sid = ?
+set(sid, session) &rarr; UPSERT INTO sessions (sid, session_data, expires)
+destroy(sid) &rarr; DELETE FROM sessions WHERE sid = ?</pre>
+        <p class="mt-2 text-xs" style="color: #94a3b8;">Avantage : les sessions survivent aux red&eacute;marrages de Render. Fallback m&eacute;moire si la table n'existe pas encore.</p>
+      </div>
+    </section>
+
+    <section id="setup">
+      <h2>Installation et configuration</h2>
+
+      <h3>Variables d'environnement</h3>
+      <div class="card">
+        <pre>
+SUPABASE_URL            = https://xxx.supabase.co
+SUPABASE_ANON_KEY       = (cl&eacute; anon du projet Supabase)
+SUPABASE_SERVICE_ROLE_KEY = (cl&eacute; service_role, pour les op&eacute;rations admin)
+STEAM_API_KEY           = (cl&eacute; API Steam, optionnelle pour l'import)
+PUBLIC_URL              = https://ton-app.render.com (pour le callback Steam)
+SESSION_SECRET          = (optionnel, pour les cookies de session)</pre>
+      </div>
+
+      <h3>Base de donn&eacute;es Supabase</h3>
+      <div class="card">
+        <p class="text-xs mb-2" style="color: #94a3b8;">Ex&eacute;cuter le fichier <code>supabase-schema.sql</code> dans l'&eacute;diteur SQL de Supabase :</p>
+        <pre>Dashboard &rarr; SQL Editor &rarr; Coller le contenu du fichier &rarr; Run</pre>
+        <p class="mt-2 text-xs" style="color: #94a3b8;">Ce script cr&eacute;e toutes les tables n&eacute;cessaires (<code>CREATE TABLE IF NOT EXISTS</code>, ex&eacute;cutable plusieurs fois sans risque).</p>
+      </div>
+
+      <h3>D&eacute;ploiement sur Render</h3>
+      <div class="card">
+        <ol class="text-xs" style="color: #94a3b8; padding-left: 1rem;">
+          <li class="mb-1">Cr&eacute;er un Web Service sur Render.com</li>
+          <li class="mb-1">Brancher le repository GitHub</li>
+          <li class="mb-1">Build Command : <code>yarn</code></li>
+          <li class="mb-1">Start Command : <code>node Site/server/server.js</code></li>
+          <li class="mb-1">Ajouter les variables d'environnement</li>
+        </ol>
+      </div>
+
+      <h3>Playnite Bridge (import local)</h3>
+      <div class="card">
+        <p class="text-xs" style="color: #94a3b8;">Le dossier <code>playnite-bridge/</code> contient un script Node.js qui lit la base SQLite de Playnite et pousse les jeux vers le serveur PlayPad.</p>
+        <pre>cd playnite-bridge
+yarn install
+# Pousser les jeux directement vers Render :
+PLAYPAD_URL=https://ton-app.render.com \
+PLAYPAD_USER=mon_login PLAYPAD_PASS=mon_mdp \
+node playnite-reader.js --push</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2>Contribuer</h2>
+      <div class="card">
+        <p class="text-xs" style="color: #94a3b8;">Le projet est open-source sur GitHub. Pour contribuer :</p>
+        <ul class="text-xs mt-2" style="color: #94a3b8; padding-left: 1rem;">
+          <li>Forker le repository</li>
+          <li>Cr&eacute;er une branche pour votre modification</li>
+          <li>Ouvrir une Pull Request</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer class="mt-12 pt-6 text-center text-xs" style="border-top: 1px solid #2a2a44; color: #475569;">
+      PlayPad &mdash; Application web de gestion de biblioth&egrave;que de jeux &mdash; Documentation g&eacute;n&eacute;r&eacute;e le 27 juin 2026
+    </footer>
+  </div>
+</body>
+</html>

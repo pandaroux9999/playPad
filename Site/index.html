@@ -401,13 +401,13 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
               h('div', { className: "flex items-center gap-1.5" }, h('span', { className: "text-[11px] font-bold text-foreground" }, cfg.name), h('div', { className: "w-1 h-1 rounded-full", style: { background: isConnected ? "#4ade80" : "#ef444450", boxShadow: isConnected ? "0 0 4px #4ade8080" : "none" } })),
               h('p', { className: "text-[9px] text-muted-foreground" }, isConnected ? (isXbox ? (user?.xbox_gamertag || '') + ' · ' : '') + `${gameCount} jeux · ${lastSync}` : "Non connecté")
             ),
-            isConnected
-              ? h('div', { className: "flex items-center gap-1" },
-                  platform === "steam"
-                    ? h('a', { href: "/api/auth/steam", className: "p-1.5 rounded-lg inline-flex", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
-                    : null,
-                  h('button', { onClick: async (e) => { e.stopPropagation(); if (!confirm(`Supprimer tous les jeux ${cfg.name} de votre bibliothèque ?`)) return; await API.disconnectPlatform(platform); setConnected(c => ({ ...c, [platform]: false })); onSyncComplete?.(); showToast(`Jeux ${cfg.name} retirés`); }, className: "p-1.5 rounded-lg hover:opacity-80", style: { background: "rgba(239,68,68,0.15)" } }, h(Trash2, { size: 10, style: { color: "#ef4444" } }))
-                )
+            isConnected &&
+              h('div', { className: "flex items-center gap-1" },
+                platform === "steam"
+                  ? h('a', { href: "/api/auth/steam", className: "p-1.5 rounded-lg inline-flex", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
+                  : null,
+                h('button', { onClick: async (e) => { e.stopPropagation(); if (!confirm(`Supprimer tous les jeux ${cfg.name} de votre bibliothèque ?`)) return; await API.disconnectPlatform(platform); setConnected(c => ({ ...c, [platform]: false })); onSyncComplete?.(); showToast(`Jeux ${cfg.name} retirés`); }, className: "p-1.5 rounded-lg hover:opacity-80", style: { background: "rgba(239,68,68,0.15)" } }, h(Trash2, { size: 10, style: { color: "#ef4444" } }))
+              )
         })),
         h('div', { className: "mt-2 pt-2 border-t border-border flex items-center gap-2" },
           h('button', { onClick: () => setShowBridgeConfig(!showBridgeConfig), className: "text-[9px] font-medium hover:opacity-80", style: { color: `${P1}aa` } }, showBridgeConfig ? "Masquer" : "Configurer le pont Playnite"),

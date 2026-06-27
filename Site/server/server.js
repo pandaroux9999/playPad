@@ -469,12 +469,62 @@ app.post('/api/platform/xbox/connect', requireAuth, async (req, res) => {
   }
 });
 
-// Récupère les jeux Xbox via xbl.io
+// Récupère les jeux Xbox via xbl.io (clé gratuite sur https://xbl.io)
 async function fetchXboxGames(apiKey, gamertag) {
-  const url = `https://xbl.io/api/v2/account/999/gameclubs?gt=${encodeURIComponent(gamertag)}`;
-  // API alternative pour les jeux : https://xbl.io/api/v2/player/{xuid}/games
-  // Pour l'instant on retourne un tableau vide — sera implémenté quand une clé API Xbox sera configurée
-  return [];
+  // Étape 1 : résoudre le Gamertag en XUID
+  const searchData = await xboxApiGet(apiKey, `https://xbl.io/api/v2/player/search?gt=${encodeURIComponent(gamertag)}`);
+  const profile = searchData?.profileUsers?.find(p => p.gamertag?.toLowerCase() === gamertag.toLowerCase());
+  const xuid = profile?.id || searchData?.xuid;
+  if (!xuid) {
+    console.error('[XboxAPI] XUID introuvable pour', gamertag);
+    return [];
+  }
+
+  // Étape 2 : récupérer les jeux
+  const gamesData = await xboxApiGet(apiKey, `https://xbl.io/api/v2/player/${xuid}/games`);
+  const titles = gamesData?.titles || [];
+  if (!titles.length) return [];
+
+  return titles.map(t => {
+    const titleId = t.titleId || t.id || '';
+    const cover = t.displayImage || t.images?.find(i => i.type === 'screenshot')?.url || '';
+    return {
+      game_id: 'xbox-' + titleId,
+      title: t.name || t.title || 'Unknown',
+      platform: 'xbox',
+      playtime: Math.round((t.playtime || 0) / 60),
+      cover,
+      genre: t.genre || t.categories?.[0] || '',
+      year: t.releaseDate ? new Date(t.releaseDate).getFullYear() : 0,
+      status: t.progression?.completionPercentage === 100 ? 'completed' : (t.playtime > 0 ? 'playing' : 'not_started'),
+      user_rating: 0,
+      review_text: '',
+      review_public: true,
+      has_review: 0,
+    };
+  });
+}
+
+// Helper appel API xbl.io
+function xboxApiGet(apiKey, url) {
+  return new Promise((resolve, reject) => {
+    const opts = {
+      method: 'GET',
+      headers: {
+        'x-authorization': apiKey,
+        'User-Agent': 'PlayPad/1.0',
+        'Accept': 'application/json',
+      },
+    };
+    https.get(url, opts, (resp) => {
+      let d = '';
+      resp.on('data', c => d += c);
+      resp.on('end', () => {
+        try { resolve(JSON.parse(d)); }
+        catch (e) { reject(e); }
+      });
+    }).on('error', reject);
+  });
 }
 
 app.get('/api/users/search', requireAuth, async (req, res) => {

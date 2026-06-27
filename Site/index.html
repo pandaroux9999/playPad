@@ -408,6 +408,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
                   : null,
                 h('button', { onClick: async (e) => { e.stopPropagation(); if (!confirm(`Supprimer tous les jeux ${cfg.name} de votre bibliothèque ?`)) return; await API.disconnectPlatform(platform); setConnected(c => ({ ...c, [platform]: false })); onSyncComplete?.(); showToast(`Jeux ${cfg.name} retirés`); }, className: "p-1.5 rounded-lg hover:opacity-80", style: { background: "rgba(239,68,68,0.15)" } }, h(Trash2, { size: 10, style: { color: "#ef4444" } }))
               )
+            )
         })),
         h('div', { className: "mt-2 pt-2 border-t border-border flex items-center gap-2" },
           h('button', { onClick: () => setShowBridgeConfig(!showBridgeConfig), className: "text-[9px] font-medium hover:opacity-80", style: { color: `${P1}aa` } }, showBridgeConfig ? "Masquer" : "Configurer le pont Playnite"),

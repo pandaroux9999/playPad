@@ -105,6 +105,7 @@ const API = {
   getSuggestions: () => API.request('GET', '/api/suggestions'),
   dismissSuggestion: (id) => API.request('DELETE', `/api/suggestions/${id}`),
   getCatalog: () => API.request('GET', '/api/catalog'),
+  deleteGame: (gameId) => API.request('DELETE', `/api/games/${gameId}`),
   disconnectPlatform: (platform) => API.request('DELETE', `/api/games/platform/${platform}`),
   heartbeat: () => API.request('POST', '/api/heartbeat'),
 };
@@ -861,7 +862,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   );
 }
 
-function GameDetailSheet({ game, onClose, onSaveReview, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, userId, ratings }) {
+function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, userId, ratings }) {
   const [editing, setEditing] = useState(false);
   const [draftRating, setDraftRating] = useState(game.userRating);
   const [draftReview, setDraftReview] = useState(game.review_text || game.reviewText || "");
@@ -945,9 +946,10 @@ function GameDetailSheet({ game, onClose, onSaveReview, wishlistIds, onToggleWis
               })
             )
           ),
-          h('div', { className: "grid grid-cols-4 gap-1.5 mb-5" },
+          h('div', { className: "grid grid-cols-4 gap-1.5 mb-3" },
             [{ icon: h(Clock, { size: 11, style: { color: P2 } }), val: `${game.playtime || 0}h`, sub: "jou\u00e9es" },{ icon: h(Trophy, { size: 11, className: "text-amber-400" }), val: String(game.year || "\u2014"), sub: "sortie" },{ icon: h(Star, { size: 11, fill: "#f59e0b", stroke: "#f59e0b" }), val: game.userRating ? `${game.userRating}/5` : "\u2014", sub: "ta note" },{ icon: h(Star, { size: 11, fill: globalRating ? "#8B5CF6" : "none", stroke: "#8B5CF6" }), val: globalRating ? globalRating.toFixed(1) : "\u2014", sub: "globale" }].map(({ icon, val, sub }) => h('div', { key: sub, className: "bg-secondary/50 rounded-xl p-2 text-center" }, h('div', { className: "flex justify-center mb-0.5" }, icon), h('p', { className: "text-xs font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, val), h('p', { className: "text-[9px] text-muted-foreground" }, sub)))
           ),
+          game.game_id && h('button', { onClick: async () => { if (confirm("Supprimer ce jeu de votre biblioth\u00e8que ?")) { await onDeleteGame?.(game.game_id); } }, className: "w-full mb-3 py-2 text-[10px] font-bold rounded-xl flex items-center justify-center gap-1.5", style: { background: "rgba(239,68,68,0.1)", color: "#ef4444" } }, h(Trash2, { size: 11 }), "Retirer de ma biblioth\u00e8que"),
           h('div', { className: "border-t border-border pt-4" },
             h('div', { className: "flex items-center justify-between mb-4" }, h('h3', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Ma Critique"), !editing && h('button', { onClick: () => setEditing(true), className: "flex items-center gap-1.5 text-xs font-bold hover:opacity-80", style: { color: P1 } }, h(Edit3, { size: 12 }), game.hasReview ? "Modifier" : "R\u00e9diger")),
             editing
@@ -1160,6 +1162,14 @@ function App() {
     await loadData();
   };
 
+  const handleDeleteGame = async (gameId) => {
+    if (!confirm("Supprimer ce jeu de votre biblioth\u00e8que ?")) return;
+    await API.deleteGame(gameId);
+    await loadData();
+    setSelectedGame(null);
+    showToast("Jeu retir\u00e9 de la biblioth\u00e8que");
+  };
+
   const handleSaveReview = async (gameId, rating, reviewText, reviewPublic, gameTitle, gameCover) => {
     await API.saveReview(gameId, rating, reviewText, reviewPublic, gameTitle, gameCover);
     await loadData();
@@ -1239,6 +1249,7 @@ function App() {
         game: selectedGame,
         onClose: () => setSelectedGame(null),
         onSaveReview: handleSaveReview,
+        onDeleteGame: handleDeleteGame,
         wishlistIds,
         onToggleWishlist: handleToggleWishlist,
         topThreeIds,

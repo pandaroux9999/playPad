@@ -256,12 +256,33 @@ app.get('/api/catalog', async (req, res) => {
   }
 });
 
+app.delete('/api/games/:gameId', requireAuth, async (req, res) => {
+  try {
+    await db.deleteGame(req.session.userId, req.params.gameId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[GameDelete] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/games/platform/:platform', requireAuth, async (req, res) => {
   try {
     await db.deletePlatformGames(req.session.userId, req.params.platform);
     res.json({ ok: true });
   } catch (err) {
     console.error('[PlatformDelete] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/reset', requireAuth, async (req, res) => {
+  try {
+    await db.resetAllData();
+    console.log('[Admin] Reset all games + catalog by user', req.session.userId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Admin] Reset error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -386,11 +407,7 @@ async function fetchSteamGames(apiKey, steamId) {
       title: g.name || 'Unknown',
       platform: 'steam',
       playtime: Math.round((g.playtime_forever || 0) / 60),
-      cover: g.img_icon_url
-        ? `https://media.steampowered.com/steamcommunity/public/images/apps/${g.appid}/${g.img_icon_url}.jpg`
-        : (g.img_logo_url
-          ? `https://media.steampowered.com/steamcommunity/public/images/apps/${g.appid}/${g.img_logo_url}.jpg`
-          : ''),
+      cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.appid}/library_600x900.jpg`,
       genre: '',
       year: 0,
       status: g.playtime_forever > 0 ? 'playing' : 'not_started',
@@ -466,12 +483,10 @@ function steamApiGet(apiKey, iface, method, params) {
   });
 }
 
-// Enrichit un jeu avec les infos Steam Store (si game_id commence par steam-)
+// Enrichit un jeu avec les infos Steam Store — genre, année, cover si absente
 async function enrichGameFromSteam(game) {
   if (!game.game_id || !game.game_id.startsWith('steam-')) return game;
   const appid = game.game_id.replace('steam-', '');
-  // Ne rien faire si déjà complet
-  if (game.cover && game.genre) return game;
   try {
     const details = await steamStoreGet(appid);
     if (details && details.success && details.data) {
@@ -479,8 +494,8 @@ async function enrichGameFromSteam(game) {
       return {
         ...game,
         cover: game.cover || d.header_image || '',
-        genre: game.genre || (d.genres && d.genres.map(g => g.description).join(', ')) || '',
-        year: game.year || (d.release_date && d.release_date.date ? parseInt(d.release_date.date.match(/\d{4}/)?.[0]) || 0 : 0),
+        genre: (d.genres && d.genres.map(g => g.description).join(', ')) || game.genre || '',
+        year: (d.release_date && d.release_date.date ? parseInt(d.release_date.date.match(/\d{4}/)?.[0]) || 0 : 0) || game.year,
       };
     }
   } catch (e) { /* Steam Store non disponible, garder les données d'origine */ }

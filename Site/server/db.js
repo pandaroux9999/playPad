@@ -392,6 +392,15 @@ async function getCatalog() {
   return data || [];
 }
 
+async function deleteGame(userId, gameId) {
+  const { error } = await supabaseAdmin
+    .from('games')
+    .delete()
+    .eq('user_id', userId)
+    .eq('game_id', gameId);
+  if (error) throw new Error(error.message);
+}
+
 async function deletePlatformGames(userId, platform) {
   const { error } = await supabaseAdmin
     .from('games')
@@ -399,6 +408,12 @@ async function deletePlatformGames(userId, platform) {
     .eq('user_id', userId)
     .eq('platform', platform);
   if (error) throw new Error(error.message);
+}
+
+async function resetAllData() {
+  const { error: e1 } = await supabaseAdmin.from('games').delete().gte('user_id', 0);
+  const { error: e2 } = await supabaseAdmin.from('catalog').delete().gte('game_id', '');
+  if (e1 || e2) throw new Error((e1?.message || '') + (e2?.message || ''));
 }
 
 async function updateLastSeen(userId) {
@@ -456,6 +471,8 @@ module.exports = {
   sendGameSuggestion,
   getGameSuggestions,
   removeGameSuggestion,
+  deleteGame,
+  resetAllData,
   ensureCatalogGame,
   getCatalog,
   deletePlatformGames,

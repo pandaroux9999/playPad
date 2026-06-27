@@ -451,17 +451,19 @@ app.post('/api/platform/xbox/connect', requireAuth, async (req, res) => {
   if (!gamertag) return res.status(400).json({ error: 'Gamertag requis' });
   try {
     await db.setXboxGamertag(req.session.userId, gamertag);
-    // Tente d'importer via xbl.io si la clé est configurée
     const xblKey = process.env.XBL_API_KEY;
+    console.log('[XboxConnect] XBL_API_KEY defined:', !!xblKey, 'gamertag:', gamertag);
     let count = 0;
     if (xblKey) {
       const games = await fetchXboxGames(xblKey, gamertag);
+      console.log('[XboxConnect] games fetched:', games.length);
       for (const game of games) {
         await db.upsertGame(req.session.userId, game);
         await db.ensureCatalogGame(game);
       }
       count = games.length;
     }
+    console.log('[XboxConnect] OK, count:', count);
     res.json({ ok: true, count });
   } catch (err) {
     console.error('[XboxConnect] Error:', err.message);
@@ -472,19 +474,29 @@ app.post('/api/platform/xbox/connect', requireAuth, async (req, res) => {
 // Récupère les jeux Xbox via xbl.io (clé gratuite sur https://xbl.io)
 async function fetchXboxGames(apiKey, gamertag) {
   // Étape 1 : résoudre le Gamertag en XUID
-  const searchData = await xboxApiGet(apiKey, `https://xbl.io/api/v2/player/search?gt=${encodeURIComponent(gamertag)}`);
+  const searchUrl = `https://xbl.io/api/v2/player/search?gt=${encodeURIComponent(gamertag)}`;
+  console.log('[XboxAPI] Search URL:', searchUrl);
+  const searchData = await xboxApiGet(apiKey, searchUrl);
+  console.log('[XboxAPI] Search response:', JSON.stringify(searchData).slice(0, 500));
   const profile = searchData?.profileUsers?.find(p => p.gamertag?.toLowerCase() === gamertag.toLowerCase());
   const xuid = profile?.id || searchData?.xuid;
   if (!xuid) {
-    console.error('[XboxAPI] XUID introuvable pour', gamertag);
+    console.error('[XboxAPI] XUID introuvable pour', gamertag, 'response keys:', Object.keys(searchData || {}));
     return [];
   }
 
   // Étape 2 : récupérer les jeux
-  const gamesData = await xboxApiGet(apiKey, `https://xbl.io/api/v2/player/${xuid}/games`);
+  console.log('[XboxAPI] XUID found:', xuid);
+  const gamesUrl = `https://xbl.io/api/v2/player/${xuid}/games`;
+  const gamesData = await xboxApiGet(apiKey, gamesUrl);
+  console.log('[XboxAPI] Games response keys:', Object.keys(gamesData || {}), 'titles length:', gamesData?.titles?.length);
   const titles = gamesData?.titles || [];
-  if (!titles.length) return [];
+  if (!titles.length) {
+    console.log('[XboxAPI] No titles found, sample response:', JSON.stringify(gamesData).slice(0, 300));
+    return [];
+  }
 
+  console.log('[XboxAPI] Titles count:', titles.length, 'first:', titles[0]?.name);
   return titles.map(t => {
     const titleId = t.titleId || t.id || '';
     const cover = t.displayImage || t.images?.find(i => i.type === 'screenshot')?.url || '';
@@ -520,10 +532,14 @@ function xboxApiGet(apiKey, url) {
       let d = '';
       resp.on('data', c => d += c);
       resp.on('end', () => {
+        console.log('[xboxApiGet]', url.split('?')[0].slice(0, 60), 'status:', resp.statusCode, 'body:', d.slice(0, 300));
         try { resolve(JSON.parse(d)); }
-        catch (e) { reject(e); }
+        catch (e) { console.error('[xboxApiGet] JSON parse error:', e.message, 'body:', d.slice(0, 200)); reject(e); }
       });
-    }).on('error', reject);
+    }).on('error', (err) => {
+      console.error('[xboxApiGet] HTTP error:', err.message);
+      reject(err);
+    });
   });
 }
 
@@ -673,6 +689,7 @@ app.listen(PORT, () => {
   console.log('[Server] SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'defined' : 'MISSING');
   console.log('[Server] SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'defined' : 'MISSING');
   console.log('[Server] PUBLIC_URL:', process.env.PUBLIC_URL || '⚠️ NON DÉFINI — Steam OpenID va échouer ! Définir PUBLIC_URL dans les env vars Render');
+  console.log('[Server] XBL_API_KEY:', process.env.XBL_API_KEY ? 'defined' : 'NON DÉFINI — Xbox import ne marchera pas');
   if (!process.env.PUBLIC_URL) {
     console.warn('⚠️  PUBLIC_URL manquant. Steam OpenID redirigera vers localhost au lieu de l\'URL publique.');
     console.warn('    Ajoute PUBLIC_URL=https://ton-app.render.com dans les env vars Render.');

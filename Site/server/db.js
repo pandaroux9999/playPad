@@ -407,31 +407,6 @@ async function setSteamId(userId, steamId) {
   if (error) throw new Error(error.message);
 }
 
-async function saveSteamAuthToken(token, userId) {
-  const { error } = await supabaseAdmin
-    .from('steam_auth_tokens')
-    .insert({ token, user_id: userId });
-  if (error) throw new Error(error.message);
-}
-
-async function getSteamAuthToken(token) {
-  const { data, error } = await supabaseAdmin
-    .from('steam_auth_tokens')
-    .select('user_id')
-    .eq('token', token)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  return data;
-}
-
-async function deleteSteamAuthToken(token) {
-  const { error } = await supabaseAdmin
-    .from('steam_auth_tokens')
-    .delete()
-    .eq('token', token);
-  if (error) throw new Error(error.message);
-}
-
 module.exports = {
   supabaseAdmin,
   createUser,
@@ -467,7 +442,4 @@ module.exports = {
   deletePlatformGames,
   updateLastSeen,
   setSteamId,
-  saveSteamAuthToken,
-  getSteamAuthToken,
-  deleteSteamAuthToken,
 };

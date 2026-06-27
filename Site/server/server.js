@@ -5,7 +5,6 @@ const bcrypt = require('bcryptjs');
 const path = require('path');
 const https = require('https');
 const querystring = require('querystring');
-const crypto = require('crypto');
 const db = require('./db');
 const SupabaseSessionStore = require('./session-store');
 
@@ -283,60 +282,34 @@ app.post('/api/heartbeat', requireAuth, async (req, res) => {
 const BASE_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 
 // Steam OpenID — login officiel sans mot de passe
-app.get('/api/auth/steam', requireAuth, async (req, res) => {
-  try {
-    const token = crypto.randomBytes(16).toString('hex');
-    await db.saveSteamAuthToken(token, req.session.userId);
-    const callbackUrl = `${BASE_URL}/api/auth/steam/callback?token=${token}`;
-    const params = querystring.stringify({
-      'openid.ns': 'http://specs.openid.net/auth/2.0',
-      'openid.mode': 'checkid_setup',
-      'openid.return_to': callbackUrl,
-      'openid.realm': BASE_URL,
-      'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
-      'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
-    });
-    res.redirect(`https://steamcommunity.com/openid/login?${params}`);
-  } catch (err) {
-    console.error('[SteamOpenID] Erreur:', err.message);
-    res.status(500).json({ error: err.message });
-  }
+app.get('/api/auth/steam', requireAuth, (req, res) => {
+  const callbackUrl = `${BASE_URL}/api/auth/steam/callback`;
+  const params = querystring.stringify({
+    'openid.ns': 'http://specs.openid.net/auth/2.0',
+    'openid.mode': 'checkid_setup',
+    'openid.return_to': callbackUrl,
+    'openid.realm': BASE_URL,
+    'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
+    'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
+  });
+  res.redirect(`https://steamcommunity.com/openid/login?${params}`);
 });
 
 // Callback Steam OpenID — validation + récupération jeux
 app.get('/api/auth/steam/callback', async (req, res) => {
   const redirectError = (msg) => res.redirect(`${BASE_URL}/?steam=error&msg=${encodeURIComponent(msg)}`);
 
-  // Récupérer l'utilisateur via le token (pas de session — Steam perd les cookies)
-  const token = req.query.token;
-  let userId = null;
-  if (token) {
-    try {
-      const tokenData = await db.getSteamAuthToken(token);
-      if (tokenData) {
-        userId = tokenData.user_id;
-        await db.deleteSteamAuthToken(token);
-      }
-    } catch (e) {
-      console.error('[SteamOpenID] Erreur lecture token:', e.message);
-    }
+  // Utiliser la session persistante (stockée dans Supabase via session-store.js)
+  if (!req.session?.userId) {
+    console.error('[SteamOpenID] Session non trouvée — userId:', req.session?.userId, 'cookies:', req.headers.cookie);
+    redirectError('Session expirée, reconnecte-toi');
+    return;
   }
-  if (!userId) {
-    console.error('[SteamOpenID] Token invalide ou expiré');
-    // Fallback : tenter avec la session
-    if (req.session?.userId) {
-      userId = req.session.userId;
-    } else {
-      redirectError('Session expirée, reconnecte-toi');
-      return;
-    }
-  }
+  const userId = req.session.userId;
 
   // Étape 1 : valider la réponse OpenID via check_authentication
   try {
-    const q = { ...req.query };
-    delete q.token;
-    const validationParams = querystring.stringify({ ...q, 'openid.mode': 'check_authentication' });
+    const validationParams = querystring.stringify({ ...req.query, 'openid.mode': 'check_authentication' });
     const body = await new Promise((resolve, reject) => {
       const opts = {
         hostname: 'steamcommunity.com',

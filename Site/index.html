@@ -353,7 +353,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
       await API.syncGames(playniteGames);
       if (platformFilter) setConnected(c => ({ ...c, [platformFilter]: true }));
       onSyncComplete?.();
-      showToast(`Sync terminé : ${playniteGames.length} jeux importés`);
+      showToast(`Sync terminé : ${playniteGames.length} jeux ajoutés à la bibliothèque et au catalogue`);
     } catch (err) {
       showToast('Erreur : ' + err.message);
     }
@@ -408,7 +408,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
               h('div', { className: "flex items-center gap-1" },
                 platform === "steam"
                   ? (user?.steam_id
-                    ? h('button', { onClick: async (e) => { e.stopPropagation(); try { await API.resyncSteam(); showToast('Jeux Steam re-synchronisés'); onSyncComplete?.(); } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); } }, className: "p-1.5 rounded-lg inline-flex", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
+                    ? h('button', { onClick: async (e) => { e.stopPropagation(); try { const r = await API.resyncSteam(); showToast(`${r.count} jeux Steam ajoutés à la bibliothèque et au catalogue`); onSyncComplete?.(); } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); } }, className: "p-1.5 rounded-lg inline-flex", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
                     : h('a', { href: "/api/auth/steam", className: "p-1.5 rounded-lg inline-flex", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
                   )
                   : null,
@@ -1239,7 +1239,7 @@ function App() {
         h('div', { className: "h-full overflow-y-auto" },
           view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user }),
           view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame }),
-          view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id); if (e) setSelectedGame(e); else { setSelectedGame({ ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); API.syncGames([{ ...game, user_rating: 0, review_text: "", review_public: 1, has_review: 0, status: "not_started", playtime: 0 }]).then(() => loadData()).catch(() => {}); } }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings }),
+          view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id); if (e) setSelectedGame(e); else { setSelectedGame({ ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); API.syncGames([{ ...game, user_rating: 0, review_text: "", review_public: 1, has_review: 0, status: "not_started", playtime: 0 }]).then(() => { loadData(); showToast('Jeu ajouté à la bibliothèque et au catalogue'); }).catch(() => {}); } }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
           view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar })
         )

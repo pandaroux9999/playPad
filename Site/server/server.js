@@ -473,48 +473,49 @@ app.post('/api/platform/xbox/connect', requireAuth, async (req, res) => {
 
 // Récupère les jeux Xbox via xbl.io (clé gratuite sur https://xbl.io)
 async function fetchXboxGames(apiKey, gamertag) {
-  // Étape 1 : résoudre le Gamertag en XUID
-  const searchUrl = `https://xbl.io/api/v2/player/search?gt=${encodeURIComponent(gamertag)}`;
-  console.log('[XboxAPI] Search URL:', searchUrl);
-  const searchData = await xboxApiGet(apiKey, searchUrl);
-  console.log('[XboxAPI] Search response:', JSON.stringify(searchData).slice(0, 500));
-  const profile = searchData?.profileUsers?.find(p => p.gamertag?.toLowerCase() === gamertag.toLowerCase());
-  const xuid = profile?.id || searchData?.xuid;
-  if (!xuid) {
-    console.error('[XboxAPI] XUID introuvable pour', gamertag, 'response keys:', Object.keys(searchData || {}));
+  const results = { search: null, xuid: null, games: null, error: null };
+  try {
+    const searchUrl = `https://xbl.io/api/v2/player/search?gt=${encodeURIComponent(gamertag)}`;
+    const searchData = await xboxApiGet(apiKey, searchUrl);
+    results.search = searchData;
+    console.log('[XboxAPI] Search response full:', JSON.stringify(searchData).slice(0, 800));
+    const profile = searchData?.profileUsers?.find(p => p.gamertag?.toLowerCase() === gamertag.toLowerCase());
+    const xuid = profile?.id || searchData?.xuid;
+    results.xuid = xuid;
+    if (!xuid) {
+      console.error('[XboxAPI] XUID introuvable pour', gamertag, '- profileUsers:', JSON.stringify(searchData?.profileUsers));
+      return [];
+    }
+
+    const gamesUrl = `https://xbl.io/api/v2/player/${xuid}/games`;
+    const gamesData = await xboxApiGet(apiKey, gamesUrl);
+    results.games = gamesData;
+    if (gamesData?.code === 'ERROR') {
+      console.error('[XboxAPI] Games API error:', JSON.stringify(gamesData).slice(0, 500));
+      return [];
+    }
+    const titles = gamesData?.titles || [];
+    console.log('[XboxAPI] Titles found:', titles.length, 'sample:', titles[0] ? JSON.stringify(titles[0]).slice(0, 200) : 'none');
+    if (!titles.length) return [];
+
+    return titles.map(t => {
+      const titleId = t.titleId || t.id || '';
+      return {
+        game_id: 'xbox-' + titleId,
+        title: t.name || t.title || 'Unknown',
+        platform: 'xbox',
+        playtime: Math.round((t.playtime || 0) / 60),
+        cover: t.displayImage || t.images?.find(i => i.type === 'screenshot')?.url || '',
+        genre: t.genre || t.categories?.[0] || '',
+        year: t.releaseDate ? new Date(t.releaseDate).getFullYear() : 0,
+        status: t.progression?.completionPercentage === 100 ? 'completed' : (t.playtime > 0 ? 'playing' : 'not_started'),
+        user_rating: 0, review_text: '', review_public: true, has_review: 0,
+      };
+    });
+  } catch (err) {
+    console.error('[XboxAPI] Exception:', err.message, JSON.stringify(results).slice(0, 300));
     return [];
   }
-
-  // Étape 2 : récupérer les jeux
-  console.log('[XboxAPI] XUID found:', xuid);
-  const gamesUrl = `https://xbl.io/api/v2/player/${xuid}/games`;
-  const gamesData = await xboxApiGet(apiKey, gamesUrl);
-  console.log('[XboxAPI] Games response keys:', Object.keys(gamesData || {}), 'titles length:', gamesData?.titles?.length);
-  const titles = gamesData?.titles || [];
-  if (!titles.length) {
-    console.log('[XboxAPI] No titles found, sample response:', JSON.stringify(gamesData).slice(0, 300));
-    return [];
-  }
-
-  console.log('[XboxAPI] Titles count:', titles.length, 'first:', titles[0]?.name);
-  return titles.map(t => {
-    const titleId = t.titleId || t.id || '';
-    const cover = t.displayImage || t.images?.find(i => i.type === 'screenshot')?.url || '';
-    return {
-      game_id: 'xbox-' + titleId,
-      title: t.name || t.title || 'Unknown',
-      platform: 'xbox',
-      playtime: Math.round((t.playtime || 0) / 60),
-      cover,
-      genre: t.genre || t.categories?.[0] || '',
-      year: t.releaseDate ? new Date(t.releaseDate).getFullYear() : 0,
-      status: t.progression?.completionPercentage === 100 ? 'completed' : (t.playtime > 0 ? 'playing' : 'not_started'),
-      user_rating: 0,
-      review_text: '',
-      review_public: true,
-      has_review: 0,
-    };
-  });
 }
 
 // Helper appel API xbl.io

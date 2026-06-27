@@ -126,7 +126,7 @@ app.post('/api/games/sync', requireAuth, async (req, res) => {
     for (const game of games) {
       console.log('[Sync] Upserting game:', game.game_id, game.title);
       await db.upsertGame(req.session.userId, game);
-      await db.ensureCatalogGame(game);
+      await db.ensureCatalogGame(await enrichGameFromSteam(game));
     }
     res.json({ ok: true });
   } catch (err) {
@@ -355,9 +355,11 @@ app.get('/api/auth/steam/callback', async (req, res) => {
       const games = await fetchSteamGames(apiKey, steamId);
       for (const game of games) {
         await db.upsertGame(userId, game);
-        await db.ensureCatalogGame(game);
+        await db.ensureCatalogGame(await enrichGameFromSteam(game));
       }
       count = games.length;
+    } else {
+      console.warn('[SteamOpenID] STEAM_API_KEY non configurée — aucun jeu importé. Ajoute-la dans les env vars Render.');
     }
     res.redirect(`${BASE_URL}/?steam=ok&count=${count}`);
   } catch (err) {
@@ -409,6 +411,40 @@ async function fetchSteamGames(apiKey, steamId) {
   return gameResults;
 }
 
+// Route pour re-sync Steam (utilise le steam_id déjà enregistré)
+app.post('/api/platform/steam/resync', requireAuth, async (req, res) => {
+  try {
+    const user = await db.getUserById(req.session.userId);
+    const steamId = user?.steam_id;
+    if (!steamId) return res.status(400).json({ error: 'Aucun compte Steam connecté' });
+    const apiKey = process.env.STEAM_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: 'STEAM_API_KEY non configurée sur le serveur' });
+    const games = await fetchSteamGames(apiKey, steamId);
+    for (const game of games) {
+      await db.upsertGame(req.session.userId, game);
+      await db.ensureCatalogGame(await enrichGameFromSteam(game));
+    }
+    res.json({ ok: true, count: games.length });
+  } catch (err) {
+    console.error('[SteamResync] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Helper appel Steam Store API (gratuit, sans clé API)
+function steamStoreGet(appid) {
+  return new Promise((resolve, reject) => {
+    https.get(`https://store.steampowered.com/api/appdetails?appids=${appid}&l=french`, (resp) => {
+      let d = '';
+      resp.on('data', c => d += c);
+      resp.on('end', () => {
+        try { const j = JSON.parse(d); resolve(j[appid]); }
+        catch (e) { reject(e); }
+      });
+    }).on('error', reject);
+  });
+}
+
 // Helper appel API Steam
 function steamApiGet(apiKey, iface, method, params) {
   const qs = querystring.stringify({ key: apiKey, format: 'json', ...params });
@@ -425,6 +461,27 @@ function steamApiGet(apiKey, iface, method, params) {
   });
 }
 
+// Enrichit un jeu avec les infos Steam Store (si game_id commence par steam-)
+async function enrichGameFromSteam(game) {
+  if (!game.game_id || !game.game_id.startsWith('steam-')) return game;
+  const appid = game.game_id.replace('steam-', '');
+  // Ne rien faire si déjà complet
+  if (game.cover && game.genre) return game;
+  try {
+    const details = await steamStoreGet(appid);
+    if (details && details.success && details.data) {
+      const d = details.data;
+      return {
+        ...game,
+        cover: game.cover || d.header_image || '',
+        genre: game.genre || (d.genres && d.genres.map(g => g.description).join(', ')) || '',
+        year: game.year || (d.release_date && d.release_date.date ? parseInt(d.release_date.date.match(/\d{4}/)?.[0]) || 0 : 0),
+      };
+    }
+  } catch (e) { /* Steam Store non disponible, garder les données d'origine */ }
+  return game;
+}
+
 // Route manuelle alternative (si OpenID ne marche pas)
 app.post('/api/platform/steam/connect', requireAuth, async (req, res) => {
   let { steamId } = req.body;
@@ -436,7 +493,7 @@ app.post('/api/platform/steam/connect', requireAuth, async (req, res) => {
     const games = await fetchSteamGames(apiKey, steamId);
     for (const game of games) {
       await db.upsertGame(req.session.userId, game);
-      await db.ensureCatalogGame(game);
+      await db.ensureCatalogGame(await enrichGameFromSteam(game));
     }
     res.json({ ok: true, count: games.length });
   } catch (err) {
@@ -459,7 +516,7 @@ app.post('/api/platform/xbox/connect', requireAuth, async (req, res) => {
       console.log('[XboxConnect] games fetched:', games.length);
       for (const game of games) {
         await db.upsertGame(req.session.userId, game);
-        await db.ensureCatalogGame(game);
+        await db.ensureCatalogGame(await enrichGameFromSteam(game));
       }
       count = games.length;
     }
@@ -770,12 +827,26 @@ app.delete('/api/suggestions/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Debug endpoint — vérifier les variables d'environnement
+app.get('/api/debug/env', (req, res) => {
+  res.json({
+    SUPABASE_URL: !!process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    STEAM_API_KEY: !!process.env.STEAM_API_KEY,
+    XBL_API_KEY: !!process.env.XBL_API_KEY,
+    PUBLIC_URL: process.env.PUBLIC_URL || null,
+    SESSION_SECRET: !!process.env.SESSION_SECRET,
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`PlayPad server running on http://localhost:${PORT}`);
   console.log('[Server] SUPABASE_URL:', process.env.SUPABASE_URL ? 'defined' : 'MISSING');
   console.log('[Server] SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'defined' : 'MISSING');
   console.log('[Server] SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'defined' : 'MISSING');
   console.log('[Server] PUBLIC_URL:', process.env.PUBLIC_URL || '⚠️ NON DÉFINI — Steam OpenID va échouer ! Définir PUBLIC_URL dans les env vars Render');
+  console.log('[Server] STEAM_API_KEY:', process.env.STEAM_API_KEY ? 'defined' : 'NON DÉFINI — Steam import ne marchera pas');
   console.log('[Server] XBL_API_KEY:', process.env.XBL_API_KEY ? 'defined' : 'NON DÉFINI — Xbox import ne marchera pas');
   if (!process.env.PUBLIC_URL) {
     console.warn('⚠️  PUBLIC_URL manquant. Steam OpenID redirigera vers localhost au lieu de l\'URL publique.');

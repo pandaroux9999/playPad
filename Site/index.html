@@ -79,6 +79,7 @@ const API = {
   getGames: () => API.request('GET', '/api/games'),
   syncGames: (games) => API.request('POST', '/api/games/sync', { games }),
   connectSteam: (steamId) => API.request('POST', '/api/platform/steam/connect', { steamId }),
+  resyncSteam: () => API.request('POST', '/api/platform/steam/resync'),
   connectXbox: (gamertag) => API.request('POST', '/api/platform/xbox/connect', { gamertag }),
   setStatus: (gameId, status) => API.request('POST', '/api/games/status', { gameId, status }),
   saveReview: (gameId, rating, reviewText, reviewPublic, gameTitle, gameCover) => API.request('POST', '/api/games/review', { gameId, rating, reviewText, reviewPublic, gameTitle, gameCover }),
@@ -404,7 +405,10 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
             isConnected &&
               h('div', { className: "flex items-center gap-1" },
                 platform === "steam"
-                  ? h('a', { href: "/api/auth/steam", className: "p-1.5 rounded-lg inline-flex", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
+                  ? (user?.steam_id
+                    ? h('button', { onClick: async (e) => { e.stopPropagation(); try { await API.resyncSteam(); showToast('Jeux Steam re-synchronisés'); onSyncComplete?.(); } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); } }, className: "p-1.5 rounded-lg inline-flex", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
+                    : h('a', { href: "/api/auth/steam", className: "p-1.5 rounded-lg inline-flex", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
+                  )
                   : null,
                 h('button', { onClick: async (e) => { e.stopPropagation(); if (!confirm(`Supprimer tous les jeux ${cfg.name} de votre bibliothèque ?`)) return; await API.disconnectPlatform(platform); setConnected(c => ({ ...c, [platform]: false })); onSyncComplete?.(); showToast(`Jeux ${cfg.name} retirés`); }, className: "p-1.5 rounded-lg hover:opacity-80", style: { background: "rgba(239,68,68,0.15)" } }, h(Trash2, { size: 10, style: { color: "#ef4444" } }))
               )

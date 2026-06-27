@@ -177,15 +177,16 @@ const STATUS_CONFIG = {
 const STATUS_OPTIONS = ["playing", "completed", "backlog", "dropped"];
 
 function PlatformLogo({ platform, size = 24 }) {
-  const map = {
-    ps5: "icons8-playstation-32.png",
-    steam: "icons8-steam-48.png",
-    epic: "icons8-epic-games-48.png",
-    nintendo: "icons8-nintendo-switch-48.png",
-    xbox: "icons8-xbox-48.png",
+  const svgs = {
+    ps5: '<svg viewBox="0 0 24 24" fill="none" stroke="#003791" stroke-width="1.5"><path d="M5.5 5h13A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5v-9A2.5 2.5 0 0 1 5.5 5z"/><circle cx="8" cy="12" r="1.5" fill="#003791"/><circle cx="16" cy="12" r="1.5" fill="#003791"/><path d="M10 9h4" stroke="#003791"/></svg>',
+    steam: '<svg viewBox="0 0 24 24" fill="none" stroke="#1b2838" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 8v4l3 2"/></svg>',
+    epic: '<svg viewBox="0 0 24 24" fill="none" stroke="#313131" stroke-width="1.5"><path d="M12 3L3 8v8l9 5 9-5V8l-9-5z"/><path d="M12 3v9l5 3"/></svg>',
+    nintendo: '<svg viewBox="0 0 24 24" fill="none" stroke="#e60012" stroke-width="1.5"><rect x="4" y="3" width="7" height="18" rx="3"/><rect x="13" y="3" width="7" height="18" rx="3"/><circle cx="7.5" cy="12" r="1" fill="#e60012"/><circle cx="16.5" cy="9" r="1" fill="#e60012"/></svg>',
+    xbox: '<svg viewBox="0 0 24 24" fill="none" stroke="#107c10" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M8 8c2 2 2 6 4 6s2-4 4-6" stroke="#107c10"/></svg>',
   };
-  const file = map[platform];
-  return file ? h('img', { src: file, alt: platform, width: size, height: size, style: { objectFit: "contain", display: "inline-block" } }) : null;
+  const svg = svgs[platform];
+  if (!svg) return null;
+  return h('span', { dangerouslySetInnerHTML: { __html: svg }, style: { width: size + 'px', height: size + 'px', display: 'inline-block', lineHeight: 0 } });
 }
 
 function PlatformBadge({ platform }) {

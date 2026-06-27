@@ -442,6 +442,9 @@ app.post('/api/platform/steam/resync', requireAuth, async (req, res) => {
     if (!apiKey) return res.status(500).json({ error: 'STEAM_API_KEY non configurée sur le serveur' });
     console.log('[SteamResync] steamId:', steamId, 'API key defined:', !!apiKey);
     const games = await fetchSteamGames(apiKey, steamId);
+    if (games.length === 0) {
+      return res.status(400).json({ error: 'Aucun jeu trouvé — ton profil Steam doit être en Public (Paramètres > Confidentialité > Détails du jeu: Public).' });
+    }
     for (const game of games) {
       await db.upsertGame(req.session.userId, game);
       await db.ensureCatalogGame(await enrichGameFromSteam(game));

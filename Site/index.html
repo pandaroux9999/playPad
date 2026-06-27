@@ -187,6 +187,7 @@ function PlatformLogo({ platform, size = 24 }) {
 
 function PlatformBadge({ platform }) {
   const cfg = PLATFORM_CONFIG[platform];
+  if (!cfg) return null;
   return h('span', { className: "inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded font-mono tracking-widest uppercase leading-none", style: { background: cfg.color + "cc", color: cfg.text, border: `1px solid ${cfg.color}` } }, h(PlatformLogo, { platform, size: 10 }), cfg.label);
 }
 

@@ -547,7 +547,7 @@ app.get('/api/users/:id/profile', requireAuth, async (req, res) => {
     const games = await db.getFriendGames(req.params.id);
     const topThree = await db.getTopThree(req.params.id);
     const reviews = await db.getUserPublicReviews(req.params.id);
-    res.json({ user, games: (games || []).map(n), topThree, reviews });
+    res.json({ user, games: games || [], topThree, reviews });
   } catch (err) {
     console.error('[UserProfile] Error:', err.message);
     res.status(500).json({ error: err.message });

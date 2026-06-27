@@ -5,20 +5,23 @@ const bcrypt = require('bcryptjs');
 const path = require('path');
 const https = require('https');
 const querystring = require('querystring');
+const crypto = require('crypto');
 const db = require('./db');
+const SupabaseSessionStore = require('./session-store');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const crypto = require('crypto');
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 app.set('trust proxy', 1);
+const sessionStore = new SupabaseSessionStore();
 app.use(session({
   secret: process.env.SESSION_SECRET || 'playpad-secret-key-change-in-production',
   resave: false,
   saveUninitialized: false,
+  store: sessionStore,
   cookie: {
     secure: process.env.NODE_ENV === 'production' || !!process.env.PUBLIC_URL,
     maxAge: 24 * 60 * 60 * 1000,

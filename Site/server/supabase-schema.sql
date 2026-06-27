@@ -98,3 +98,10 @@ CREATE TABLE IF NOT EXISTS steam_auth_tokens (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_steam_auth_tokens_token ON steam_auth_tokens(token);
+
+-- Table sessions persistantes (survit aux redémarrages Render)
+CREATE TABLE IF NOT EXISTS sessions (
+  sid TEXT PRIMARY KEY,
+  session_data JSONB NOT NULL,
+  expires TIMESTAMPTZ
+);

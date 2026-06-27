@@ -433,6 +433,7 @@ async function deleteSteamAuthToken(token) {
 }
 
 module.exports = {
+  supabaseAdmin,
   createUser,
   getUserByUsername,
   getUserById,

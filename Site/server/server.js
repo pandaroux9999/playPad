@@ -39,21 +39,26 @@ function requireAuth(req, res, next) {
 
 app.post('/api/register', async (req, res) => {
   try {
-    const { username, displayName, password } = req.body;
-    console.log('[Register] Request:', { username, displayName });
-    if (!username || !displayName || !password) {
+    const { username, displayName, password, email } = req.body;
+    console.log('[Register] Request:', { username, displayName, email });
+    if (!username || !displayName || !password || !email) {
       return res.status(400).json({ error: 'Tous les champs sont requis' });
     }
     if (password.length < 4) {
       return res.status(400).json({ error: 'Mot de passe trop court (min 4 caractères)' });
     }
-    const existing = await db.getUserByUsername(username);
-    if (existing) {
+    const existingUser = await db.getUserByUsername(username);
+    if (existingUser) {
       console.log('[Register] Username taken:', username);
       return res.status(409).json({ error: 'Cet identifiant est déjà pris' });
     }
+    const existingEmail = await db.getUserByEmail(email);
+    if (existingEmail) {
+      console.log('[Register] Email already used:', email);
+      return res.status(409).json({ error: 'Cet email est déjà utilisé par un autre compte' });
+    }
     const hashed = await bcrypt.hash(password, 10);
-    const userId = await db.createUser(username, displayName, hashed);
+    const userId = await db.createUser(username, displayName, hashed, email);
     const user = await db.getUserById(userId);
     req.session.userId = userId;
     console.log('[Register] Success:', username, 'id:', userId);
@@ -61,6 +66,55 @@ app.post('/api/register', async (req, res) => {
   } catch (err) {
     console.error('[Register] Error:', err.message, err.stack);
     res.status(500).json({ error: 'Erreur serveur: ' + err.message });
+  }
+});
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email requis' });
+    const user = await db.getUserByEmail(email);
+    if (!user) return res.json({ ok: true, message: 'Si cet email existe, un lien de réinitialisation a été généré.' });
+    const token = await db.createResetToken(user.id, 'password');
+    const resetLink = (process.env.PUBLIC_URL || 'http://localhost:3000') + '/reset-password?token=' + token;
+    console.log('[ForgotPassword] Token for', email, ':', resetLink);
+    res.json({ ok: true, resetLink, message: 'Lien de réinitialisation généré (console serveur)' });
+  } catch (err) {
+    console.error('[ForgotPassword] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ error: 'Token et nouveau mot de passe requis' });
+    if (newPassword.length < 4) return res.status(400).json({ error: 'Mot de passe trop court (min 4 caractères)' });
+    const rt = await db.getResetToken(token);
+    if (!rt) return res.status(400).json({ error: 'Token invalide ou expiré' });
+    const hashed = await bcrypt.hash(newPassword, 10);
+    const { error } = await db.supabaseAdmin.from('users').update({ password: hashed }).eq('id', rt.user_id);
+    if (error) throw new Error(error.message);
+    await db.markResetTokenUsed(token);
+    console.log('[ResetPassword] Success for user_id:', rt.user_id);
+    res.json({ ok: true, message: 'Mot de passe réinitialisé avec succès' });
+  } catch (err) {
+    console.error('[ResetPassword] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/forgot-username', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email requis' });
+    const user = await db.getUserByEmail(email);
+    if (!user) return res.json({ ok: true, message: 'Si cet email existe, l\'identifiant a été envoyé.' });
+    console.log('[ForgotUsername] Username for', email, ':', user.username);
+    res.json({ ok: true, username: user.username, message: 'Identifiant récupéré (console serveur)' });
+  } catch (err) {
+    console.error('[ForgotUsername] Error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -22,10 +22,10 @@ function checkResult({ data, error }) {
   return data;
 }
 
-async function createUser(username, displayName, hashedPassword) {
+async function createUser(username, displayName, hashedPassword, email) {
   const { data, error } = await supabaseAdmin
     .from('users')
-    .insert({ username, display_name: displayName, password: hashedPassword })
+    .insert({ username, display_name: displayName, password: hashedPassword, email: email || '' })
     .select('id')
     .single();
   checkResult({ data, error });
@@ -40,6 +40,47 @@ async function getUserByUsername(username) {
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data;
+}
+
+async function getUserByEmail(email) {
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select('*')
+    .eq('email', email)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function createResetToken(userId, type) {
+  const crypto = require('crypto');
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 3600000); // 1 hour
+  const { error } = await supabaseAdmin
+    .from('reset_tokens')
+    .insert({ user_id: userId, token, type, expires_at: expiresAt.toISOString() });
+  if (error) throw new Error(error.message);
+  return token;
+}
+
+async function getResetToken(token) {
+  const { data, error } = await supabaseAdmin
+    .from('reset_tokens')
+    .select('*')
+    .eq('token', token)
+    .eq('used', false)
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function markResetTokenUsed(token) {
+  const { error } = await supabaseAdmin
+    .from('reset_tokens')
+    .update({ used: true })
+    .eq('token', token);
+  if (error) throw new Error(error.message);
 }
 
 async function getUserById(id) {
@@ -444,6 +485,10 @@ module.exports = {
   supabaseAdmin,
   createUser,
   getUserByUsername,
+  getUserByEmail,
+  createResetToken,
+  getResetToken,
+  markResetTokenUsed,
   getUserById,
   getGames,
   upsertGame,

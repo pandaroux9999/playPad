@@ -72,8 +72,11 @@ const API = {
     if (!res.ok) throw new Error(data.error || 'Erreur serveur');
     return data;
   },
-  register: (u, d, p) => API.request('POST', '/api/register', { username: u, displayName: d, password: p }),
+  register: (u, d, p, e) => API.request('POST', '/api/register', { username: u, displayName: d, password: p, email: e }),
   login: (u, p) => API.request('POST', '/api/login', { username: u, password: p }),
+  forgotPassword: (email) => API.request('POST', '/api/auth/forgot-password', { email }),
+  resetPassword: (token, newPassword) => API.request('POST', '/api/auth/reset-password', { token, newPassword }),
+  forgotUsername: (email) => API.request('POST', '/api/auth/forgot-username', { email }),
   logout: () => API.request('POST', '/api/logout'),
   me: () => API.request('GET', '/api/me'),
   getGames: () => API.request('GET', '/api/games'),
@@ -1038,9 +1041,11 @@ function AuthPage({ onLoginSuccess }) {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [forgotMode, setForgotMode] = useState(null); // 'password' | 'username' | null
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
@@ -1049,20 +1054,64 @@ function AuthPage({ onLoginSuccess }) {
     setError("");
     setLoading(true);
     try {
+      if (forgotMode === 'password') {
+        const data = await API.forgotPassword(email);
+        showToast(data.resetLink ? 'Lien de réinitialisation généré ! Vérifie la console serveur.' : data.message);
+        setForgotMode(null);
+        setLoading(false);
+        return;
+      }
+      if (forgotMode === 'username') {
+        const data = await API.forgotUsername(email);
+        if (data.username) showToast('Ton identifiant est : ' + data.username);
+        else showToast(data.message);
+        setForgotMode(null);
+        setLoading(false);
+        return;
+      }
       if (isRegister) {
         if (!displayName.trim()) { setError("Le nom d'affichage est requis"); setLoading(false); return; }
-        await API.register(username, displayName, password);
+        await API.register(username, displayName, password, email);
         showToast("Compte cr\u00e9\u00e9 avec succ\u00e8s !");
       }
       const data = await API.login(username, password);
       console.log('[Auth] Login success', data);
       onLoginSuccess(data.user);
     } catch (err) {
-      console.error('[Auth] Login/Register error:', err.message);
+      console.error('[Auth] Error:', err.message);
       setError(err.message);
     }
     setLoading(false);
   };
+
+  if (forgotMode) {
+    return h('div', { className: "min-h-screen flex items-center justify-center", style: { background: "#030308" } },
+      h('div', { className: "fixed inset-0 pointer-events-none overflow-hidden" },
+        h('div', { className: "absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full blur-3xl", style: { background: `${P1}07` } })
+      ),
+      h('div', { className: "relative bg-card border border-border rounded-2xl flex flex-col items-center justify-center p-8 w-full max-w-sm mx-auto" },
+        h('h2', { className: "text-lg font-black mb-1", style: { fontFamily: "'Rajdhani', sans-serif", color: "#fff" } },
+          forgotMode === 'password' ? 'Mot de passe oubli\u00e9' : 'Identifiant oubli\u00e9'
+        ),
+        h('p', { className: "text-xs text-muted-foreground mb-6 text-center" },
+          forgotMode === 'password'
+            ? 'Entre ton email pour recevoir un lien de r\u00e9initialisation'
+            : 'Entre ton email pour retrouver ton identifiant'
+        ),
+        h('form', { onSubmit: handleSubmit, className: "w-full space-y-3" },
+          h('div', null,
+            h('p', { className: "text-[10px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider" }, "Email"),
+            h('input', { value: email, onChange: e => setEmail(e.target.value), type: "email", placeholder: "ton@email.com", className: "w-full bg-secondary/60 border border-border rounded-xl px-3.5 py-3 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-purple-500 transition-colors" })
+          ),
+          error && h('p', { className: "text-[11px] text-red-400 font-medium text-center" }, error),
+          h('button', { type: "submit", disabled: loading, className: "w-full py-3 text-white text-sm font-bold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50", style: { background: GRAD } },
+            loading ? h(Loader, { size: 14, className: "animate-spin" }) : (forgotMode === 'password' ? 'R\u00e9initialiser' : 'Retrouver')
+          )
+        ),
+        h('button', { onClick: () => { setForgotMode(null); setError(""); }, className: "text-[11px] font-medium mt-4 hover:opacity-80", style: { color: `${P1}cc` } }, "Retour")
+      )
+    );
+  }
 
   return h('div', { className: "min-h-screen flex items-center justify-center", style: { background: "#030308" } },
     h('div', { className: "fixed inset-0 pointer-events-none overflow-hidden" },
@@ -1085,6 +1134,10 @@ function AuthPage({ onLoginSuccess }) {
           h('input', { value: displayName, onChange: e => setDisplayName(e.target.value), placeholder: "Ton pseudo public", className: "w-full bg-secondary/60 border border-border rounded-xl px-3.5 py-3 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-purple-500 transition-colors" })
         ),
         h('div', null,
+          h('p', { className: "text-[10px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider" }, "Email"),
+          h('input', { value: email, onChange: e => setEmail(e.target.value), type: "email", placeholder: "ton@email.com", className: "w-full bg-secondary/60 border border-border rounded-xl px-3.5 py-3 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-purple-500 transition-colors" })
+        ),
+        h('div', null,
           h('p', { className: "text-[10px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider" }, "Mot de passe"),
           h('input', { type: "password", value: password, onChange: e => setPassword(e.target.value), placeholder: isRegister ? "Min. 4 caract\u00e8res" : "Entrez votre mot de passe", className: "w-full bg-secondary/60 border border-border rounded-xl px-3.5 py-3 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-purple-500 transition-colors" })
         ),
@@ -1093,6 +1146,10 @@ function AuthPage({ onLoginSuccess }) {
           loading && h(Loader, { size: 14, className: "animate-spin" }),
           isRegister ? "Cr\u00e9er mon compte" : "Se connecter"
         )
+      ),
+      !isRegister && h('div', { className: "flex gap-4 mt-3" },
+        h('button', { onClick: () => setForgotMode('password'), className: "text-[10px] font-medium hover:opacity-80", style: { color: `${P1}aa` } }, "Mot de passe oubli\u00e9 ?"),
+        h('button', { onClick: () => setForgotMode('username'), className: "text-[10px] font-medium hover:opacity-80", style: { color: `${P1}aa` } }, "Identifiant oubli\u00e9 ?")
       ),
       h('button', { onClick: () => { setIsRegister(!isRegister); setError(""); }, className: "text-[11px] font-medium mt-5 hover:opacity-80 transition-opacity", style: { color: `${P1}cc` } },
         isRegister ? "D\u00e9j\u00e0 un compte ? Connecte-toi" : "Pas de compte ? Inscris-toi"

@@ -612,20 +612,25 @@ function CommunityView({ onSelectFriend, onSelectGame, onAddNotification }) {
         ),
         publicReviews.map(r => {
           const pos = (r.rating || 0) >= 4;
+          const time = r.created_at ? new Date(r.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
           return h('div', { key: r.id, className: "rounded-2xl p-3.5 border", style: { background: pos ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)", border: `1px solid ${pos ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)"}` } },
             h('div', { className: "flex items-center gap-2 mb-2" },
-              h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black text-white flex-shrink-0", style: { background: pos ? "#22c55e" : "#ef4444" } },
-                initials(r.users?.display_name)
-              ),
-              h('span', { className: "text-xs font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, r.users?.display_name || "Inconnu"),
-              r.game_title && h('span', { className: "text-[10px] text-muted-foreground ml-auto truncate" }, "sur ", r.game_title)
+              r.game_cover && h('div', { className: "w-7 h-10 rounded overflow-hidden flex-shrink-0" }, h('img', { src: r.game_cover, alt: "", className: "w-full h-full object-cover", style: { aspectRatio: "3/4" } })),
+              h('div', { className: "flex-1 min-w-0" },
+                h('p', { className: "text-xs font-bold text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, r.game_title || "Jeu"),
+                h('div', { className: "flex items-center gap-1.5 mt-0.5" },
+                  h('div', { className: "w-4 h-4 rounded flex items-center justify-center text-[6px] font-black text-white flex-shrink-0", style: { background: pos ? "#22c55e" : "#ef4444" } }, (r.users?.display_name || "?")[0]),
+                  h('span', { className: "text-[9px] text-muted-foreground" }, r.users?.display_name || "Inconnu"),
+                  time && h('span', { className: "text-[8px] text-muted-foreground/50 ml-auto" }, time)
+                )
+              )
             ),
-            h('div', { className: "flex items-center gap-1.5 mb-1.5" },
-              h(Star, { size: 11, style: { color: "#fbbf24", fill: "#fbbf24" } }),
-              h('span', { className: "text-[11px] font-bold text-foreground" }, r.rating, "/5"),
-              h('span', { className: `text-[9px] font-bold ml-auto ${pos ? "text-green-400" : "text-red-400"}` }, pos ? "Recommand\u00e9" : "D\u00e9conseill\u00e9")
-            ),
-            r.review_text && h('p', { className: "text-[11px] text-foreground/80 leading-relaxed" }, r.review_text)
+            r.review_text && h('p', { className: "text-[11px] text-foreground/80 leading-relaxed mb-1.5" }, r.review_text),
+            h('div', { className: "flex items-center gap-1.5" },
+              h(Star, { size: 10, style: { color: "#fbbf24", fill: "#fbbf24" } }),
+              h('span', { className: "text-[10px] font-bold text-foreground" }, r.rating, "/5"),
+              h('span', { className: `text-[8px] font-bold ml-auto ${pos ? "text-green-400" : "text-red-400"}` }, pos ? "Recommand\u00e9" : "D\u00e9conseill\u00e9")
+            )
           );
         })
       )
@@ -643,7 +648,6 @@ function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification }) {
   const [suggestSearch, setSuggestSearch] = useState("");
   const [suggestMsg, setSuggestMsg] = useState("");
   const [suggesting, setSuggesting] = useState(false);
-  const [activeTab, setActiveTab] = useState("games");
   useEffect(() => {
     setLoading(true);
     API.getUserProfile(friend.id).then(d => {
@@ -655,109 +659,113 @@ function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification }) {
   }, [friend.id]);
   const totalHours = friendGames.reduce((s, g) => s + (g.playtime || 0), 0);
   const completed = friendGames.filter(g => g.status === "completed").length;
-  const playing = friendGames.filter(g => g.status === "playing").length;
-  const backlog = friendGames.filter(g => g.status === "not_started").length;
-  const initials = (profile?.display_name || friend.display_name || "?").charAt(0).toUpperCase();
+  const reviewed = reviews.length;
+  const initials = (profile?.display_name || friend.display_name || "??").charAt(0).toUpperCase() + ((profile?.display_name || friend.display_name || "?")[1] || "").toUpperCase();
   const online = isOnline ? isOnline(profile?.last_seen || friend.last_seen) : false;
   const suggestFiltered = CATALOGUE.filter(g =>
     g.title.toLowerCase().includes(suggestSearch.toLowerCase())
   );
+  const rated = friendGames.filter(g => g.userRating > 0);
+  const avgRating = rated.length ? (rated.reduce((s, g) => s + g.userRating, 0) / rated.length) : 0;
   return h('div', { className: "fixed inset-0 z-50" },
     h('div', { className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
-    h('div', { className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-hidden flex flex-col", style: { maxHeight: "88%" } },
-      h('div', { className: "px-4 pt-4 pb-3 flex-shrink-0 border-b border-border" },
-        h('div', { className: "flex items-center gap-3" },
-          h('div', { className: "relative w-14 h-14 rounded-2xl overflow-hidden flex-shrink-0" },
-            profile?.avatar_url
-              ? h('img', { src: profile.avatar_url, className: "w-full h-full object-cover", onError: e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex" } })
-              : null,
-            h('div', { className: "w-full h-full flex items-center justify-center text-lg font-black text-white", style: { background: GRAD, display: profile?.avatar_url ? "none" : "flex" } }, initials),
-            online && h('div', { className: "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-card", style: { background: "#22c55e" } })
-          ),
-          h('div', { className: "flex-1 min-w-0" },
-            h('h2', { className: "text-lg font-black text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, profile?.display_name || friend.display_name),
-            h('p', { className: "text-[10px] text-muted-foreground" }, "@" + (profile?.username || friend.username)),
-            h('p', { className: "text-[11px] text-muted-foreground mt-0.5" },
-              h('span', { className: "font-bold", style: { color: P1 } }, friendGames.length), " jeux",
-              totalHours > 0 ? ` \u00b7 ${totalHours}h jou\u00e9es` : "",
-              reviews.length > 0 ? ` \u00b7 ${reviews.length} critique${reviews.length > 1 ? 's' : ''}` : ""
-            )
-          ),
-          h('button', { onClick: () => setSuggestOpen(true), className: "mr-1.5 w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-80 transition-opacity", style: { background: `${P1}20` } }, h(Send, { size: 15, style: { color: P1 } })),
-          h('button', { onClick: onClose, className: "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0", style: { background: "rgba(0,0,0,0.5)" } }, h(X, { size: 16, className: "text-white" }))
-        ),
-        h('div', { className: "grid grid-cols-3 gap-2 mt-3" },
-          h('div', { className: "bg-secondary/40 rounded-xl p-2 text-center" }, h('p', { className: "text-xs font-black", style: { color: P1 } }, String(friendGames.length)), h('p', { className: "text-[9px] text-muted-foreground" }, "Jeux")),
-          h('div', { className: "bg-secondary/40 rounded-xl p-2 text-center" }, h('p', { className: "text-xs font-black text-green-400" }, String(completed)), h('p', { className: "text-[9px] text-muted-foreground" }, "Termin\u00e9s")),
-          h('div', { className: "bg-secondary/40 rounded-xl p-2 text-center" }, h('p', { className: "text-xs font-black", style: { color: P2 } }, String(totalHours) + "h"), h('p', { className: "text-[9px] text-muted-foreground" }, "Jou\u00e9es"))
-        ),
-        suggestOpen && h('div', { className: "mt-3 p-3 rounded-2xl", style: { background: `${P1}08`, border: `1px solid ${P1}20` } },
-          h('p', { className: "text-[10px] font-bold mb-2 flex items-center gap-1.5", style: { color: "#c4b5fd" } }, h(Send, { size: 10 }), "Proposer un jeu \u00e0 ", profile?.display_name || friend.display_name),
-          h('div', { className: "relative mb-2" },
-            h(Search, { size: 11, className: "absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" }),
-            h('input', { value: suggestSearch, onChange: e => setSuggestSearch(e.target.value), placeholder: "Chercher un jeu...", className: "w-full bg-secondary/60 border border-border rounded-lg pl-7 pr-3 py-2 text-[11px] text-foreground placeholder-muted-foreground outline-none" })
-          ),
-          h('input', { value: suggestMsg, onChange: e => setSuggestMsg(e.target.value), placeholder: "\u00c9cris un message personnalis\u00e9 *", className: "w-full bg-secondary/60 border border-border rounded-lg px-3 py-2 text-[11px] text-foreground placeholder-muted-foreground outline-none mb-2" }),
-          suggestFiltered.slice(0, 20).map(game =>
-            h('div', { key: game.game_id, className: "flex items-center gap-2 py-1.5 px-1 rounded-lg cursor-pointer hover:opacity-80 transition-opacity" },
-              h('div', { className: "w-6 h-8 rounded overflow-hidden flex-shrink-0" }, h('img', { src: game.cover, alt: "", className: "w-full h-full object-cover", style: { aspectRatio: "3/4" } })),
-              h('span', { className: "text-[11px] font-bold text-foreground flex-1 truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
-              h('button', { onClick: async () => {
-                if (!suggestMsg.trim()) { alert("Ajoute un message personnalisé !"); return; }
-                setSuggesting(true);
-                await API.sendSuggestion(friend.id, game.game_id, game.title, game.cover, suggestMsg);
-                setSuggesting(false); setSuggestOpen(false); setSuggestSearch(""); setSuggestMsg("");
-                onAddNotification?.(`Tu as propos\u00e9 "${game.title}" \u00e0 ${profile?.display_name || friend.display_name}`);
-              }, disabled: suggesting, className: "px-2 py-1 text-[9px] font-bold rounded-lg text-white whitespace-nowrap", style: { background: GRAD } }, suggesting ? "..." : "Proposer")
-            )
-          )
-        )
-      ),
-      loading
-        ? h('div', { className: "flex items-center justify-center py-10 flex-1" }, h(Loader, { size: 24, className: "animate-spin", style: { color: P1 } }))
-        : h('div', { className: "flex flex-col flex-1 overflow-hidden" },
-            h('div', { className: "flex gap-1 px-4 pt-3 pb-2 border-b border-border flex-shrink-0" },
-              h('button', { onClick: () => setActiveTab("games"), className: `px-3 py-1.5 text-[10px] font-bold rounded-lg transition-colors ${activeTab === "games" ? "text-white" : "text-muted-foreground hover:text-foreground"}`, style: activeTab === "games" ? { background: GRAD } : {} }, `Jeux (${friendGames.length})`),
-              topThree.length > 0 && h('button', { onClick: () => setActiveTab("top"), className: `px-3 py-1.5 text-[10px] font-bold rounded-lg transition-colors ${activeTab === "top" ? "text-white" : "text-muted-foreground hover:text-foreground"}`, style: activeTab === "top" ? { background: GRAD } : {} }, "Top 3"),
-              reviews.length > 0 && h('button', { onClick: () => setActiveTab("reviews"), className: `px-3 py-1.5 text-[10px] font-bold rounded-lg transition-colors ${activeTab === "reviews" ? "text-white" : "text-muted-foreground hover:text-foreground"}`, style: activeTab === "reviews" ? { background: GRAD } : {} }, `Critiques (${reviews.length})`)
+    h('div', { className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-hidden flex flex-col", style: { maxHeight: "90%" } },
+      h('div', { className: "overflow-y-auto flex-1", style: { scrollbarWidth: "none" } },
+        h('div', { className: "px-4 pt-4 pb-4" },
+          h('div', { className: "flex items-center gap-4" },
+            h('div', { className: "relative w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0", style: { boxShadow: "0 8px 24px rgba(139,92,246,0.35)" } },
+              profile?.avatar_url
+                ? h('img', { src: profile.avatar_url, className: "w-full h-full object-cover", onError: e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex" } })
+                : null,
+              h('div', { className: "w-full h-full flex items-center justify-center text-2xl font-black text-white", style: { background: GRAD, display: profile?.avatar_url ? "none" : "flex" } }, initials),
+              online && h('div', { className: "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-card", style: { background: "#22c55e", boxShadow: "0 0 6px #4ade8080" } })
             ),
-            h('div', { className: "overflow-y-auto flex-1 px-4 pt-3 pb-8" },
-              activeTab === "games" && (friendGames.length === 0
-                ? h('div', { className: "flex flex-col items-center justify-center py-10 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu dans la bibliotheque"))
-                : h('div', { className: "grid grid-cols-2 md:grid-cols-3 gap-3" }, friendGames.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: onClose })))
-              ),
-              activeTab === "top" && h('div', { className: "space-y-2" },
-                topThree.sort((a, b) => (a.position || 0) - (b.position || 0)).map(t => {
-                  const game = friendGames.find(g => g.game_id === t.game_id) || t;
-                  return h('div', { key: t.game_id, className: "flex items-center gap-3 bg-secondary/30 rounded-2xl p-3 border border-border" },
-                    h('div', { className: `w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black ${t.position === 1 ? 'text-yellow-400' : t.position === 2 ? 'text-gray-300' : 'text-amber-600'} flex-shrink-0`, style: { background: `${t.position === 1 ? '#fbbf24' : t.position === 2 ? '#9ca3af' : '#b45309'}20` } }, `#${t.position}`),
-                    h('div', { className: "w-10 h-14 rounded-lg overflow-hidden flex-shrink-0" }, h('img', { src: game.cover || t.cover, className: "w-full h-full object-cover", style: { aspectRatio: "3/4" } })),
-                    h('div', { className: "flex-1 min-w-0" },
-                      h('p', { className: "text-sm font-bold text-foreground truncate" }, game.title || t.title),
-                      h('p', { className: "text-[10px] text-muted-foreground" }, game.genre || t.genre || "")
-                    )
-                  );
-                })
-              ),
-              activeTab === "reviews" && h('div', { className: "space-y-2" },
-                reviews.map(r => {
-                  const game = friendGames.find(g => g.game_id === r.game_id);
-                  const pos = (r.rating || 0) >= 4;
-                  return h('div', { key: r.id, className: "rounded-2xl p-3 border", style: { background: pos ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)", border: `1px solid ${pos ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)"}` } },
-                    h('div', { className: "flex items-center gap-2 mb-2" },
-                      game && h('div', { className: "w-6 h-8 rounded overflow-hidden flex-shrink-0" }, h('img', { src: game.cover, className: "w-full h-full object-cover", style: { aspectRatio: "3/4" } })),
-                      h('div', { className: "flex-1 min-w-0" },
-                        h('p', { className: "text-xs font-bold text-foreground truncate" }, r.game_title || game?.title || "Jeu"),
-                        h('p', { className: "text-[10px] font-bold mt-0.5", style: { color: pos ? "#22c55e" : "#ef4444" } }, pos ? "Recommand\u00e9" : "D\u00e9conseill\u00e9")
-                      ),
-                      h('span', { className: "text-[10px] font-black" }, r.rating + "/5")
-                    ),
-                    r.review_text && h('p', { className: "text-[10px] text-foreground/70 leading-relaxed" }, r.review_text)
-                  );
-                })
+            h('div', null,
+              h('h1', { className: "text-lg font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, profile?.display_name || friend.display_name),
+              h('p', { className: "text-xs text-muted-foreground" }, "@" + (profile?.username || friend.username) + " \u00b7 PlayPad"),
+              h('div', { className: "flex items-center gap-1.5 mt-1" },
+                h(Star, { size: 11, fill: "#f59e0b", stroke: "#f59e0b" }),
+                h('span', { className: "text-xs font-bold text-amber-400" }, avgRating.toFixed(1)),
+                h('span', { className: "text-xs text-muted-foreground" }, "note moyenne")
+              )
+            ),
+            h('button', { onClick: () => setSuggestOpen(true), className: "ml-auto w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-80 transition-opacity", style: { background: `${P1}20` } }, h(Send, { size: 15, style: { color: P1 } })),
+            h('button', { onClick: onClose, className: "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0", style: { background: "rgba(0,0,0,0.5)" } }, h(X, { size: 16, className: "text-white" }))
+          ),
+          suggestOpen && h('div', { className: "mt-3 p-3 rounded-2xl", style: { background: `${P1}08`, border: `1px solid ${P1}20` } },
+            h('p', { className: "text-[10px] font-bold mb-2 flex items-center gap-1.5", style: { color: "#c4b5fd" } }, h(Send, { size: 10 }), "Proposer un jeu \u00e0 ", profile?.display_name || friend.display_name),
+            h('div', { className: "relative mb-2" },
+              h(Search, { size: 11, className: "absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" }),
+              h('input', { value: suggestSearch, onChange: e => setSuggestSearch(e.target.value), placeholder: "Chercher un jeu...", className: "w-full bg-secondary/60 border border-border rounded-lg pl-7 pr-3 py-2 text-[11px] text-foreground placeholder-muted-foreground outline-none" })
+            ),
+            h('input', { value: suggestMsg, onChange: e => setSuggestMsg(e.target.value), placeholder: "\u00c9cris un message personnalis\u00e9 *", className: "w-full bg-secondary/60 border border-border rounded-lg px-3 py-2 text-[11px] text-foreground placeholder-muted-foreground outline-none mb-2" }),
+            suggestFiltered.slice(0, 20).map(game =>
+              h('div', { key: game.game_id, className: "flex items-center gap-2 py-1.5 px-1 rounded-lg cursor-pointer hover:opacity-80 transition-opacity" },
+                h('div', { className: "w-6 h-8 rounded overflow-hidden flex-shrink-0" }, h('img', { src: game.cover, alt: "", className: "w-full h-full object-cover", style: { aspectRatio: "3/4" } })),
+                h('span', { className: "text-[11px] font-bold text-foreground flex-1 truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
+                h('button', { onClick: async () => {
+                  if (!suggestMsg.trim()) { alert("Ajoute un message personnalisé !"); return; }
+                  setSuggesting(true);
+                  await API.sendSuggestion(friend.id, game.game_id, game.title, game.cover, suggestMsg);
+                  setSuggesting(false); setSuggestOpen(false); setSuggestSearch(""); setSuggestMsg("");
+                  onAddNotification?.(`Tu as propos\u00e9 "${game.title}" \u00e0 ${profile?.display_name || friend.display_name}`);
+                }, disabled: suggesting, className: "px-2 py-1 text-[9px] font-bold rounded-lg text-white whitespace-nowrap", style: { background: GRAD } }, suggesting ? "..." : "Proposer")
               )
             )
           )
+        ),
+        loading
+          ? h('div', { className: "flex items-center justify-center py-10 flex-1" }, h(Loader, { size: 24, className: "animate-spin", style: { color: P1 } }))
+          : h('div', null,
+              topThree.length > 0 && h('div', { className: "px-4 mb-4" },
+                h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5" }, h(Crown, { size: 12, fill: "#f59e0b", stroke: "#f59e0b" }), "Top 3"),
+                h('div', { className: "grid grid-cols-3 gap-2" },
+                  topThree.sort((a, b) => (a.position || 0) - (b.position || 0)).map(t => {
+                    const game = friendGames.find(g => g.game_id === t.game_id) || t;
+                    return h('div', { key: t.game_id, className: "game-card relative rounded-2xl overflow-hidden", style: { aspectRatio: "3/4" } },
+                      h('img', { src: game.cover || t.cover, alt: game.title || t.title, className: "w-full h-full object-cover", style: { aspectRatio: "3/4" } }),
+                      h('div', { className: "absolute bottom-0 left-0 right-0 p-2", style: { background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent)" } },
+                        h('div', { className: `w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${t.position === 1 ? 'text-yellow-400' : t.position === 2 ? 'text-gray-300' : 'text-amber-600'}`, style: { background: `${t.position === 1 ? '#fbbf24' : t.position === 2 ? '#9ca3af' : '#b45309'}20` } }, `#${t.position}`),
+                        h('p', { className: "text-[11px] font-bold text-white truncate mt-1" }, game.title || t.title)
+                      )
+                    );
+                  })
+                )
+              ),
+              h('div', { className: "px-4 grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" },
+                [{ label: "Jeux", value: friendGames.length, color: P1, Icon: Gamepad2 },{ label: "Heures", value: `${totalHours}h`, color: P2, Icon: Clock },{ label: "Termin\u00e9s", value: completed, color: "#22c55e", Icon: Trophy },{ label: "Critiques", value: reviewed, color: "#f59e0b", Icon: Edit3 }].map(({ label, value, color, Icon }) =>
+                  h('div', { key: label, className: "bg-card border border-border rounded-2xl p-3.5" }, h('div', { className: "flex items-center gap-1.5 mb-2" }, h(Icon, { size: 13, style: { color } }), h('span', { className: "text-xs font-medium text-muted-foreground" }, label)), h('span', { className: "text-2xl font-black", style: { fontFamily: "'Rajdhani', sans-serif", color } }, value))
+                )
+              ),
+              friendGames.length > 0 && h('div', { className: "px-4 mb-4" },
+                h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Biblioth\u00e8que"),
+                h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, friendGames.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: onClose })))
+              ),
+              reviews.length > 0 && h('div', { className: "px-4 mb-6" },
+                h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5" }, h(MessageSquare, { size: 12, style: { color: P1 } }), "Critiques (", reviews.length, ")"),
+                h('div', { className: "space-y-2" },
+                  reviews.map(r => {
+                    const game = friendGames.find(g => g.game_id === r.game_id);
+                    const pos = (r.rating || 0) >= 4;
+                    return h('div', { key: r.id, className: "rounded-2xl p-3 border", style: { background: pos ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)", border: `1px solid ${pos ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)"}` } },
+                      h('div', { className: "flex items-center gap-2" },
+                        game && h('div', { className: "w-8 h-11 rounded overflow-hidden flex-shrink-0" }, h('img', { src: game.cover, className: "w-full h-full object-cover", style: { aspectRatio: "3/4" } })),
+                        h('div', { className: "flex-1 min-w-0" },
+                          h('p', { className: "text-xs font-bold text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, r.game_title || game?.title || "Jeu"),
+                          h('div', { className: "flex items-center gap-1.5 mt-1" },
+                            h(Star, { size: 9, fill: "#fbbf24", stroke: "#fbbf24" }),
+                            h('span', { className: "text-[10px] font-bold text-foreground" }, r.rating + "/5"),
+                            h('span', { className: `text-[8px] font-bold ml-auto ${pos ? "text-green-400" : "text-red-400"}` }, pos ? "Recommand\u00e9" : "D\u00e9conseill\u00e9")
+                          )
+                        )
+                      ),
+                      r.review_text && h('p', { className: "text-[10px] text-foreground/70 leading-relaxed mt-1.5" }, r.review_text)
+                    );
+                  })
+                )
+              )
+            )
+      )
     )
   );
 }

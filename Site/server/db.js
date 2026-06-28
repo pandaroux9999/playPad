@@ -86,7 +86,7 @@ async function markResetTokenUsed(token) {
 async function getUserById(id) {
   const { data, error } = await supabaseAdmin
     .from('users')
-    .select('id, username, display_name, avatar_url, created_at, steam_id, xbox_gamertag, last_seen')
+    .select('id, username, display_name, avatar_url, email, created_at, steam_id, xbox_gamertag, last_seen')
     .eq('id', id)
     .single();
   checkResult({ data, error });

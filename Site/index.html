@@ -104,6 +104,7 @@ const API = {
   getUserProfile: (userId) => API.request('GET', `/api/users/${userId}/profile`),
   getFriendStatus: (friendId) => API.request('GET', `/api/friends/status/${friendId}`),
   updateAvatar: (avatarUrl) => API.request('POST', '/api/account/avatar', { avatarUrl }),
+  updateEmail: (email) => API.request('POST', '/api/account/email', { email }),
   sendSuggestion: (toUserId, gameId, gameTitle, gameCover, message) => API.request('POST', '/api/suggestions', { toUserId, gameId, gameTitle, gameCover, message }),
   getSuggestions: () => API.request('GET', '/api/suggestions'),
   dismissSuggestion: (id) => API.request('DELETE', `/api/suggestions/${id}`),
@@ -149,6 +150,7 @@ const Send = Icon(["M22 2 11 13", "M22 2l-7 20-4-9-9-4 20-7z"]);
 const ChevronRight = Icon(["M9 18l6-6-6-6"]);
 const Upload = Icon(["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M17 8l-5-5-5 5", "M12 3v12"]);
 const Trash2 = Icon(["M3 6h18", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"]);
+const Mail = Icon(["M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z", "m22 6-10 7L2 6"]);
 
 
 
@@ -802,10 +804,13 @@ function ReviewsView({ games, onSelect }) {
   );
 }
 
-function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar }) {
+function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar, onUpdateEmail }) {
   const [avatarModal, setAvatarModal] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || "");
   const [avatarSaving, setAvatarSaving] = useState(false);
+  const [emailModal, setEmailModal] = useState(false);
+  const [email, setEmail] = useState(user?.email || "");
+  const [emailSaving, setEmailSaving] = useState(false);
   const fileInputRef = useRef(null);
   const completed  = games.filter(g => g.status === "completed").length;
   const playing    = games.filter(g => g.status === "playing").length;
@@ -886,7 +891,21 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
     )))),
     h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Distribution des notes"), h('div', { className: "bg-card border border-border rounded-2xl p-4" }, ratingDist.map(({ score, count }) => h('div', { key: score, className: "flex items-center gap-2 mb-1.5 last:mb-0" }, h('div', { className: "flex gap-px w-14 flex-shrink-0" }, Array.from({ length: score }).map((_, i) => h(Star, { key: i, size: 9, fill: "#f59e0b", stroke: "#f59e0b" }))), h('div', { className: "flex-1 h-2 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full bg-amber-500", style: { width: `${(count / maxCount) * 100}%` } })), h('span', { className: "text-xs text-muted-foreground w-4 text-right font-mono" }, count))))),
     h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Par plateforme"), h('div', { className: "bg-card border border-border rounded-2xl p-4 flex flex-wrap gap-4" }, ["ps5","steam","epic","nintendo","xbox"].map(p => h('div', { key: p, className: "flex items-center gap-2" }, h(PlatformLogo, { platform: p, size: 16 }), h('span', { className: "text-xs font-bold text-foreground" }, PLATFORM_CONFIG[p].label), h('span', { className: "text-xs font-black font-mono", style: { color: p === "steam" ? "#c2dbf0" : PLATFORM_CONFIG[p].color } }, games.filter(g => g.platform === p).length))))),
-    h('div', { className: "px-4 mb-4" }, h('button', { onClick: onDeleteAccount, className: "text-[10px] font-medium flex items-center gap-1.5 hover:opacity-80 transition-opacity", style: { color: "#ef444488" } }, "Supprimer mon compte")),
+    emailModal && h('div', { className: "fixed inset-0 z-50 flex items-center justify-center" },
+      h('div', { className: "absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: () => setEmailModal(false) }),
+      h('div', { className: "relative bg-card border border-border rounded-2xl p-5 w-80", style: { zIndex: 1 } },
+        h('p', { className: "text-sm font-black text-foreground mb-3", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Modifier l'email"),
+        h('input', { value: email, onChange: e => setEmail(e.target.value), type: "email", placeholder: "ton@email.com", className: "w-full bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none mb-3" }),
+        h('div', { className: "flex gap-2" },
+          h('button', { onClick: () => setEmailModal(false), className: "flex-1 py-2 text-xs font-bold rounded-lg", style: { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, "Annuler"),
+          h('button', { onClick: async () => { setEmailSaving(true); try { await onUpdateEmail?.(email); setEmailModal(false); } catch (e) { } setEmailSaving(false); }, disabled: emailSaving, className: "flex-1 py-2 text-xs font-bold rounded-lg text-white", style: { background: GRAD } }, emailSaving ? "..." : "Sauvegarder")
+        )
+      )
+    ),
+    h('div', { className: "px-4 mb-4 flex items-center gap-3" },
+      h('button', { onClick: () => { setEmail(user?.email || ''); setEmailModal(true); }, className: "text-[10px] font-medium flex items-center gap-1.5 hover:opacity-80 transition-opacity", style: { color: `${P1}aa` } }, h(Mail, { size: 11 }), user?.email ? "Changer l'email" : "Ajouter un email"),
+      h('button', { onClick: onDeleteAccount, className: "text-[10px] font-medium flex items-center gap-1.5 hover:opacity-80 transition-opacity", style: { color: "#ef444488" } }, "Supprimer mon compte")
+    ),
     h('div', { className: "px-4 mb-6" },
       h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5" }, h(Heart, { size: 11, fill: "#ef4444", stroke: "#ef4444", strokeWidth: 2 }), "Liste de souhaits (", wishlistIds.size, ")"),
       wishlistIds.size === 0
@@ -1312,6 +1331,12 @@ function App() {
     setUser(prev => ({ ...prev, avatar_url: avatarUrl }));
   };
 
+  const handleUpdateEmail = async (email) => {
+    const data = await API.updateEmail(email);
+    setUser(prev => ({ ...prev, email: data.email }));
+    showToast('Email mis à jour');
+  };
+
   if (loading) {
     return h('div', { className: "min-h-screen flex items-center justify-center", style: { background: "#030308" } },
       h('div', { className: "flex flex-col items-center gap-3" },
@@ -1335,7 +1360,7 @@ function App() {
           view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false }, ...prev ]); } }),
           view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id); if (e) setSelectedGame(e); else { setSelectedGame({ ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); API.syncGames([{ ...game, user_rating: 0, review_text: "", review_public: 1, has_review: 0, status: "not_started", playtime: 0 }]).then(() => { loadData(); showToast('Jeu ajouté à la bibliothèque et au catalogue'); }).catch(() => {}); } }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
-          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar })
+          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail })
         )
       ),
       h(BottomNav, { view, setView }),

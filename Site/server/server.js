@@ -74,13 +74,27 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email requis' });
     const user = await db.getUserByEmail(email);
-    if (!user) return res.json({ ok: true, message: 'Si cet email existe, un lien de réinitialisation a été généré.' });
+    if (!user) return res.status(404).json({ error: 'Aucun compte trouvé avec cet email' });
     const token = await db.createResetToken(user.id, 'password');
     const resetLink = (process.env.PUBLIC_URL || 'http://localhost:3000') + '/reset-password?token=' + token;
     console.log('[ForgotPassword] Token for', email, ':', resetLink);
-    res.json({ ok: true, resetLink, message: 'Lien de réinitialisation généré (console serveur)' });
+    res.json({ ok: true, resetLink, message: 'Lien de réinitialisation généré (vérifie la console serveur)' });
   } catch (err) {
     console.error('[ForgotPassword] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/forgot-username', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email requis' });
+    const user = await db.getUserByEmail(email);
+    if (!user) return res.status(404).json({ error: 'Aucun compte trouvé avec cet email' });
+    console.log('[ForgotUsername] Username for', email, ':', user.username);
+    res.json({ ok: true, username: user.username, message: 'Identifiant trouvé !' });
+  } catch (err) {
+    console.error('[ForgotUsername] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -100,20 +114,6 @@ app.post('/api/auth/reset-password', async (req, res) => {
     res.json({ ok: true, message: 'Mot de passe réinitialisé avec succès' });
   } catch (err) {
     console.error('[ResetPassword] Error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/auth/forgot-username', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email requis' });
-    const user = await db.getUserByEmail(email);
-    if (!user) return res.json({ ok: true, message: 'Si cet email existe, l\'identifiant a été envoyé.' });
-    console.log('[ForgotUsername] Username for', email, ':', user.username);
-    res.json({ ok: true, username: user.username, message: 'Identifiant récupéré (console serveur)' });
-  } catch (err) {
-    console.error('[ForgotUsername] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -138,7 +138,7 @@ app.post('/api/login', async (req, res) => {
     }
     req.session.userId = user.id;
     console.log('[Login] Success:', username, 'id:', user.id);
-    res.json({ user: { id: user.id, username: user.username, display_name: user.display_name, created_at: user.created_at } });
+    res.json({ user: { id: user.id, username: user.username, display_name: user.display_name, email: user.email, created_at: user.created_at } });
   } catch (err) {
     console.error('[Login] Error:', err.message, err.stack);
     res.status(500).json({ error: 'Erreur serveur: ' + err.message });
@@ -855,6 +855,23 @@ app.post('/api/account/avatar', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[Avatar] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/account/email', requireAuth, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email requis' });
+    const existing = await db.getUserByEmail(email);
+    if (existing && existing.id !== Number(req.session.userId)) {
+      return res.status(409).json({ error: 'Cet email est déjà utilisé par un autre compte' });
+    }
+    const { error } = await db.supabaseAdmin.from('users').update({ email }).eq('id', req.session.userId);
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, email });
+  } catch (err) {
+    console.error('[Email] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

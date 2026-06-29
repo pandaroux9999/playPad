@@ -637,8 +637,9 @@ async function fetchXboxGames(apiKey, gamertag) {
         diagnostic.push(`Account ${acctUrl.slice(0,30)}: ERROR ${accountData?.status || ''} ${accountData?.message || accountData?.body || ''}`);
         continue;
       }
-      diagnostic.push(`Account ${acctUrl.slice(0,30)}: OK, keys=${Object.keys(accountData||{}).join(',')}`);
-      if (accountData?.xuid || accountData?.gamertag || accountData?.profileUsers) {
+      diagnostic.push(`Account ${acctUrl.slice(0,30)}: OK, keys=${Object.keys(accountData||{}).join(',')}, contentKeys=${accountData?.content ? Object.keys(accountData.content).join(',') : 'none'}`);
+      const acct = accountData?.content || accountData;
+      if (acct?.xuid || acct?.gamertag || acct?.profileUsers) {
         apiKeyValid = true;
         break;
       }
@@ -663,8 +664,9 @@ async function fetchXboxGames(apiKey, gamertag) {
     try {
       const data = await xboxApiGet(apiKey, url);
       if (data?.code === 'ERROR' || data?.code === 'HTTP_ERROR') { diagnostic.push(`Search ${url.slice(-30)}: ERROR`); continue; }
-      diagnostic.push(`Search ${url.slice(-30)}: keys=${Object.keys(data||{}).join(',')}`);
-      if (data?.xuid) { xuid = data.xuid; diagnostic.push(`XUID found via root: ${xuid}`); break; }
+      diagnostic.push(`Search ${url.slice(-30)}: keys=${Object.keys(data||{}).join(',')}, contentKeys=${data?.content ? Object.keys(data.content).join(',') : 'none'}`);
+      const player = data?.content || data;
+      if (player?.xuid) { xuid = player.xuid; diagnostic.push(`XUID found via root: ${xuid}`); break; }
     } catch (e) {
       diagnostic.push(`Search ${url.slice(-30)}: FAILED - ${e.message}`);
     }
@@ -695,7 +697,8 @@ async function fetchXboxGames(apiKey, gamertag) {
     diagnostic.push('Games API error: ' + JSON.stringify(gamesData).slice(0, 300));
     return { games: [], diagnostic: diagnostic.join(' | ') };
   }
-  const titles = gamesData?.titles || gamesData?.data?.titles || gamesData?.games || gamesData?.data || [];
+  const titlesData = gamesData?.content || gamesData;
+  const titles = titlesData?.titles || titlesData?.data?.titles || titlesData?.games || titlesData?.data || [];
   diagnostic.push(`Titles array length=${Array.isArray(titles)?titles.length:'N/A'}, sample=${JSON.stringify(Array.isArray(titles)?titles[0]:titles).slice(0,200)}`);
   if (!Array.isArray(titles) || !titles.length) {
     diagnostic.push('Aucun titre trouvé (profil Xbox privé ?)');

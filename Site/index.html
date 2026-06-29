@@ -116,6 +116,8 @@ const API = {
   getMessages: (friendId) => API.request('GET', `/api/messages/${friendId}`),
   getConversations: () => API.request('GET', '/api/messages/conversations'),
   getUnreadMessages: () => API.request('GET', '/api/messages/unread'),
+  getStoreDetails: (gameId) => API.request('GET', `/api/games/${gameId}/store-details`),
+  getStats: () => API.request('GET', '/api/stats'),
 };
 
 function Icon(paths, viewBox = "0 0 24 24") {
@@ -158,6 +160,8 @@ const Mail = Icon(["M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6
 const Sliders = Icon(["M4 21v-7", "M4 10V3", "M12 21v-9", "M12 8V3", "M20 21v-5", "M20 12V3", "M1 14h6", "M9 8h6", "M17 16h6"]);
 const MessageCircle = Icon(["M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"]);
 const ArrowLeft = Icon(["M19 12H5", "M12 19l-7-7 7-7"]);
+const Info = Icon(["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M12 16v-4", "M12 8h.01"]);
+const BarChart3 = Icon(["M3 3v18h18", "M7 16l4-8 4 4 4-6"]);
 
 
 
@@ -963,6 +967,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   const [emailModal, setEmailModal] = useState(false);
   const [email, setEmail] = useState(user?.email || "");
   const [emailSaving, setEmailSaving] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const fileInputRef = useRef(null);
   const completed  = games.filter(g => g.status === "completed").length;
   const playing    = games.filter(g => g.status === "playing").length;
@@ -1043,6 +1048,30 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
     )))),
     h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Distribution des notes"), h('div', { className: "bg-card border border-border rounded-2xl p-4" }, ratingDist.map(({ score, count }) => h('div', { key: score, className: "flex items-center gap-2 mb-1.5 last:mb-0" }, h('div', { className: "flex gap-px w-14 flex-shrink-0" }, Array.from({ length: score }).map((_, i) => h(Star, { key: i, size: 9, fill: "#f59e0b", stroke: "#f59e0b" }))), h('div', { className: "flex-1 h-2 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full bg-amber-500", style: { width: `${(count / maxCount) * 100}%` } })), h('span', { className: "text-xs text-muted-foreground w-4 text-right font-mono" }, count))))),
     h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Par plateforme"), h('div', { className: "bg-card border border-border rounded-2xl p-4 flex flex-wrap gap-4" }, ["ps5","steam","epic","nintendo","xbox"].map(p => h('div', { key: p, className: "flex items-center gap-2" }, h(PlatformLogo, { platform: p, size: 16 }), h('span', { className: "text-xs font-bold text-foreground" }, PLATFORM_CONFIG[p].label), h('span', { className: "text-xs font-black font-mono", style: { color: p === "steam" ? "#c2dbf0" : PLATFORM_CONFIG[p].color } }, games.filter(g => g.platform === p).length))))),
+    h('div', { className: "px-4 mb-4" },
+      h('button', { onClick: () => setShowStats(!showStats), className: "w-full py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2", style: { background: showStats ? `${P1}15` : "rgba(26,26,46,0.7)", color: P1 } }, h(BarChart3, { size: 13 }), showStats ? "Masquer les stats" : "Statistiques d\u00e9taill\u00e9es")
+    ),
+    showStats && h('div', { className: "px-4 mb-4 space-y-3" },
+      (() => { const gen = {}; const yr = {}; games.forEach(g => { gen[g.genre || "Autre"] = (gen[g.genre || "Autre"] || 0) + 1; const y = g.year || 0; if (y) yr[y] = (yr[y] || 0) + 1; }); const topGenres = Object.entries(gen).sort((a,b) => b[1]-a[1]).slice(0,5); const topYears = Object.entries(yr).sort((a,b) => b[1]-a[1]).slice(0,8); const totalPlaytime = games.reduce((s,g) => s + (g.playtime || 0), 0); const avgRating = games.filter(g => g.userRating).reduce((s,g,i,a) => s + g.userRating/(a.length||1), 0); return [
+        h('div', { className: "bg-card border border-border rounded-2xl p-4" },
+          h('p', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Vue d'ensemble"),
+          h('div', { className: "grid grid-cols-2 gap-3 text-xs" },
+            h('div', null, h('p', { className: "text-muted-foreground" }, "Total jeux"), h('p', { className: "text-lg font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, games.length)),
+            h('div', null, h('p', { className: "text-muted-foreground" }, "Temps total"), h('p', { className: "text-lg font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, `${totalPlaytime}h`)),
+            h('div', null, h('p', { className: "text-muted-foreground" }, "Note moyenne"), h('p', { className: "text-lg font-black text-amber-400", style: { fontFamily: "'Rajdhani', sans-serif" } }, avgRating > 0 ? avgRating.toFixed(1) : "\u2014")),
+            h('div', null, h('p', { className: "text-muted-foreground" }, "Compl\u00e9t\u00e9s"), h('p', { className: "text-lg font-black text-green-400", style: { fontFamily: "'Rajdhani', sans-serif" } }, games.filter(g => g.status === "completed").length)),
+          )
+        ),
+        h('div', { className: "bg-card border border-border rounded-2xl p-4" },
+          h('p', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Genres les plus jou\u00e9s"),
+          h('div', { className: "space-y-2" }, topGenres.map(([genre, count]) => h('div', { key: genre }, h('div', { className: "flex justify-between text-xs mb-0.5" }, h('span', { className: "text-foreground" }, genre), h('span', { className: "font-bold text-muted-foreground" }, count)), h('div', { className: "h-1.5 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full", style: { width: `${(count/topGenres[0][1])*100}%`, background: P1 } })))))
+        ),
+        h('div', { className: "bg-card border border-border rounded-2xl p-4" },
+          h('p', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Jeux par ann\u00e9e de sortie"),
+          h('div', { className: "space-y-2" }, topYears.map(([year, count]) => h('div', { key: year }, h('div', { className: "flex justify-between text-xs mb-0.5" }, h('span', { className: "text-foreground" }, year), h('span', { className: "font-bold text-muted-foreground" }, count)), h('div', { className: "h-1.5 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full", style: { width: `${(count/topYears[0][1])*100}%`, background: "#f59e0b" } })))))
+        ),
+      ]})()
+    ),
     emailModal && h('div', { className: "fixed inset-0 z-50 flex items-center justify-center" },
       h('div', { className: "absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: () => setEmailModal(false) }),
       h('div', { className: "relative bg-card border border-border rounded-2xl p-5 w-80", style: { zIndex: 1 } },
@@ -1075,6 +1104,9 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
   const [status, setStatus] = useState(game.status);
   const [saving, setSaving] = useState(false);
   const [communityReviews, setCommunityReviews] = useState([]);
+  const [storeDetails, setStoreDetails] = useState(null);
+  const [storeLoading, setStoreLoading] = useState(false);
+  const [showStoreDetails, setShowStoreDetails] = useState(false);
   const gameId = game.game_id || game.id;
   const globalRating = ratings?.[gameId];
 
@@ -1153,6 +1185,20 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
           ),
           h('div', { className: "grid grid-cols-4 gap-1.5 mb-3" },
             [{ icon: h(Clock, { size: 11, style: { color: P2 } }), val: `${game.playtime || 0}h`, sub: "jou\u00e9es" },{ icon: h(Trophy, { size: 11, className: "text-amber-400" }), val: String(game.year || "\u2014"), sub: "sortie" },{ icon: h(Star, { size: 11, fill: "#f59e0b", stroke: "#f59e0b" }), val: game.userRating ? `${game.userRating}/5` : "\u2014", sub: "ta note" },{ icon: h(Star, { size: 11, fill: globalRating ? "#8B5CF6" : "none", stroke: "#8B5CF6" }), val: globalRating ? globalRating.toFixed(1) : "\u2014", sub: "globale" }].map(({ icon, val, sub }) => h('div', { key: sub, className: "bg-secondary/50 rounded-xl p-2 text-center" }, h('div', { className: "flex justify-center mb-0.5" }, icon), h('p', { className: "text-xs font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, val), h('p', { className: "text-[9px] text-muted-foreground" }, sub)))
+          ),
+          game.game_id && h('button', { onClick: async () => { if (!showStoreDetails) { setShowStoreDetails(true); if (!storeDetails && !storeLoading) { setStoreLoading(true); const d = await API.getStoreDetails(game.game_id).catch(() => ({})); setStoreDetails(d.details || null); setStoreLoading(false); } } else setShowStoreDetails(false); }, className: "w-full mb-2 py-2 text-[10px] font-bold rounded-xl flex items-center justify-center gap-1.5", style: { background: showStoreDetails ? `${P1}20` : "rgba(26,26,46,0.7)", color: P1 } }, h(Info, { size: 11 }), storeLoading ? "Chargement..." : (showStoreDetails ? "Masquer les d\u00e9tails" : "D\u00e9tails du jeu")),
+          showStoreDetails && storeDetails && h('div', { className: "rounded-2xl p-3.5 mb-3", style: { background: "rgba(26,26,46,0.5)", border: `1px solid ${P1}20` } },
+            storeDetails.description && h('p', { className: "text-[11px] text-foreground/80 leading-relaxed mb-3" }, storeDetails.description),
+            h('div', { className: "grid grid-cols-2 gap-2 text-[10px]" },
+              storeDetails.developers && h('div', null, h('span', { className: "text-muted-foreground" }, "D\u00e9veloppeur(s): "), h('span', { className: "font-bold text-foreground" }, storeDetails.developers)),
+              storeDetails.publishers && h('div', null, h('span', { className: "text-muted-foreground" }, "Editeur(s): "), h('span', { className: "font-bold text-foreground" }, storeDetails.publishers)),
+              storeDetails.price && h('div', null, h('span', { className: "text-muted-foreground" }, "Prix: "), h('span', { className: "font-bold text-green-400" }, storeDetails.price)),
+              storeDetails.platforms && h('div', null, h('span', { className: "text-muted-foreground" }, "Plateformes: "), h('span', { className: "font-bold text-foreground" }, storeDetails.platforms)),
+              storeDetails.metacritic && h('div', null, h('span', { className: "text-muted-foreground" }, "Metacritic: "), h('span', { className: "font-bold", style: { color: storeDetails.metacritic >= 75 ? '#22c55e' : storeDetails.metacritic >= 50 ? '#f59e0b' : '#ef4444' } }, storeDetails.metacritic)),
+              storeDetails.recommendations && h('div', null, h('span', { className: "text-muted-foreground" }, "Recommandations: "), h('span', { className: "font-bold text-foreground" }, Number(storeDetails.recommendations).toLocaleString('fr-FR'))),
+              storeDetails.release_date && h('div', null, h('span', { className: "text-muted-foreground" }, "Sortie: "), h('span', { className: "font-bold text-foreground" }, storeDetails.release_date)),
+              storeDetails.website && h('div', { className: "col-span-2" }, h('a', { href: storeDetails.website, target: "_blank", className: "font-bold hover:opacity-80", style: { color: P1 } }, "Site officiel \u2197"))
+            )
           ),
           game.game_id && h('button', { onClick: async () => { if (confirm("Supprimer ce jeu de votre biblioth\u00e8que ?")) { await onDeleteGame?.(game.game_id); } }, className: "w-full mb-3 py-2 text-[10px] font-bold rounded-xl flex items-center justify-center gap-1.5", style: { background: "rgba(239,68,68,0.1)", color: "#ef4444" } }, h(Trash2, { size: 11 }), "Retirer de ma biblioth\u00e8que"),
           h('div', { className: "border-t border-border pt-4" },

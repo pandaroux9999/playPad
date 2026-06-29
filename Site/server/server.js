@@ -973,6 +973,62 @@ app.get('/api/messages/unread', requireAuth, async (req, res) => {
   }
 });
 
+// Store details — données enrichies Steam Store
+const storeCache = {};
+app.get('/api/games/:gameId/store-details', async (req, res) => {
+  try {
+    const gameId = req.params.gameId;
+    const appid = gameId.replace('steam-', '');
+    if (!/^\d+$/.test(appid)) return res.json({ details: null, error: 'Pas un jeu Steam' });
+    if (storeCache[appid]) return res.json({ details: storeCache[appid] });
+    const details = await steamStoreGet(appid);
+    if (details && details.success && details.data) {
+      const d = details.data;
+      storeCache[appid] = {
+        name: d.name,
+        description: d.short_description || d.detailed_description?.replace(/<[^>]*>/g, '') || '',
+        price: d.price_overview ? (d.price_overview.final / 100).toFixed(2) + ' €' : null,
+        metacritic: d.metacritic?.score || null,
+        recommendations: d.recommendations?.total || null,
+        developers: d.developers ? d.developers.join(', ') : '',
+        publishers: d.publishers ? d.publishers.join(', ') : '',
+        platforms: Object.entries(d.platforms || {}).filter(([, v]) => v).map(([k]) => k).join(', '),
+        header_image: d.header_image,
+        website: d.website,
+        release_date: d.release_date?.date || '',
+      };
+      res.json({ details: storeCache[appid] });
+    } else {
+      res.json({ details: null, error: 'Non trouvé sur le Steam Store' });
+    }
+  } catch (err) {
+    console.error('[StoreDetails] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Stats personnelles
+app.get('/api/stats', requireAuth, async (req, res) => {
+  try {
+    const games = await db.getGames(req.session.userId);
+    const total = games.length;
+    const playtime = games.reduce((s, g) => s + (g.playtime || 0), 0);
+    const completed = games.filter(g => g.status === 'completed').length;
+    const platforms = {};
+    const genres = {};
+    const years = {};
+    for (const g of games) {
+      if (g.platform) platforms[g.platform] = (platforms[g.platform] || 0) + 1;
+      if (g.genre) genres[g.genre] = (genres[g.genre] || 0) + 1;
+      if (g.year) years[g.year] = (years[g.year] || 0) + 1;
+    }
+    res.json({ stats: { total, playtime, completed, platforms, genres, years } });
+  } catch (err) {
+    console.error('[Stats] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Debug endpoint — vérifier les variables d'environnement
 app.get('/api/debug/env', (req, res) => {
   res.json({

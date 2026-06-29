@@ -630,10 +630,14 @@ async function fetchXboxGames(apiKey, gamertag) {
 
   // Étape 1 : vérifier que la clé API est valide
   let apiKeyValid = false;
-  for (const acctUrl of ['https://xbl.io/api/v2/account']) {
+  for (const acctUrl of ['https://xbl.io/api/v2/account', 'https://api.xbl.io/api/v2/account']) {
     try {
       const accountData = await xboxApiGet(apiKey, acctUrl);
-      diagnostic.push(`Account ${acctUrl.slice(0,30)}: status OK, keys=${Object.keys(accountData||{}).join(',')}`);
+      if (accountData?.code === 'ERROR' || accountData?.code === 'HTTP_ERROR') {
+        diagnostic.push(`Account ${acctUrl.slice(0,30)}: ERROR ${accountData?.status || ''} ${accountData?.message || accountData?.body || ''}`);
+        continue;
+      }
+      diagnostic.push(`Account ${acctUrl.slice(0,30)}: OK, keys=${Object.keys(accountData||{}).join(',')}`);
       if (accountData?.xuid || accountData?.gamertag || accountData?.profileUsers) {
         apiKeyValid = true;
         break;
@@ -653,10 +657,12 @@ async function fetchXboxGames(apiKey, gamertag) {
 
   const searchUrls = [
     `https://xbl.io/api/v2/player/gamertag/${gt}`,
+    `https://api.xbl.io/api/v2/player/gamertag/${gt}`,
   ];
   for (const url of searchUrls) {
     try {
       const data = await xboxApiGet(apiKey, url);
+      if (data?.code === 'ERROR' || data?.code === 'HTTP_ERROR') { diagnostic.push(`Search ${url.slice(-30)}: ERROR`); continue; }
       diagnostic.push(`Search ${url.slice(-30)}: keys=${Object.keys(data||{}).join(',')}`);
       if (data?.xuid) { xuid = data.xuid; diagnostic.push(`XUID found via root: ${xuid}`); break; }
     } catch (e) {
@@ -672,12 +678,14 @@ async function fetchXboxGames(apiKey, gamertag) {
   // Étape 3 : récupérer les jeux
   const gamesUrls = [
     `https://xbl.io/api/v2/player/titleHistory/${xuid}`,
+    `https://api.xbl.io/api/v2/player/titleHistory/${xuid}`,
   ];
   let gamesData = null;
   for (const url of gamesUrls) {
     try {
       gamesData = await xboxApiGet(apiKey, url);
-      diagnostic.push(`Titles ${url.slice(-30)}: ${gamesData?.code === 'ERROR' ? 'ERROR' : 'OK'}`);
+      if (gamesData?.code === 'ERROR' || gamesData?.code === 'HTTP_ERROR') { diagnostic.push(`Titles ${url.slice(-30)}: ERROR`); continue; }
+      diagnostic.push(`Titles ${url.slice(-30)}: OK`);
       if (gamesData && gamesData?.code !== 'ERROR') break;
     } catch (e) {
       diagnostic.push(`Titles ${url.slice(-30)}: FAILED - ${e.message}`);

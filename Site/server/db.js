@@ -99,7 +99,22 @@ async function getGames(userId) {
     .select('*')
     .eq('user_id', userId);
   checkResult({ data, error });
-  return data;
+  // Fusionner les jeux avec le même titre (cross-platform)
+  const merged = {};
+  for (const g of data) {
+    const key = g.title.toLowerCase().trim();
+    if (!merged[key]) { merged[key] = { ...g, platforms: [g.platform || ''] }; continue; }
+    const m = merged[key];
+    if (!m.platforms.includes(g.platform)) m.platforms.push(g.platform);
+    m.playtime = (m.playtime || 0) + (g.playtime || 0);
+    const statusRank = { completed: 4, playing: 3, paused: 2, dropped: 1, not_started: 0 };
+    if (statusRank[g.status] > statusRank[m.status]) m.status = g.status;
+    if (!m.cover && g.cover) m.cover = g.cover;
+    if (g.genre && !m.genre) m.genre = g.genre;
+    if (g.year && !m.year) m.year = g.year;
+    if (g.developer && !m.developer) m.developer = g.developer;
+  }
+  return Object.values(merged);
 }
 
 async function upsertGame(userId, game) {

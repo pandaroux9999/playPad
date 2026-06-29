@@ -205,10 +205,19 @@ function PlatformLogo({ platform, size = 24 }) {
   return h('span', { dangerouslySetInnerHTML: { __html: svg }, style: { width: size + 'px', height: size + 'px', display: 'inline-block', lineHeight: 0 } });
 }
 
-function PlatformBadge({ platform }) {
-  const cfg = PLATFORM_CONFIG[platform];
-  if (!cfg) return null;
-  return h('span', { className: "inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded font-mono tracking-widest uppercase leading-none", style: { background: cfg.color + "cc", color: cfg.text, border: `1px solid ${cfg.color}` } }, h(PlatformLogo, { platform, size: 10 }), cfg.label);
+function PlatformBadge({ platform, platforms }) {
+  const list = platforms || (platform ? platform.split(',').map(s => s.trim()).filter(Boolean) : []);
+  if (list.length === 0) return null;
+  if (list.length === 1) {
+    const cfg = PLATFORM_CONFIG[list[0]];
+    if (!cfg) return null;
+    return h('span', { className: "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold", style: { background: cfg.color + "20", color: cfg.color } }, h(PlatformLogo, { platform: list[0], size: 9 }), cfg.label);
+  }
+  return h('div', { className: "flex flex-wrap gap-1" }, list.map(p => {
+    const cfg = PLATFORM_CONFIG[p];
+    if (!cfg) return null;
+    return h('span', { key: p, className: "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold", style: { background: cfg.color + "20", color: cfg.color } }, h(PlatformLogo, { platform: p, size: 9 }), cfg.label);
+  }));
 }
 
 function StarRating({ rating, size = 14, interactive = false, onChange }) {
@@ -323,7 +332,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const [filterYearMax, setFilterYearMax] = useState("");
   const [filterDeveloper, setFilterDeveloper] = useState("");
   const filtered = useMemo(() => games.filter(g =>
-    (activePlatform === "all" || g.platform === activePlatform) &&
+    (activePlatform === "all" || (g.platforms || [g.platform]).filter(Boolean).includes(activePlatform)) &&
     (filterGenre === "all" || g.genre === filterGenre) &&
     (filterStatus === "all" || g.status === filterStatus) &&
     (filterRatingMin === 0 || (g.userRating || 0) >= filterRatingMin) &&
@@ -966,7 +975,7 @@ function ReviewsView({ games, onSelect }) {
               h('div', { className: "relative w-14 h-20 rounded-xl overflow-hidden flex-shrink-0" }, h('img', { src: game.cover, alt: game.title, className: "w-full h-full object-cover" })),
               h('div', { className: "flex-1 min-w-0 py-0.5" },
                 h('div', { className: "flex items-center gap-2 mb-1.5 flex-wrap" },
-                  h(PlatformBadge, { platform: game.platform }),
+      h(PlatformBadge, { platforms: game.platforms || (game.platform ? [game.platform] : []) }),
                   h('div', { className: "flex items-center gap-1" }, (game.review_public || game.reviewPublic) ? h(Globe, { size: 10, className: "text-green-400" }) : h(Lock, { size: 10, className: "text-amber-400" }), h('span', { className: `text-[10px] font-bold ${(game.review_public || game.reviewPublic) ? "text-green-400" : "text-amber-400"}` }, (game.review_public || game.reviewPublic) ? "Public" : "Priv\u00e9"))
                 ),
                 h('p', { className: "text-sm font-bold text-foreground leading-tight truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
@@ -1065,7 +1074,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
       h('div', { className: "h-1.5 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full", style: { width: `${(count / games.length) * 100}%`, background: STATUS_CONFIG[key].color } }))
     )))),
     h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Distribution des notes"), h('div', { className: "bg-card border border-border rounded-2xl p-4" }, ratingDist.map(({ score, count }) => h('div', { key: score, className: "flex items-center gap-2 mb-1.5 last:mb-0" }, h('div', { className: "flex gap-px w-14 flex-shrink-0" }, Array.from({ length: score }).map((_, i) => h(Star, { key: i, size: 9, fill: "#f59e0b", stroke: "#f59e0b" }))), h('div', { className: "flex-1 h-2 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full bg-amber-500", style: { width: `${(count / maxCount) * 100}%` } })), h('span', { className: "text-xs text-muted-foreground w-4 text-right font-mono" }, count))))),
-    h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Par plateforme"), h('div', { className: "bg-card border border-border rounded-2xl p-4 flex flex-wrap gap-4" }, ["ps5","steam","epic","nintendo","xbox"].map(p => h('div', { key: p, className: "flex items-center gap-2" }, h(PlatformLogo, { platform: p, size: 16 }), h('span', { className: "text-xs font-bold text-foreground" }, PLATFORM_CONFIG[p].label), h('span', { className: "text-xs font-black font-mono", style: { color: p === "steam" ? "#c2dbf0" : PLATFORM_CONFIG[p].color } }, games.filter(g => g.platform === p).length))))),
+    h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Par plateforme"), h('div', { className: "bg-card border border-border rounded-2xl p-4 flex flex-wrap gap-4" }, ["ps5","steam","epic","nintendo","xbox"].map(p => h('div', { key: p, className: "flex items-center gap-2" }, h(PlatformLogo, { platform: p, size: 16 }), h('span', { className: "text-xs font-bold text-foreground" }, PLATFORM_CONFIG[p].label), h('span', { className: "text-xs font-black font-mono", style: { color: p === "steam" ? "#c2dbf0" : PLATFORM_CONFIG[p].color } }, games.filter(g => (g.platforms || [g.platform]).filter(Boolean).includes(p)).length))))),
     emailModal && h('div', { className: "fixed inset-0 z-50 flex items-center justify-center" },
       h('div', { className: "absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: () => setEmailModal(false) }),
       h('div', { className: "relative bg-card border border-border rounded-2xl p-5 w-80", style: { zIndex: 1 } },
@@ -1162,7 +1171,7 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
         h('button', { onClick: () => onToggleWishlist?.(game), className: "absolute top-4 left-4 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110", style: { background: inWishlist ? "rgba(239,68,68,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Heart, { size: 14, fill: inWishlist ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
         h('button', { onClick: () => handleTopThree(game), className: "absolute top-4 left-14 w-8 h-8 rounded-full flex items-center justify-center", style: { background: inTopThree ? "rgba(245,158,11,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Crown, { size: 14, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
         h('div', { className: "absolute bottom-0 left-0 right-0 px-4 pb-3" },
-          h('div', { className: "flex items-center gap-2 mb-1" }, h(PlatformBadge, { platform: game.platform }), h('span', { className: "text-xs px-2 py-0.5 rounded-md font-bold", style: { background: (statusCfg || STATUS_CONFIG.not_started).color + "28", color: (statusCfg || STATUS_CONFIG.not_started).color } }, (statusCfg || STATUS_CONFIG.not_started).label)),
+          h('div', { className: "flex items-center gap-2 mb-1" }, h(PlatformBadge, { platforms: game.platforms || (game.platform ? [game.platform] : []) }), h('span', { className: "text-xs px-2 py-0.5 rounded-md font-bold", style: { background: (statusCfg || STATUS_CONFIG.not_started).color + "28", color: (statusCfg || STATUS_CONFIG.not_started).color } }, (statusCfg || STATUS_CONFIG.not_started).label)),
           h('h2', { className: "text-lg font-black text-white leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
           h('p', { className: "text-xs mt-0.5", style: { color: "rgba(255,255,255,0.5)" } }, `${game.genre} \u00b7 ${game.year}`)
         )

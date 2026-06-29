@@ -627,63 +627,36 @@ app.get('/api/platform/xbox/diagnostic', requireAuth, async (req, res) => {
 // Retourne { games: [], diagnostic: '...' }
 async function fetchXboxGames(apiKey, gamertag) {
   let diagnostic = [];
+  let xuid = null;
 
-  // Étape 1 : vérifier que la clé API est valide (l'endpoint /account retourne les stats rate-limit)
-  let apiKeyValid = false;
-  for (const acctUrl of ['https://xbl.io/api/v2/account']) {
-    try {
-      const accountData = await xboxApiGet(apiKey, acctUrl);
-      const acctContent = accountData?.content || {};
-      diagnostic.push(`Account ${acctUrl.slice(0,30)}: OK, code=${accountData?.code}, contentKeys=${Object.keys(acctContent).join(',')}`);
-      // Si on reçoit une réponse valide (structure {content, code}), la clé est bonne
-      if (accountData && typeof accountData === 'object' && accountData.code !== 'ERROR' && accountData.code !== 'HTTP_ERROR') {
-        apiKeyValid = true;
-        break;
-      }
-    } catch (e) {
-      diagnostic.push(`Account ${acctUrl.slice(0,30)}: FAILED - ${e.message}`);
-    }
-  }
-  if (!apiKeyValid) {
-    diagnostic.push('XBL_API_KEY invalide ou expirée — vérifie la clé sur https://xbl.io');
+  // Étape 1 : vérifier la clé API et récupérer le XUID depuis le profil lié à la clé
+  const accountData = await xboxApiGet(apiKey, 'https://xbl.io/api/v2/account');
+  const acctContent = accountData?.content || {};
+  diagnostic.push(`Account: code=${accountData?.code}, contentKeys=${Object.keys(acctContent).join(',')}`);
+  if (accountData && accountData.code === 'ERROR') {
+    diagnostic.push('XBL_API_KEY invalide ou expirée');
     return { games: [], diagnostic: diagnostic.join(' | ') };
   }
-
-  // Étape 2 : résoudre le Gamertag en XUID
-  let xuid = null;
-  const gt = encodeURIComponent(gamertag);
-  const gtRaw = gamertag;
-
-  // Méthode A : xbl.io player/search endpoint
-  for (const url of [
-    `https://xbl.io/api/v2/player/search?gt=${gt}`,
-    `https://api.xbl.io/api/v2/player/search?gt=${gt}`,
-    `https://xbl.io/api/v2/player/search?q=${gt}`,
-    `https://xbl.io/api/v2/friends/search?gt=${gt}`,
-  ]) {
-    try {
-      const data = await xboxApiGet(apiKey, url);
-      if (data?.code === 'ERROR' || data?.code === 'HTTP_ERROR') { diagnostic.push(`Search ${url.slice(-30)}: ERROR`); continue; }
-      diagnostic.push(`Search ${url.slice(-30)}: keys=${Object.keys(data||{}).join(',')}`);
-      const results = data?.content?.profileUsers || data?.profileUsers || (data?.content ? [data.content] : [data]);
-      for (const p of results) {
-        if (p?.xuid) { xuid = p.xuid; diagnostic.push(`XUID found: ${xuid}`); break; }
-      }
-      if (xuid) break;
-    } catch (e) { /* ignore */ }
+  // Le profil Xbox lié à la clé API est dans content.profileUsers[0]
+  const profile = acctContent?.profileUsers?.[0] || acctContent;
+  if (profile?.xuid) {
+    xuid = profile.xuid;
+    diagnostic.push(`XUID from account profile: ${xuid} (${profile.gamertag || ''})`);
   }
 
-  // Méthode B : Microsoft Xbox Live API publique (sans clé, peut échouer)
+  // Étape 2 : si XUID pas trouvé via la clé, chercher par gamertag
   if (!xuid) {
+    const gt = encodeURIComponent(gamertag);
+    // Microsoft Xbox Live API publique (sans clé)
     try {
-      const msUrl = `https://profile.xboxlive.com/users/gt(${gtRaw})/profile/settings`;
+      const msUrl = `https://profile.xboxlive.com/users/gt(${encodeURIComponent(gamertag)})/profile/settings`;
       const msData = await new Promise((resolve) => {
         const opts = { headers: { 'x-xbl-contract-version': '2', 'Accept': 'application/json' } };
         https.get(msUrl, opts, (resp) => {
           let d = '';
           resp.on('data', c => d += c);
           resp.on('end', () => {
-            diagnostic.push(`MS profile status: ${resp.statusCode}`);
+            diagnostic.push(`MS profile: ${resp.statusCode}`);
             try { resolve(JSON.parse(d)); } catch { resolve(null); }
           });
         }).on('error', (err) => { diagnostic.push(`MS profile error: ${err.message}`); resolve(null); });
@@ -692,23 +665,27 @@ async function fetchXboxGames(apiKey, gamertag) {
     } catch (e) { /* ignore */ }
   }
 
-  // Méthode C : requête directe par gamertag encodé (certains endpoints xbl.io)
   if (!xuid) {
+    // Dernier recours : xbl.io search endpoint
+    const gt = encodeURIComponent(gamertag);
     for (const url of [
-      `https://xbl.io/api/v2/player/gamertag/${gt}`,
-      `https://api.xbl.io/api/v2/player/gamertag/${gt}`,
+      `https://xbl.io/api/v2/player/search?gt=${gt}`,
+      `https://xbl.io/api/v2/friends/search?gt=${gt}`,
     ]) {
       try {
         const data = await xboxApiGet(apiKey, url);
-        if (data?.code === 'ERROR' || data?.code === 'HTTP_ERROR') { continue; }
-        const p = data?.content || data;
-        if (p?.xuid) { xuid = p.xuid; diagnostic.push(`XUID via gamertag endpoint: ${xuid}`); break; }
+        if (data?.code === 'ERROR' || data?.code === 'HTTP_ERROR') { diagnostic.push(`Search ${url.slice(-30)}: ERROR`); continue; }
+        const results = data?.content?.profileUsers || data?.profileUsers || (data?.content ? [data.content] : [data]);
+        for (const p of results) {
+          if (p?.xuid) { xuid = p.xuid; diagnostic.push(`XUID found: ${xuid}`); break; }
+        }
+        if (xuid) break;
       } catch (e) { /* ignore */ }
     }
   }
 
   if (!xuid) {
-    diagnostic.push('XUID introuvable — vérifie le Gamertag (casse, espaces, #)');
+    diagnostic.push('XUID introuvable — vérifie que la clé API xbl.io est liée à ton compte Xbox');
     return { games: [], diagnostic: diagnostic.join(' | ') };
   }
 

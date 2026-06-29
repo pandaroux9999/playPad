@@ -211,12 +211,12 @@ function PlatformBadge({ platform, platforms }) {
   if (list.length === 1) {
     const cfg = PLATFORM_CONFIG[list[0]];
     if (!cfg) return null;
-    return h('span', { className: "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold", style: { background: cfg.color + "20", color: cfg.color } }, h(PlatformLogo, { platform: list[0], size: 9 }), cfg.label);
+    return h('span', { className: "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold", style: { background: cfg.color + "cc", color: "#fff", border: `1px solid ${cfg.color}` } }, h(PlatformLogo, { platform: list[0], size: 10 }), cfg.label);
   }
   return h('div', { className: "flex flex-wrap gap-1" }, list.map(p => {
     const cfg = PLATFORM_CONFIG[p];
     if (!cfg) return null;
-    return h('span', { key: p, className: "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold", style: { background: cfg.color + "20", color: cfg.color } }, h(PlatformLogo, { platform: p, size: 9 }), cfg.label);
+    return h('span', { key: p, className: "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold", style: { background: cfg.color + "cc", color: "#fff", border: `1px solid ${cfg.color}` } }, h(PlatformLogo, { platform: p, size: 10 }), cfg.label);
   }));
 }
 

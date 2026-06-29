@@ -629,25 +629,47 @@ async function fetchXboxGames(apiKey, gamertag) {
   let diagnostic = [];
   let xuid = null;
 
-  // Étape 1 : vérifier la clé API et récupérer le XUID depuis le profil lié à la clé
+  // Étape 1 : obtenir le XUID via la clé API xbl.io
   const accountData = await xboxApiGet(apiKey, 'https://xbl.io/api/v2/account');
   const acctContent = accountData?.content || {};
   diagnostic.push(`Account: code=${accountData?.code}, contentKeys=${Object.keys(acctContent).join(',')}`);
-  if (accountData && accountData.code === 'ERROR') {
+  if (accountData?.code === 'ERROR' || accountData?.code === 'HTTP_ERROR') {
     diagnostic.push('XBL_API_KEY invalide ou expirée');
     return { games: [], diagnostic: diagnostic.join(' | ') };
   }
-  // Le profil Xbox lié à la clé API est dans content.profileUsers[0]
-  const profile = acctContent?.profileUsers?.[0] || acctContent;
-  if (profile?.xuid) {
-    xuid = profile.xuid;
-    diagnostic.push(`XUID from account profile: ${xuid} (${profile.gamertag || ''})`);
+  if (accountData?.code === 429) {
+    diagnostic.push('Rate limit atteint — attends 1h puis réessaie');
+    return { games: [], diagnostic: diagnostic.join(' | ') };
   }
 
-  // Étape 2 : si XUID pas trouvé via la clé, chercher par gamertag
+  // Étape 2 : chercher le joueur par gamertag (doit marcher pour TOUS les utilisateurs)
+  const gtClean = gamertag.replace(/#/g, '%23');
+  const searchUrls = [
+    `https://xbl.io/api/v2/player/search?gt=${encodeURIComponent(gamertag)}`,
+    `https://xbl.io/api/v2/friends/search?gt=${encodeURIComponent(gamertag)}`,
+    `https://xbl.io/api/v2/player/search?q=${encodeURIComponent(gamertag)}`,
+  ];
+  for (const url of searchUrls) {
+    try {
+      const data = await xboxApiGet(apiKey, url);
+      if (data?.code === 'ERROR' || data?.code === 'HTTP_ERROR') { diagnostic.push(`Search ${url.slice(-30)}: ERROR`); continue; }
+      const c = data?.content || {};
+      diagnostic.push(`Search ${url.slice(-30)}: contentKeys=${Object.keys(c).join(',')}, sample=${JSON.stringify(c).slice(0,200)}`);
+      // Chercher dans profileUsers ou tout tableau dans content
+      const users = c?.profileUsers || c?.profiles || c?.people || c?.users || (Array.isArray(c) ? c : (c[c?.type || ''] || null));
+      if (Array.isArray(users)) {
+        for (const u of users) {
+          if (u?.xuid || u?.id) { xuid = u.xuid || u.id; diagnostic.push(`XUID found: ${xuid} (${u.gamertag || ''})`); break; }
+        }
+      }
+      // Chercher aussi directement dans content
+      if (!xuid && c?.xuid) { xuid = c.xuid; diagnostic.push(`XUID in content: ${xuid}`); }
+      if (xuid) break;
+    } catch (e) { diagnostic.push(`Search ${url.slice(-30)}: FAILED`); }
+  }
+
+  // Fallback API Microsoft (sans clé)
   if (!xuid) {
-    const gt = encodeURIComponent(gamertag);
-    // Microsoft Xbox Live API publique (sans clé)
     try {
       const msUrl = `https://profile.xboxlive.com/users/gt(${encodeURIComponent(gamertag)})/profile/settings`;
       const msData = await new Promise((resolve) => {
@@ -666,26 +688,7 @@ async function fetchXboxGames(apiKey, gamertag) {
   }
 
   if (!xuid) {
-    // Dernier recours : xbl.io search endpoint
-    const gt = encodeURIComponent(gamertag);
-    for (const url of [
-      `https://xbl.io/api/v2/player/search?gt=${gt}`,
-      `https://xbl.io/api/v2/friends/search?gt=${gt}`,
-    ]) {
-      try {
-        const data = await xboxApiGet(apiKey, url);
-        if (data?.code === 'ERROR' || data?.code === 'HTTP_ERROR') { diagnostic.push(`Search ${url.slice(-30)}: ERROR`); continue; }
-        const results = data?.content?.profileUsers || data?.profileUsers || (data?.content ? [data.content] : [data]);
-        for (const p of results) {
-          if (p?.xuid) { xuid = p.xuid; diagnostic.push(`XUID found: ${xuid}`); break; }
-        }
-        if (xuid) break;
-      } catch (e) { /* ignore */ }
-    }
-  }
-
-  if (!xuid) {
-    diagnostic.push('XUID introuvable — vérifie que la clé API xbl.io est liée à ton compte Xbox');
+    diagnostic.push('XUID introuvable. Vérifie ton Gamertag (casse, #, espaces). La fonction recherche de xbl.io nécessite un abonnement Premium sur https://xbl.io (gratuit ≈ 20req/min, mais limited).');
     return { games: [], diagnostic: diagnostic.join(' | ') };
   }
 

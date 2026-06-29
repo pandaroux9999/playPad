@@ -1111,10 +1111,20 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
   const [detailsLoading, setDetailsLoading] = useState(false);
   const gameId = game.game_id || game.id;
   const globalRating = ratings?.[gameId];
+  const hasUserReview = game.hasReview || draftRating > 0 || draftReview.trim().length > 0;
+  const userReviewText = game.review_text || game.reviewText || draftReview;
+  const userRatingValue = game.userRating || draftRating;
+  const isReviewPublic = game.review_public !== undefined ? game.review_public : (game.reviewPublic !== false);
 
   useEffect(() => {
     API.getGameReviews(gameId).then(data => {
-      setCommunityReviews(data.reviews?.filter(r => Number(r.user_id) !== Number(userId)) || []);
+      const all = data.reviews || [];
+      setCommunityReviews(all.filter(r => Number(r.user_id) !== Number(userId)) || []);
+      const mine = all.find(r => Number(r.user_id) === Number(userId));
+      if (mine) {
+        setDraftRating(mine.rating);
+        setDraftReview(mine.review_text || '');
+      }
     }).catch(() => {});
     // Fetch rich details
     setDetailsLoading(true);
@@ -1219,8 +1229,8 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
                   ),
                   h('div', { className: "flex gap-3" }, h('button', { onClick: () => setEditing(false), className: "flex-1 py-2.5 bg-secondary/60 text-foreground text-sm font-bold rounded-xl" }, "Annuler"), h('button', { onClick: handleSave, disabled: saving, className: "flex-1 py-2.5 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50", style: { background: GRAD } }, saving ? h(Loader, { size: 14, className: "animate-spin" }) : h(Check, { size: 14 }), saving ? "Sauvegarde\u2026" : "Sauvegarder"))
                 )
-              : game.hasReview
-                ? h('div', { className: "space-y-3" }, h(StarRating, { rating: game.userRating, size: 18 }), h('div', { className: "bg-secondary/40 rounded-xl p-3.5" }, h('p', { className: "text-xs text-foreground/80 leading-relaxed" }, game.review_text || game.reviewText)), h('div', { className: "flex items-center gap-2" }, (game.review_public || game.reviewPublic) ? h(Globe, { size: 12, className: "text-green-400" }) : h(Lock, { size: 12, className: "text-amber-400" }), h('span', { className: `text-xs font-bold ${(game.review_public || game.reviewPublic) ? "text-green-400" : "text-amber-400"}` }, (game.review_public || game.reviewPublic) ? "Critique publique" : "Critique priv\u00e9e")))
+              : hasUserReview
+                ? h('div', { className: "space-y-3" }, h(StarRating, { rating: userRatingValue, size: 18 }), h('div', { className: "bg-secondary/40 rounded-xl p-3.5" }, h('p', { className: "text-xs text-foreground/80 leading-relaxed" }, userReviewText)), h('div', { className: "flex items-center gap-2" }, isReviewPublic ? h(Globe, { size: 12, className: "text-green-400" }) : h(Lock, { size: 12, className: "text-amber-400" }), h('span', { className: `text-xs font-bold ${isReviewPublic ? "text-green-400" : "text-amber-400"}` }, isReviewPublic ? "Critique publique" : "Critique priv\u00e9e")))
                 : h('div', { className: "py-8 text-center" }, h(Edit3, { size: 28, className: "text-muted-foreground/20 mx-auto mb-2.5" }), h('p', { className: "text-xs text-muted-foreground" }, "Aucune critique r\u00e9dig\u00e9e"), h('p', { className: "text-xs mt-1", style: { color: "rgba(136,136,170,0.45)" } }, "Appuie sur \"R\u00e9diger\" pour partager ton avis"))
   ),
   communityReviews.length > 0 && h('div', { className: "border-t border-border pt-4 mt-4" },
@@ -1507,8 +1517,18 @@ function App() {
   };
 
   const handleSaveReview = async (gameId, rating, reviewText, reviewPublic, gameTitle, gameCover) => {
+    const [gData] = await Promise.all([API.getGames()]);
+    let next = gData.games.map(n);
+    const found = next.find(g => g.game_id === gameId) || next.find(g => g.title === gameTitle);
+    if (!found) {
+      await API.syncGames([{ game_id: gameId, title: gameTitle, cover: gameCover || '', user_rating: 0, review_text: "", review_public: 1, has_review: 0, status: "not_started", playtime: 0 }]);
+    }
     await API.saveReview(gameId, rating, reviewText, reviewPublic, gameTitle, gameCover);
-    await loadData();
+    const [g2] = await Promise.all([API.getGames()]);
+    next = g2.games.map(n);
+    setGames(next);
+    const updated = next.find(g => g.game_id === gameId) || next.find(g => g.title === gameTitle);
+    if (updated) setSelectedGame(updated);
     showToast("Critique sauvegard\u00e9e !");
   };
 
@@ -1580,7 +1600,7 @@ function App() {
         h('div', { className: "h-full overflow-y-auto" },
           view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user }),
           view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false }, ...prev ]); } }),
-          view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id); if (e) setSelectedGame(e); else { setSelectedGame({ ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); API.syncGames([{ ...game, user_rating: 0, review_text: "", review_public: 1, has_review: 0, status: "not_started", playtime: 0 }]).then(() => { loadData(); showToast('Jeu ajouté à la bibliothèque et au catalogue'); }).catch(() => {}); } }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings }),
+          view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
           view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail })
         )

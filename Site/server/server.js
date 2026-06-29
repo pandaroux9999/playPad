@@ -715,7 +715,7 @@ function xboxApiGet(apiKey, url) {
     const opts = {
       method: 'GET',
       headers: {
-        'x-authorization': apiKey,
+        'X-Authorization': apiKey,
         'User-Agent': 'PlayPad/1.0',
         'Accept': 'application/json',
       },
@@ -727,7 +727,7 @@ function xboxApiGet(apiKey, url) {
         console.log('[xboxApiGet]', url.split('?')[0].slice(-40), 'status:', resp.statusCode, 'body length:', d.length);
         if (resp.statusCode !== 200) {
           console.error('[xboxApiGet] HTTP error:', resp.statusCode, d.slice(0, 500));
-          resolve(JSON.parse(d));
+          try { resolve(JSON.parse(d)); } catch { resolve({ code: 'HTTP_ERROR', status: resp.statusCode, body: d.slice(0, 300) }); }
           return;
         }
         try { resolve(JSON.parse(d)); }

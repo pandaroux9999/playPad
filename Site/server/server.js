@@ -628,18 +628,15 @@ app.get('/api/platform/xbox/diagnostic', requireAuth, async (req, res) => {
 async function fetchXboxGames(apiKey, gamertag) {
   let diagnostic = [];
 
-  // Étape 1 : vérifier que la clé API est valide
+  // Étape 1 : vérifier que la clé API est valide (l'endpoint /account retourne les stats rate-limit)
   let apiKeyValid = false;
-  for (const acctUrl of ['https://xbl.io/api/v2/account', 'https://api.xbl.io/api/v2/account']) {
+  for (const acctUrl of ['https://xbl.io/api/v2/account']) {
     try {
       const accountData = await xboxApiGet(apiKey, acctUrl);
-      if (accountData?.code === 'ERROR' || accountData?.code === 'HTTP_ERROR') {
-        diagnostic.push(`Account ${acctUrl.slice(0,30)}: ERROR ${accountData?.status || ''} ${accountData?.message || accountData?.body || ''}`);
-        continue;
-      }
-      diagnostic.push(`Account ${acctUrl.slice(0,30)}: OK, keys=${Object.keys(accountData||{}).join(',')}, contentKeys=${accountData?.content ? Object.keys(accountData.content).join(',') : 'none'}`);
-      const acct = accountData?.content?.profileUsers?.[0] || accountData?.content || accountData;
-      if (acct?.xuid || acct?.gamertag || acct?.profileUsers) {
+      const acctContent = accountData?.content || {};
+      diagnostic.push(`Account ${acctUrl.slice(0,30)}: OK, code=${accountData?.code}, contentKeys=${Object.keys(acctContent).join(',')}`);
+      // Si on reçoit une réponse valide (structure {content, code}), la clé est bonne
+      if (accountData && typeof accountData === 'object' && accountData.code !== 'ERROR' && accountData.code !== 'HTTP_ERROR') {
         apiKeyValid = true;
         break;
       }
@@ -648,7 +645,7 @@ async function fetchXboxGames(apiKey, gamertag) {
     }
   }
   if (!apiKeyValid) {
-    diagnostic.push('XBL_API_KEY invalide ou expirée');
+    diagnostic.push('XBL_API_KEY invalide ou expirée — vérifie la clé sur https://xbl.io');
     return { games: [], diagnostic: diagnostic.join(' | ') };
   }
 

@@ -912,27 +912,6 @@ app.post('/api/messages/send', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
-  try {
-    const messages = await db.getMessages(req.session.userId, req.params.friendId);
-    await db.markMessagesRead(req.session.userId, req.params.friendId);
-    res.json({ messages });
-  } catch (err) {
-    console.error('[Messages] Error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/messages/conversations', requireAuth, async (req, res) => {
-  try {
-    const conversations = await db.getConversations(req.session.userId);
-    res.json({ conversations });
-  } catch (err) {
-    console.error('[Conversations] Error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.get('/api/messages/unread', requireAuth, async (req, res) => {
   try {
     const { data, error } = await db.supabaseAdmin
@@ -950,6 +929,27 @@ app.get('/api/messages/unread', requireAuth, async (req, res) => {
     res.json({ unread: data || [] });
   } catch (err) {
     console.error('[UnreadMessages] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/messages/conversations', requireAuth, async (req, res) => {
+  try {
+    const conversations = await db.getConversations(req.session.userId);
+    res.json({ conversations });
+  } catch (err) {
+    console.error('[Conversations] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
+  try {
+    const messages = await db.getMessages(req.session.userId, req.params.friendId);
+    await db.markMessagesRead(req.session.userId, req.params.friendId);
+    res.json({ messages });
+  } catch (err) {
+    console.error('[Messages] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

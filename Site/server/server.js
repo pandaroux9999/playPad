@@ -894,6 +894,8 @@ app.post('/api/suggestions', requireAuth, async (req, res) => {
   try {
     const { toUserId, gameId, gameTitle, gameCover, message } = req.body;
     await db.sendGameSuggestion(req.session.userId, toUserId, gameId, gameTitle, gameCover, message);
+    // Also send as chat message
+    await db.sendMessage(req.session.userId, toUserId, '🎮 Je te propose "' + gameTitle + '"' + (message ? ' : ' + message : ''));
     res.json({ ok: true });
   } catch (err) {
     console.error('[Suggestion] Error:', err.message);
@@ -951,6 +953,22 @@ app.get('/api/messages/conversations', requireAuth, async (req, res) => {
     res.json({ conversations });
   } catch (err) {
     console.error('[Conversations] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/messages/unread', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await db.supabaseAdmin
+      .from('messages')
+      .select('*, sender:sender_id(id, display_name, avatar_url)')
+      .eq('receiver_id', req.session.userId)
+      .eq('read', false)
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    res.json({ unread: data || [] });
+  } catch (err) {
+    console.error('[UnreadMessages] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

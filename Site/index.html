@@ -115,6 +115,7 @@ const API = {
   sendMessage: (receiverId, message) => API.request('POST', '/api/messages/send', { receiverId, message }),
   getMessages: (friendId) => API.request('GET', `/api/messages/${friendId}`),
   getConversations: () => API.request('GET', '/api/messages/conversations'),
+  getUnreadMessages: () => API.request('GET', '/api/messages/unread'),
 };
 
 function Icon(paths, viewBox = "0 0 24 24") {
@@ -1378,6 +1379,24 @@ function App() {
     const interval = setInterval(() => { API.heartbeat().catch(() => {}); }, 120000);
     return () => clearInterval(interval);
   }, []);
+  // Poll unread messages as notifications
+  const notifiedMsgIds = useRef(new Set());
+  useEffect(() => {
+    if (!user) return;
+    const poll = () => {
+      API.getUnreadMessages().then(d => {
+        for (const m of (d.unread || [])) {
+          if (!notifiedMsgIds.current.has(m.id)) {
+            notifiedMsgIds.current.add(m.id);
+            setNotifications(prev => [{ id: 'msg-' + m.id, text: '💬 ' + (m.sender?.display_name || 'Quelqu\'un') + ' : ' + m.message, read: false, friendId: m.sender_id }, ...prev]);
+          }
+        }
+      }).catch(() => {});
+    };
+    poll();
+    const interval = setInterval(poll, 10000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const loadData = async () => {
     const [gData, wData, tData, rData] = await Promise.all([API.getGames(), API.getWishlist(), API.getTopThree(), API.getGameRatings()]);

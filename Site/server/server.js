@@ -921,6 +921,40 @@ app.delete('/api/suggestions/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Messages — chat entre amis
+app.post('/api/messages/send', requireAuth, async (req, res) => {
+  try {
+    const { receiverId, message } = req.body;
+    if (!receiverId || !message) return res.status(400).json({ error: 'Destinataire et message requis' });
+    const msg = await db.sendMessage(req.session.userId, receiverId, message);
+    res.json({ message: msg });
+  } catch (err) {
+    console.error('[MessageSend] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
+  try {
+    const messages = await db.getMessages(req.session.userId, req.params.friendId);
+    await db.markMessagesRead(req.session.userId, req.params.friendId);
+    res.json({ messages });
+  } catch (err) {
+    console.error('[Messages] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/messages/conversations', requireAuth, async (req, res) => {
+  try {
+    const conversations = await db.getConversations(req.session.userId);
+    res.json({ conversations });
+  } catch (err) {
+    console.error('[Conversations] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Debug endpoint — vérifier les variables d'environnement
 app.get('/api/debug/env', (req, res) => {
   res.json({

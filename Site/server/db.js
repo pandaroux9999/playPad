@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const crypto = require('crypto');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
@@ -53,7 +54,6 @@ async function getUserByEmail(email) {
 }
 
 async function createResetToken(userId, type) {
-  const crypto = require('crypto');
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + 3600000); // 1 hour
   const { error } = await supabaseAdmin
@@ -481,6 +481,57 @@ async function setXboxGamertag(userId, gamertag) {
   if (error) throw new Error(error.message);
 }
 
+async function sendMessage(senderId, receiverId, message) {
+  const { data, error } = await supabaseAdmin
+    .from('messages')
+    .insert({ sender_id: senderId, receiver_id: receiverId, message })
+    .select('*')
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function getMessages(userId, friendId) {
+  const { data, error } = await supabaseAdmin
+    .from('messages')
+    .select('*')
+    .or(`and(sender_id.eq.${userId},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${userId})`)
+    .order('created_at', { ascending: true })
+    .limit(100);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+async function markMessagesRead(userId, senderId) {
+  const { error } = await supabaseAdmin
+    .from('messages')
+    .update({ read: true })
+    .eq('sender_id', senderId)
+    .eq('receiver_id', userId)
+    .eq('read', false);
+  if (error) throw new Error(error.message);
+}
+
+async function getConversations(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('messages')
+    .select(`*, sender:sender_id(id, display_name, avatar_url), receiver:receiver_id(id, display_name, avatar_url)`)
+    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  const conv = {};
+  for (const m of data || []) {
+    const otherId = m.sender_id === userId ? m.receiver_id : m.sender_id;
+    const other = m.sender_id === userId ? m.receiver : m.sender;
+    if (!conv[otherId] || new Date(m.created_at) > new Date(conv[otherId].lastMessage.created_at)) {
+      conv[otherId] = { otherId, other, lastMessage: m, unread: !m.read && m.receiver_id === userId ? 1 : 0 };
+    } else if (!m.read && m.receiver_id === userId) {
+      conv[otherId].unread++;
+    }
+  }
+  return Object.values(conv).sort((a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at));
+}
+
 module.exports = {
   supabaseAdmin,
   createUser,
@@ -524,4 +575,8 @@ module.exports = {
   updateLastSeen,
   setSteamId,
   setXboxGamertag,
+  sendMessage,
+  getMessages,
+  markMessagesRead,
+  getConversations,
 };

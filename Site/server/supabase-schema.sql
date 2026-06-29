@@ -90,6 +90,15 @@ CREATE TABLE IF NOT EXISTS reset_tokens (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS messages (
+  id SERIAL PRIMARY KEY,
+  sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  receiver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Table catalogue partagé (tous les jeux connus, dédupliqués par game_id)
 CREATE TABLE IF NOT EXISTS catalog (
   id SERIAL PRIMARY KEY,

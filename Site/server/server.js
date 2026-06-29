@@ -553,6 +553,8 @@ async function enrichGameFromSteam(game) {
         cover: game.cover || d.header_image || '',
         genre: (d.genres && d.genres.map(g => g.description).join(', ')) || game.genre || '',
         year: (d.release_date && d.release_date.date ? parseInt(d.release_date.date.match(/\d{4}/)?.[0]) || 0 : 0) || game.year,
+        developer: (d.developers && d.developers[0]) || game.developer || '',
+        publisher: (d.publishers && d.publishers[0]) || game.publisher || '',
       };
     }
   } catch (e) { /* Steam Store non disponible, garder les données d'origine */ }
@@ -587,7 +589,7 @@ app.post('/api/platform/xbox/connect', requireAuth, async (req, res) => {
     await db.setXboxGamertag(req.session.userId, gamertag);
     const xblKey = process.env.XBL_API_KEY;
     console.log('[XboxConnect] XBL_API_KEY defined:', !!xblKey, 'gamertag:', gamertag);
-    let count = 0;
+    let count = 0, warning = '';
     if (xblKey) {
       const games = await fetchXboxGames(xblKey, gamertag);
       console.log('[XboxConnect] games fetched:', games.length);
@@ -596,9 +598,12 @@ app.post('/api/platform/xbox/connect', requireAuth, async (req, res) => {
         await db.ensureCatalogGame(await enrichGameFromSteam(game));
       }
       count = games.length;
+      if (count === 0) warning = 'Aucun jeu trouvé pour ce Gamertag (profil privé ?)';
+    } else {
+      warning = 'XBL_API_KEY non configurée sur le serveur — jeux Xbox non synchronisés. Va sur https://xbl.io pour obtenir une clé gratuite.';
     }
-    console.log('[XboxConnect] OK, count:', count);
-    res.json({ ok: true, count });
+    console.log('[XboxConnect] OK, count:', count, 'warning:', warning);
+    res.json({ ok: true, count, warning });
   } catch (err) {
     console.error('[XboxConnect] Error:', err.message);
     res.status(500).json({ error: err.message });

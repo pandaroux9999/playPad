@@ -233,6 +233,7 @@ function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown
     h('div', { className: "absolute bottom-0 left-0 right-0 p-2.5" },
       h(PlatformBadge, { platform: game.platform }),
       h('p', { className: "text-white text-xs font-bold leading-tight mt-1.5 line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
+      game.developer && h('p', { className: "text-[9px] text-muted-foreground/70 leading-tight mt-0.5 line-clamp-1" }, game.developer),
       h('div', { className: "mt-1.5" }, h(StarRating, { rating: game.userRating, size: 9 }))
     )
   );
@@ -319,6 +320,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterYearMin, setFilterYearMin] = useState("");
   const [filterYearMax, setFilterYearMax] = useState("");
+  const [filterDeveloper, setFilterDeveloper] = useState("");
   const filtered = useMemo(() => games.filter(g =>
     (activePlatform === "all" || g.platform === activePlatform) &&
     (filterGenre === "all" || g.genre === filterGenre) &&
@@ -327,10 +329,11 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
     (filterRatingMax === 5 || (g.userRating || 0) <= filterRatingMax) &&
     (!filterYearMin || (g.year || 0) >= Number(filterYearMin)) &&
     (!filterYearMax || (g.year || 0) <= Number(filterYearMax)) &&
+    (!filterDeveloper || (g.developer || '').toLowerCase().includes(filterDeveloper.toLowerCase())) &&
     g.title.toLowerCase().includes(search.toLowerCase())
-  ), [games, activePlatform, search, filterGenre, filterRatingMin, filterRatingMax, filterStatus, filterYearMin, filterYearMax]);
-  const hasActiveFilters = filterGenre !== "all" || filterStatus !== "all" || filterRatingMin > 0 || filterRatingMax < 5 || filterYearMin || filterYearMax;
-  const clearFilters = () => { setFilterGenre("all"); setFilterStatus("all"); setFilterRatingMin(0); setFilterRatingMax(5); setFilterYearMin(""); setFilterYearMax(""); };
+  ), [games, activePlatform, search, filterGenre, filterRatingMin, filterRatingMax, filterStatus, filterYearMin, filterYearMax, filterDeveloper]);
+  const hasActiveFilters = filterGenre !== "all" || filterStatus !== "all" || filterRatingMin > 0 || filterRatingMax < 5 || filterYearMin || filterYearMax || filterDeveloper;
+  const clearFilters = () => { setFilterGenre("all"); setFilterStatus("all"); setFilterRatingMin(0); setFilterRatingMax(5); setFilterYearMin(""); setFilterYearMax(""); setFilterDeveloper(""); };
   const totalHours = games.reduce((s, g) => s + g.playtime, 0);
   const platforms = ["all", "ps5", "steam", "epic", "nintendo", "xbox"];
   const [showNotifications, setShowNotifications] = useState(false);
@@ -444,9 +447,13 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
                 h('span', { className: "text-[10px] text-muted-foreground" }, "\u00e0"),
                 h('input', { value: filterYearMax, onChange: e => setFilterYearMax(e.target.value), type: "number", placeholder: "Max", className: "w-16 bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-[10px] text-foreground placeholder-muted-foreground outline-none" })
               )
+            ),
+            h('div', null,
+              h('p', { className: "text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5" }, "D\u00e9veloppeur"),
+              h('input', { value: filterDeveloper, onChange: e => setFilterDeveloper(e.target.value), placeholder: "Rechercher par d\u00e9veloppeur\u2026", className: "w-full bg-secondary/60 border border-border rounded-lg px-2.5 py-1.5 text-[10px] text-foreground placeholder-muted-foreground outline-none" })
             )
           ),
-          (filterGenre !== "all" || filterStatus !== "all" || filterRatingMin > 0 || filterRatingMax < 5 || filterYearMin || filterYearMax) && h('button', { onClick: clearFilters, className: "w-full mt-3 py-2 text-[10px] font-bold rounded-xl flex items-center justify-center gap-1.5", style: { background: "rgba(239,68,68,0.1)", color: "#ef4444" } }, h(X, { size: 10 }), "R\u00e9initialiser les filtres")
+          (filterGenre !== "all" || filterStatus !== "all" || filterRatingMin > 0 || filterRatingMax < 5 || filterYearMin || filterYearMax || filterDeveloper) && h('button', { onClick: clearFilters, className: "w-full mt-3 py-2 text-[10px] font-bold rounded-xl flex items-center justify-center gap-1.5", style: { background: "rgba(239,68,68,0.1)", color: "#ef4444" } }, h(X, { size: 10 }), "R\u00e9initialiser les filtres")
         )
       ),
       showSync && h('div', { className: "rounded-2xl p-3.5", style: { background: "#1a1a2e", border: `1px solid ${P1}30`, position: "absolute", zIndex: 20, top: "100%", left: 16, right: 16 } },
@@ -465,9 +472,11 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
               const current = isXbox ? user?.xbox_gamertag : '';
               const g = prompt(`Entrez votre ${label} :`, current || '');
               if (g) {
-                if (isXbox) await API.connectXbox(g);
-                setConnected(c => ({ ...c, [platform]: true })); onSyncComplete?.();
-                showToast(`${cfg.name} ${isConnected ? 're-synchronisé' : 'connecté'}`);
+                try {
+                  if (isXbox) { const r = await API.connectXbox(g); if (r.warning) showToast(r.warning); if (r.count === 0 && !r.warning?.includes('XBL_API_KEY')) { showToast('Aucun jeu trouvé pour ce Gamertag'); return; } }
+                  setConnected(c => ({ ...c, [platform]: true })); onSyncComplete?.();
+                  showToast(`${cfg.name} ${isConnected ? 're-synchronisé' : 'connecté'}${isXbox && g === current ? ' · re-sync' : ''}`);
+                } catch (err) { showToast('Erreur ' + cfg.name + ' : ' + (err.message || 'inconnue')); }
               }
             };
           return h('div', { key: platform, className: "flex items-center gap-2.5 py-1.5" + (isXbox ? " cursor-pointer hover:opacity-80 transition-opacity" : ""), onClick: isXbox ? onConnect : undefined },
@@ -483,7 +492,10 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
                       ? h('button', { onClick: async (e) => { e.stopPropagation(); if (syncing === 'steam') return; setSyncing('steam'); try { const r = await API.resyncSteam(); showToast(`${r.count} jeux Steam ajoutés à la bibliothèque et au catalogue`); onSyncComplete?.(); } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); } finally { setSyncing(null); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, syncing === 'steam' ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
                       : h('a', { href: "/api/auth/steam", className: "p-1.5 rounded-lg inline-flex", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
                     )
-                    : null,
+                    : (isXbox && user?.xbox_gamertag
+                      ? h('button', { onClick: async (e) => { e.stopPropagation(); setSyncing('xbox'); try { const r = await API.connectXbox(user.xbox_gamertag); if (r.warning) showToast(r.warning); showToast(`${r.count} jeux Xbox synchronisés`); onSyncComplete?.(); } catch (err) { showToast('Erreur Xbox: ' + (err.message || 'inconnue')); } finally { setSyncing(null); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, syncing === 'xbox' ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
+                      : null
+                    ),
                   h('button', { onClick: async (e) => { e.stopPropagation(); if (!confirm(`Supprimer tous les jeux ${cfg.name} de votre bibliothèque ?`)) return; await API.disconnectPlatform(platform); setConnected(c => ({ ...c, [platform]: false })); onSyncComplete?.(); showToast(`Jeux ${cfg.name} retirés`); }, className: "p-1.5 rounded-lg hover:opacity-80", style: { background: "rgba(239,68,68,0.15)" } }, h(Trash2, { size: 10, style: { color: "#ef4444" } }))]
                 : [h('button', { onClick: onConnect, className: "px-2 py-1 text-[9px] font-bold rounded-md text-white whitespace-nowrap", style: { background: GRAD } }, "+ " + cfg.name)]
             )
@@ -535,6 +547,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings }) {
   const [filterRatingMax, setFilterRatingMax] = useState(5);
   const [filterYearMin, setFilterYearMin] = useState("");
   const [filterYearMax, setFilterYearMax] = useState("");
+  const [filterDeveloper, setFilterDeveloper] = useState("");
   useEffect(() => { API.getCatalog().then(d => setCatalog(d.catalog || [])).catch(() => {}); }, []);
   const genres = useMemo(() => ["all", ...new Set(catalog.map(g => g.genre).filter(Boolean))], [catalog]);
   const platforms = ["all", "ps5", "steam", "epic", "nintendo", "xbox"];
@@ -545,10 +558,11 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings }) {
     (filterRatingMax === 5 || (ratings?.[g.game_id] || 0) <= filterRatingMax) &&
     (!filterYearMin || (g.year || 0) >= Number(filterYearMin)) &&
     (!filterYearMax || (g.year || 0) <= Number(filterYearMax)) &&
+    (!filterDeveloper || (g.developer || '').toLowerCase().includes(filterDeveloper.toLowerCase())) &&
     g.title.toLowerCase().includes(search.toLowerCase())
-  ), [catalog, activePlatform, activeGenre, search, filterRatingMin, filterRatingMax, filterYearMin, filterYearMax]);
-  const hasActiveFilters = activePlatform !== "all" || activeGenre !== "all" || filterRatingMin > 0 || filterRatingMax < 5 || filterYearMin || filterYearMax;
-  const clearFilters = () => { setActivePlatform("all"); setActiveGenre("all"); setFilterRatingMin(0); setFilterRatingMax(5); setFilterYearMin(""); setFilterYearMax(""); };
+  ), [catalog, activePlatform, activeGenre, search, filterRatingMin, filterRatingMax, filterYearMin, filterYearMax, filterDeveloper]);
+  const hasActiveFilters = activePlatform !== "all" || activeGenre !== "all" || filterRatingMin > 0 || filterRatingMax < 5 || filterYearMin || filterYearMax || filterDeveloper;
+  const clearFilters = () => { setActivePlatform("all"); setActiveGenre("all"); setFilterRatingMin(0); setFilterRatingMax(5); setFilterYearMin(""); setFilterYearMax(""); setFilterDeveloper(""); };
 
   return h('div', { className: "flex flex-col h-full view-enter" },
     h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
@@ -587,16 +601,20 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings }) {
                 [1,2,3,4,5].map(v => h('button', { key: v, onClick: () => setFilterRatingMax(v), className: "px-1.5 py-1 rounded-lg text-[10px] font-bold", style: filterRatingMax === v ? { background: GRAD, color: "#fff" } : { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, String(v)))
               )
             ),
-            h('div', null,
-              h('p', { className: "text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5" }, "Ann\u00e9e"),
-              h('div', { className: "flex items-center gap-2" },
-                h('input', { value: filterYearMin, onChange: e => setFilterYearMin(e.target.value), type: "number", placeholder: "Min", className: "w-16 bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-[10px] text-foreground placeholder-muted-foreground outline-none" }),
-                h('span', { className: "text-[10px] text-muted-foreground" }, "\u00e0"),
-                h('input', { value: filterYearMax, onChange: e => setFilterYearMax(e.target.value), type: "number", placeholder: "Max", className: "w-16 bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-[10px] text-foreground placeholder-muted-foreground outline-none" })
+              h('div', null,
+                h('p', { className: "text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5" }, "Ann\u00e9e"),
+                h('div', { className: "flex items-center gap-2" },
+                  h('input', { value: filterYearMin, onChange: e => setFilterYearMin(e.target.value), type: "number", placeholder: "Min", className: "w-16 bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-[10px] text-foreground placeholder-muted-foreground outline-none" }),
+                  h('span', { className: "text-[10px] text-muted-foreground" }, "\u00e0"),
+                  h('input', { value: filterYearMax, onChange: e => setFilterYearMax(e.target.value), type: "number", placeholder: "Max", className: "w-16 bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-[10px] text-foreground placeholder-muted-foreground outline-none" })
+                )
+              ),
+              h('div', null,
+                h('p', { className: "text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5" }, "D\u00e9veloppeur"),
+                h('input', { value: filterDeveloper, onChange: e => setFilterDeveloper(e.target.value), placeholder: "Rechercher par d\u00e9veloppeur\u2026", className: "w-full bg-secondary/60 border border-border rounded-lg px-2.5 py-1.5 text-[10px] text-foreground placeholder-muted-foreground outline-none" })
               )
-            )
-          ),
-          hasActiveFilters && h('button', { onClick: clearFilters, className: "w-full mt-3 py-2 text-[10px] font-bold rounded-xl flex items-center justify-center gap-1.5", style: { background: "rgba(239,68,68,0.1)", color: "#ef4444" } }, h(X, { size: 10 }), "R\u00e9initialiser les filtres")
+            ),
+            hasActiveFilters && h('button', { onClick: clearFilters, className: "w-full mt-3 py-2 text-[10px] font-bold rounded-xl flex items-center justify-center gap-1.5", style: { background: "rgba(239,68,68,0.1)", color: "#ef4444" } }, h(X, { size: 10 }), "R\u00e9initialiser les filtres")
         )
       ),
     ),
@@ -1162,19 +1180,20 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
           h('div', { className: "grid grid-cols-4 gap-1.5 mb-3" },
             [{ icon: h(Clock, { size: 11, style: { color: P2 } }), val: `${game.playtime || 0}h`, sub: "jou\u00e9es" },{ icon: h(Trophy, { size: 11, className: "text-amber-400" }), val: String(game.year || "\u2014"), sub: "sortie" },{ icon: h(Star, { size: 11, fill: "#f59e0b", stroke: "#f59e0b" }), val: game.userRating ? `${game.userRating}/5` : "\u2014", sub: "ta note" },{ icon: h(Star, { size: 11, fill: globalRating ? "#8B5CF6" : "none", stroke: "#8B5CF6" }), val: globalRating ? globalRating.toFixed(1) : "\u2014", sub: "globale" }].map(({ icon, val, sub }) => h('div', { key: sub, className: "bg-secondary/50 rounded-xl p-2 text-center" }, h('div', { className: "flex justify-center mb-0.5" }, icon), h('p', { className: "text-xs font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, val), h('p', { className: "text-[9px] text-muted-foreground" }, sub)))
           ),
-          gameDetails && h('div', { className: "border-t border-border pt-4 mb-4" },
+          h('div', { className: "border-t border-border pt-4 mb-4" },
             h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2.5 flex items-center gap-1.5" }, h(Info, { size: 10 }), "D\u00e9tails"),
-            gameDetails.description && h('p', { className: "text-[11px] text-foreground/70 leading-relaxed mb-3" }, gameDetails.description),
+            gameDetails?.description && h('p', { className: "text-[11px] text-foreground/70 leading-relaxed mb-3" }, gameDetails.description),
             h('div', { className: "grid grid-cols-2 gap-2 text-[10px]" },
-              gameDetails.developers?.length > 0 && h('div', null, h('span', { className: "text-muted-foreground" }, "D\u00e9veloppeur"), h('p', { className: "font-bold text-foreground" }, gameDetails.developers.join(', '))),
-              gameDetails.publishers?.length > 0 && h('div', null, h('span', { className: "text-muted-foreground" }, "\u00c9diteur"), h('p', { className: "font-bold text-foreground" }, gameDetails.publishers.join(', '))),
-              gameDetails.release_date && h('div', null, h('span', { className: "text-muted-foreground" }, "Sortie"), h('p', { className: "font-bold text-foreground" }, gameDetails.release_date)),
-              gameDetails.platforms?.length > 0 && h('div', null, h('span', { className: "text-muted-foreground" }, "Plateformes"), h('p', { className: "font-bold text-foreground" }, gameDetails.platforms.map(p => p === 'windows' ? 'PC' : p === 'mac' ? 'Mac' : 'Linux').join(', '))),
-              gameDetails.price && h('div', null, h('span', { className: "text-muted-foreground" }, "Prix"), h('p', { className: "font-bold text-green-400" }, gameDetails.price)),
-              gameDetails.metacritic?.score && h('div', null, h('span', { className: "text-muted-foreground" }, "Metacritic"), h('p', { className: "font-bold", style: { color: gameDetails.metacritic.score >= 75 ? "#22c55e" : gameDetails.metacritic.score >= 50 ? "#f59e0b" : "#ef4444" } }, gameDetails.metacritic.score, "/100")),
-              gameDetails.recommendations > 0 && h('div', null, h('span', { className: "text-muted-foreground" }, "Recommandations"), h('p', { className: "font-bold text-foreground" }, gameDetails.recommendations.toLocaleString('fr-FR')))
+              (gameDetails?.developers?.length > 0) && h('div', null, h('span', { className: "text-muted-foreground" }, "D\u00e9veloppeur"), h('p', { className: "font-bold text-foreground" }, gameDetails.developers.join(', '))),
+              (gameDetails?.publishers?.length > 0) && h('div', null, h('span', { className: "text-muted-foreground" }, "\u00c9diteur"), h('p', { className: "font-bold text-foreground" }, gameDetails.publishers.join(', '))),
+              h('div', null, h('span', { className: "text-muted-foreground" }, "Sortie"), h('p', { className: "font-bold text-foreground" }, gameDetails?.release_date || String(game.year || "\u2014"))),
+              gameDetails?.release_date && game.year && h('div', null, h('span', { className: "text-muted-foreground" }, "Ann\u00e9e"), h('p', { className: "font-bold text-foreground" }, String(game.year))),
+              (gameDetails?.platforms?.length > 0) && h('div', null, h('span', { className: "text-muted-foreground" }, "Plateformes"), h('p', { className: "font-bold text-foreground" }, gameDetails.platforms.map(p => p === 'windows' ? 'PC' : p === 'mac' ? 'Mac' : 'Linux').join(', '))),
+              gameDetails?.price && h('div', null, h('span', { className: "text-muted-foreground" }, "Prix"), h('p', { className: "font-bold text-green-400" }, gameDetails.price)),
+              gameDetails?.metacritic?.score && h('div', null, h('span', { className: "text-muted-foreground" }, "Metacritic"), h('p', { className: "font-bold", style: { color: gameDetails.metacritic.score >= 75 ? "#22c55e" : gameDetails.metacritic.score >= 50 ? "#f59e0b" : "#ef4444" } }, gameDetails.metacritic.score, "/100")),
+              (gameDetails?.recommendations > 0) && h('div', null, h('span', { className: "text-muted-foreground" }, "Recommandations"), h('p', { className: "font-bold text-foreground" }, gameDetails.recommendations.toLocaleString('fr-FR')))
             ),
-            gameDetails.website && h('a', { href: gameDetails.website, target: "_blank", className: "inline-flex items-center gap-1 mt-2 text-[10px] font-bold hover:opacity-80", style: { color: P1 } }, h(ExternalLink, { size: 10 }), "Site officiel")
+            gameDetails?.website && h('a', { href: gameDetails.website, target: "_blank", className: "inline-flex items-center gap-1 mt-2 text-[10px] font-bold hover:opacity-80", style: { color: P1 } }, h(ExternalLink, { size: 10 }), "Site officiel")
           ),
           game.game_id && h('button', { onClick: async () => { if (confirm("Supprimer ce jeu de votre biblioth\u00e8que ?")) { await onDeleteGame?.(game.game_id); } }, className: "w-full mb-3 py-2 text-[10px] font-bold rounded-xl flex items-center justify-center gap-1.5", style: { background: "rgba(239,68,68,0.1)", color: "#ef4444" } }, h(Trash2, { size: 11 }), "Retirer de ma biblioth\u00e8que"),
           h('div', { className: "border-t border-border pt-4" },

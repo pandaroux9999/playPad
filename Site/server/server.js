@@ -542,22 +542,48 @@ function steamApiGet(apiKey, iface, method, params) {
 
 // Enrichit un jeu avec les infos Steam Store — genre, année, cover si absente
 async function enrichGameFromSteam(game) {
-  if (!game.game_id || !game.game_id.startsWith('steam-')) return game;
-  const appid = game.game_id.replace('steam-', '');
-  try {
-    const details = await steamStoreGet(appid);
-    if (details && details.success && details.data) {
-      const d = details.data;
-      return {
-        ...game,
-        cover: game.cover || d.header_image || '',
-        genre: (d.genres && d.genres.map(g => g.description).join(', ')) || game.genre || '',
-        year: (d.release_date && d.release_date.date ? parseInt(d.release_date.date.match(/\d{4}/)?.[0]) || 0 : 0) || game.year,
-        developer: (d.developers && d.developers[0]) || game.developer || '',
-        publisher: (d.publishers && d.publishers[0]) || game.publisher || '',
-      };
-    }
-  } catch (e) { /* Steam Store non disponible, garder les données d'origine */ }
+  // Pour les jeux Steam, on a l'appid direct
+  if (game.game_id && game.game_id.startsWith('steam-')) {
+    const appid = game.game_id.replace('steam-', '');
+    try {
+      const details = await steamStoreGet(appid);
+      if (details && details.success && details.data) {
+        const d = details.data;
+        return {
+          ...game,
+          cover: game.cover || d.header_image || '',
+          genre: (d.genres && d.genres.map(g => g.description).join(', ')) || game.genre || '',
+          year: (d.release_date && d.release_date.date ? parseInt(d.release_date.date.match(/\d{4}/)?.[0]) || 0 : 0) || game.year,
+          developer: (d.developers && d.developers[0]) || game.developer || '',
+          publisher: (d.publishers && d.publishers[0]) || game.publisher || '',
+        };
+      }
+    } catch (e) { /* Steam Store non disponible */ }
+  }
+
+  // Pour les jeux non-Steam (Xbox, Playnite, etc.), chercher dans le catalogue par titre
+  if (!game.cover || !game.genre || !game.year) {
+    try {
+      const catalog = await db.getCatalog();
+      const match = catalog.find(c =>
+        c.title && game.title &&
+        (c.title.toLowerCase() === game.title.toLowerCase() ||
+         c.title.toLowerCase().includes(game.title.toLowerCase()) ||
+         game.title.toLowerCase().includes(c.title.toLowerCase()))
+      );
+      if (match) {
+        return {
+          ...game,
+          cover: game.cover || match.cover || '',
+          genre: game.genre || match.genre || '',
+          year: game.year || match.year || (game.year || 0),
+          developer: game.developer || match.developer || '',
+          publisher: game.publisher || match.publisher || '',
+        };
+      }
+    } catch (e) { /* catalogue non disponible */ }
+  }
+
   return game;
 }
 

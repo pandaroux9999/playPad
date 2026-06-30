@@ -354,6 +354,13 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const unread = notifications.filter(n => !n.read).length;
   const [bridgeUrl, setBridgeUrl] = useState(() => localStorage.getItem('playnite_bridge_url') || 'http://localhost:3456');
   const [showBridgeConfig, setShowBridgeConfig] = useState(false);
+  const [bridgeOnline, setBridgeOnline] = useState(null);
+
+  useEffect(() => {
+    fetch(bridgeUrl + '/health', { signal: AbortSignal.timeout(3000) })
+      .then(r => setBridgeOnline(r.ok))
+      .catch(() => setBridgeOnline(false));
+  }, [bridgeUrl]);
   const handleFileImport = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -512,9 +519,21 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
             )
           )
         })),
-        h('div', { className: "mt-2 pt-2 border-t border-border flex items-center gap-2" },
-          h('button', { onClick: () => setShowBridgeConfig(!showBridgeConfig), className: "text-[9px] font-medium hover:opacity-80", style: { color: `${P1}aa` } }, showBridgeConfig ? "Masquer" : "Configurer le pont Playnite"),
-          showBridgeConfig && h('input', { value: bridgeUrl, onChange: e => { setBridgeUrl(e.target.value); localStorage.setItem('playnite_bridge_url', e.target.value); }, placeholder: "http://localhost:3456", className: "flex-1 bg-secondary/60 border border-border rounded-lg px-2 py-1 text-[10px] text-foreground placeholder-muted-foreground outline-none" })
+        h('div', { className: "mt-2 pt-2 border-t border-border" },
+          h('div', { className: "flex items-center gap-2 mb-2" },
+            h('div', { className: "w-5 h-5 rounded-md flex items-center justify-center", style: { background: bridgeOnline === true ? "#22c55e15" : bridgeOnline === false ? "#ef444415" : "rgba(26,26,46,0.5)" } },
+              h(Gamepad2, { size: 10, style: { color: bridgeOnline === true ? "#22c55e" : bridgeOnline === false ? "#ef4444" : "#888" } })
+            ),
+            h('span', { className: "text-[10px] font-bold", style: { color: bridgeOnline === true ? "#22c55e" : bridgeOnline === false ? "#ef4444" : "#888" } },
+              bridgeOnline === null ? "Vérification..." : bridgeOnline ? "Playnite Bridge en ligne" : "Bridge hors ligne"
+            ),
+            bridgeOnline && h('button', { onClick: async () => { setSyncing('all'); try { await syncFromBridge(); } catch(e) {} setSyncing(null); }, className: "ml-auto px-2 py-0.5 text-[9px] font-bold rounded-md text-white", style: { background: GRAD } }, "Sync")
+          ),
+          !showBridgeConfig && h('button', { onClick: () => setShowBridgeConfig(true), className: "text-[9px] font-medium hover:opacity-80", style: { color: `${P1}80` } }, "Configurer l'URL du bridge"),
+          showBridgeConfig && h('div', { className: "flex gap-1.5 mt-1" },
+            h('input', { value: bridgeUrl, onChange: e => { setBridgeUrl(e.target.value); localStorage.setItem('playnite_bridge_url', e.target.value); }, placeholder: "http://localhost:3456", className: "flex-1 bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-[10px] text-foreground placeholder-muted-foreground outline-none" }),
+            h('button', { onClick: () => { setShowBridgeConfig(false); fetch(bridgeUrl + '/health', { signal: AbortSignal.timeout(3000) }).then(r => setBridgeOnline(r.ok)).catch(() => setBridgeOnline(false)); }, className: "px-2 py-1.5 text-[9px] font-bold rounded-lg text-white", style: { background: GRAD } }, "OK")
+          )
         ),
         h('div', { className: "mt-2 pt-2 border-t border-border" },
           h('label', { className: "flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" },
@@ -988,13 +1007,15 @@ function ReviewsView({ games, onSelect }) {
   );
 }
 
-function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar, onUpdateEmail }) {
+function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar, onUpdateEmail, onSyncComplete, showToast }) {
   const [avatarModal, setAvatarModal] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || "");
   const [avatarSaving, setAvatarSaving] = useState(false);
   const [emailModal, setEmailModal] = useState(false);
   const [email, setEmail] = useState(user?.email || "");
   const [emailSaving, setEmailSaving] = useState(false);
+  const [syncingPlatform, setSyncingPlatform] = useState(null);
+  const [bridgeStatus, setBridgeStatus] = useState('unknown');
   const fileInputRef = useRef(null);
   const completed  = games.filter(g => g.status === "completed").length;
   const playing    = games.filter(g => g.status === "playing").length;
@@ -1007,6 +1028,19 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   const ratingDist = [5,4,3,2,1].map(r => ({ score: r, count: games.filter(g => g.userRating === r).length }));
   const maxCount   = Math.max(...ratingDist.map(r => r.count), 1);
   const initials = (user?.display_name || "??").charAt(0).toUpperCase() + ((user?.display_name || "?")[1] || "").toUpperCase();
+  const platformStats = ["steam","xbox","epic","gog","nintendo","ps5"].map(p => ({
+    id: p, name: PLATFORM_CONFIG[p]?.name || p, color: PLATFORM_CONFIG[p]?.color || "#888",
+    count: games.filter(g => (g.platforms || [g.platform]).filter(Boolean).includes(p)).length,
+    connected: p === "steam" ? !!user?.steam_id : p === "xbox" ? !!user?.xbox_gamertag : p === "epic" ? games.some(g => g.platform === 'epic') : false,
+  }));
+  const connectedCount = platformStats.filter(p => p.connected).length;
+
+  useEffect(() => {
+    const bridgeUrl = localStorage.getItem('playnite_bridge_url') || 'http://localhost:3456';
+    fetch(bridgeUrl + '/health', { signal: AbortSignal.timeout(3000) })
+      .then(r => { setBridgeStatus(r.ok ? 'online' : 'offline'); })
+      .catch(() => setBridgeStatus('offline'));
+  }, []);
 
   return h('div', { className: "flex flex-col h-full overflow-y-auto view-enter", style: { scrollbarWidth: "none" } },
     h('div', { className: "px-4 pt-4 pb-4" },
@@ -1075,6 +1109,45 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
     )))),
     h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Distribution des notes"), h('div', { className: "bg-card border border-border rounded-2xl p-4" }, ratingDist.map(({ score, count }) => h('div', { key: score, className: "flex items-center gap-2 mb-1.5 last:mb-0" }, h('div', { className: "flex gap-px w-14 flex-shrink-0" }, Array.from({ length: score }).map((_, i) => h(Star, { key: i, size: 9, fill: "#f59e0b", stroke: "#f59e0b" }))), h('div', { className: "flex-1 h-2 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full bg-amber-500", style: { width: `${(count / maxCount) * 100}%` } })), h('span', { className: "text-xs text-muted-foreground w-4 text-right font-mono" }, count))))),
     h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Par plateforme"), h('div', { className: "bg-card border border-border rounded-2xl p-4 flex flex-wrap gap-4" }, ["ps5","steam","epic","nintendo","xbox"].map(p => h('div', { key: p, className: "flex items-center gap-2" }, h(PlatformLogo, { platform: p, size: 16 }), h('span', { className: "text-xs font-bold text-foreground" }, PLATFORM_CONFIG[p].label), h('span', { className: "text-xs font-black font-mono", style: { color: p === "steam" ? "#c2dbf0" : PLATFORM_CONFIG[p].color } }, games.filter(g => (g.platforms || [g.platform]).filter(Boolean).includes(p)).length))))),
+    h('div', { className: "px-4 mb-4" },
+      h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5" }, h(Wifi, { size: 12 }), "Connexions"),
+      h('div', { className: "bg-card border border-border rounded-2xl p-3 space-y-2" },
+        platformStats.map(p => h('div', { key: p.id, className: "flex items-center gap-2.5 py-1.5 px-2 rounded-xl", style: { background: p.connected ? `${p.color}08` : "transparent" } },
+          h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0", style: { background: p.color + "20" } }, h(PlatformLogo, { platform: p.id, size: 16 })),
+          h('div', { className: "flex-1 min-w-0" },
+            h('div', { className: "flex items-center gap-1.5" },
+              h('span', { className: "text-[11px] font-bold text-foreground" }, p.name),
+              h('div', { className: "w-1.5 h-1.5 rounded-full", style: { background: p.connected ? "#4ade80" : "#555", boxShadow: p.connected ? "0 0 6px #4ade8080" : "none" } })
+            ),
+            h('p', { className: "text-[9px] text-muted-foreground" }, p.connected ? `${p.count} jeux synchronisés` : "Non connecté")
+          ),
+          p.connected
+            ? h('button', { onClick: async () => {
+                if (syncingPlatform) return;
+                setSyncingPlatform(p.id);
+                try {
+                  let r;
+                  if (p.id === 'steam') r = await API.resyncSteam();
+                  else if (p.id === 'xbox' && user?.xbox_gamertag) r = await API.connectXbox(user.xbox_gamertag);
+                  if (r?.count !== undefined) showToast(`${r.count} jeux ${p.name} synchronisés`);
+                  onSyncComplete?.();
+                } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); }
+                finally { setSyncingPlatform(null); }
+              }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 26, height: 26 } },
+              syncingPlatform === p.id ? h(Loader, { size: 11, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 11, style: { color: P1 } }))
+            : (p.id === 'steam'
+              ? h('a', { href: "/api/auth/steam", className: "px-2.5 py-1 text-[9px] font-bold rounded-md text-white whitespace-nowrap", style: { background: GRAD } }, "Connecter")
+              : null)
+        )),
+        bridgeStatus !== 'unknown' && h('div', { className: "pt-2 mt-1 border-t border-border flex items-center gap-2 px-2" },
+          h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0", style: { background: bridgeStatus === 'online' ? "#22c55e15" : "#ef444415" } }, h(Gamepad2, { size: 14, style: { color: bridgeStatus === 'online' ? "#22c55e" : "#ef4444" } })),
+          h('div', { className: "flex-1" },
+            h('span', { className: "text-[10px] font-bold", style: { color: bridgeStatus === 'online' ? "#22c55e" : "#ef4444" } }, bridgeStatus === 'online' ? 'Playnite Bridge en ligne' : 'Playnite Bridge hors ligne'),
+            h('p', { className: "text-[8px] text-muted-foreground" }, bridgeStatus === 'online' ? 'http://localhost:3456' : 'Lance le bridge pour sync automatique')
+          )
+        )
+      )
+    ),
     emailModal && h('div', { className: "fixed inset-0 z-50 flex items-center justify-center" },
       h('div', { className: "absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: () => setEmailModal(false) }),
       h('div', { className: "relative bg-card border border-border rounded-2xl p-5 w-80", style: { zIndex: 1 } },
@@ -1602,7 +1675,7 @@ function App() {
           view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false }, ...prev ]); } }),
           view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
-          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail })
+          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadGames(); loadCatalog(); }, showToast })
         )
       ),
       h(BottomNav, { view, setView }),

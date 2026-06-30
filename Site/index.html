@@ -205,21 +205,6 @@ function PlatformLogo({ platform, size = 24 }) {
   return h('span', { dangerouslySetInnerHTML: { __html: svg }, style: { width: size + 'px', height: size + 'px', display: 'inline-block', lineHeight: 0 } });
 }
 
-function getStoreUrl(game) {
-  const platform = game.platform || 'steam';
-  const cfg = MONETIZATION.STORES[platform];
-  if (!cfg || !game.storePath) return null;
-  return cfg.url + game.storePath + cfg.param;
-}
-
-function trackAffiliateClick(gameId, platform) {
-  fetch('/api/affiliate/click', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ gameId, platform, ts: Date.now() })
-  }).catch(() => {});
-}
-
 function PlatformBadge({ platform, platforms, small }) {
   const list = platforms || (platform ? platform.split(',').map(s => s.trim()).filter(Boolean) : []);
   if (list.length === 0) return null;
@@ -250,83 +235,88 @@ function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown
   const inWishlist = wishlistIds?.has(game.game_id || game.id);
   const inTopThree = topThreeIds?.has(game.game_id || game.id);
   const gameId = game.game_id || game.id;
-  const storeUrl = getStoreUrl(game);
+  const storeLinks = getStoreLinks(game);
   return h('div', { onClick, className: "game-card relative rounded-2xl overflow-hidden", style: { aspectRatio: "3/4", background: "#1a1a2e" } },
     h('img', { src: game.cover, alt: game.title, className: "absolute inset-0 w-full h-full object-cover", loading: "lazy" }),
     h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent" }),
     status && game.status !== "not_started" && h('div', { className: "absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full", style: { background: status.color, boxShadow: `0 0 8px ${status.color}80` } }),
+    storeLinks.length > 0 && h('a', { href: storeLinks[0].url, target: "_blank", rel: "noopener", onClick: e => e.stopPropagation(), className: "absolute top-2.5 right-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125 opacity-0 group-hover:opacity-100", style: { background: "rgba(34,197,94,0.9)" } }, h(Briefcase, { size: 10, fill: "#fff", stroke: "#fff", strokeWidth: 2 })),
     game.hasReview && h('div', { className: "absolute top-2.5 left-2.5 w-5 h-5 rounded-full flex items-center justify-center", style: { background: GRAD } }, h(Edit3, { size: 10, className: "text-white" })),
-    game.sponsored && h('div', { className: "absolute top-2.5 left-2.5 px-1.5 py-0.5 rounded-md text-[7px] font-black", style: { background: "rgba(245,158,11,0.9)", color: "#fff" } }, "SPONSOR"),
     onWishlist && h('button', { onClick: e => { e.stopPropagation(); onWishlist(game); }, className: "absolute top-9 left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: inWishlist ? "rgba(239,68,68,0.9)" : "rgba(0,0,0,0.5)" } }, h(Heart, { size: 11, fill: inWishlist ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
     onCrown && h('button', { onClick: e => { e.stopPropagation(); onCrown(game); }, className: "absolute top-[60px] left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: inTopThree ? "rgba(245,158,11,0.9)" : "rgba(0,0,0,0.5)" } }, h(Crown, { size: 11, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
     h('div', { className: "absolute bottom-0 left-0 right-0 p-2.5" },
       h(PlatformBadge, { platform: game.platform, small }),
       h('p', { className: "text-white text-xs font-bold leading-tight mt-1.5 line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
       game.developer && h('p', { className: "text-[9px] text-muted-foreground/70 leading-tight mt-0.5 line-clamp-1" }, game.developer),
-      h('div', { className: "flex items-center justify-between mt-1.5" },
+      h('div', { className: "mt-1.5 flex items-center justify-between" },
         h(StarRating, { rating: game.userRating, size: 9 }),
-        storeUrl && h('a', { href: storeUrl, target: "_blank", onClick: e => { e.stopPropagation(); trackAffiliateClick(gameId, game.platform); }, className: "px-1.5 py-0.5 rounded-md text-[8px] font-bold text-white hover:scale-110 transition-transform", style: { background: "rgba(34,197,94,0.9)" } }, "Acheter")
+        storeLinks.length > 0 && h('a', { href: storeLinks[0].url, target: "_blank", rel: "noopener", onClick: e => e.stopPropagation(), className: "px-1.5 py-0.5 rounded text-[8px] font-bold text-white flex items-center gap-0.5 transition-opacity hover:opacity-80", style: { background: "#22c55e" } }, "\u2022Acheter")
       )
     )
   );
 }
 
-const MONETIZATION = {
-  AFFILIATE_ENABLED: true,
-  AFFILIATE_ID: "playpad-21",
-  SPONSORED_ENABLED: true,
-  THEMES_PREMIUM: true,
-  STORES: {
-    steam: { name: "Steam", url: "https://store.steampowered.com/app/", param: "?utm_source=playpad&utm_medium=affiliate" },
-    epic: { name: "Epic Games", url: "https://store.epicgames.com/fr/p/", param: "?utm_source=playpad" },
-    gog: { name: "GOG", url: "https://www.gog.com/fr/game/", param: "" },
-    humble: { name: "Humble Bundle", url: "https://www.humblebundle.com/store/", param: "?partner=playpad" },
-  },
+const CATALOGUE = [
+  { game_id: "c105", title: "The Witcher 3: Wild Hunt",  platform: "steam",    genre: "RPG",             cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/292030/library_600x900.jpg",   year: 2015 },
+  { game_id: "c106", title: "Cyberpunk 2077",             platform: "steam",    genre: "RPG",             cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1091500/library_600x900.jpg",  year: 2020 },
+  { game_id: "c107", title: "Dark Souls III",             platform: "steam",    genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/374320/library_600x900.jpg",   year: 2016 },
+  { game_id: "c108", title: "Sekiro: Shadows Die Twice",  platform: "ps5",      genre: "Action-Aventure", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/814380/library_600x900.jpg",   year: 2019 },
+  { game_id: "c109", title: "Horizon Forbidden West",     platform: "ps5",      genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2420110/library_600x900.jpg",  year: 2022 },
+  { game_id: "c110", title: "Grand Theft Auto V",         platform: "epic",     genre: "Open World",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/271590/library_600x900.jpg",   year: 2013 },
+  { game_id: "c111", title: "Elden Ring",                 platform: "ps5",      genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1245620/library_600x900.jpg",  year: 2022 },
+  { game_id: "c112", title: "God of War Ragnar\u00f6k",     platform: "ps5",      genre: "Action-Aventure", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2322010/library_600x900.jpg",  year: 2022 },
+  { game_id: "c113", title: "Red Dead Redemption 2",      platform: "epic",     genre: "Open World",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1174180/library_600x900.jpg",  year: 2018 },
+  { game_id: "c114", title: "Hollow Knight",              platform: "steam",    genre: "Metroidvania",    cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/367520/library_600x900.jpg",   year: 2017 },
+  { game_id: "c115", title: "Baldur's Gate 3",           platform: "steam",    genre: "RPG",             cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1086940/library_600x900.jpg",  year: 2023 },
+  { game_id: "c116", title: "DOOM Eternal",               platform: "steam",    genre: "FPS",             cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/782330/library_600x900.jpg",   year: 2020 },
+  { game_id: "c117", title: "Resident Evil 4",            platform: "steam",    genre: "Survival Horror", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2050650/library_600x900.jpg", year: 2023 },
+  { game_id: "c118", title: "Street Fighter 6",           platform: "steam",    genre: "Combat",          cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1364780/library_600x900.jpg", year: 2023 },
+  { game_id: "c119", title: "Ghost of Tsushima",          platform: "ps5",      genre: "Action-Aventure", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2215430/library_600x900.jpg", year: 2020 },
+  { game_id: "c120", title: "Forza Horizon 5",            platform: "xbox",     genre: "Course",          cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1551360/library_600x900.jpg",  year: 2021 },
+  { game_id: "c121", title: "Halo Infinite",              platform: "xbox",     genre: "FPS",             cover: "Halo_infinite.jpg", year: 2021 },
+  { game_id: "c122", title: "Mario Kart 8 Deluxe",        platform: "nintendo", genre: "Course",          cover: "MK_8_deluxe.jpg",   year: 2017 },
+  { game_id: "c123", title: "Spider-Man 2",               platform: "ps5",      genre: "Action-Aventure", cover: "spider_man_2.jpg",   year: 2023 },
+  { game_id: "c124", title: "The Legend of Zelda: TOTK",  platform: "nintendo", genre: "Aventure",        cover: "TOTK.jpg",          year: 2023 },
+  { game_id: "c125", title: "Stray",                      platform: "ps5",      genre: "Aventure",        cover: "stray-smmq5.jpg",   year: 2022 },
+  { game_id: "c126", title: "Final Fantasy VII Remake",   platform: "ps5",      genre: "JRPG",            cover: "FFVIIRemake.png",   year: 2024 },
+  { game_id: "c127", title: "It Takes Two",               platform: "steam",    genre: "Aventure",        cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1426210/library_600x900.jpg", year: 2021 },
+  { game_id: "c128", title: "Diablo IV",                  platform: "steam",    genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2344520/library_600x900.jpg", year: 2023 },
+  { game_id: "c129", title: "Lies of P",                  platform: "ps5",      genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1627720/library_600x900.jpg", year: 2023 },
+  { game_id: "c130", title: "Hogwarts Legacy",            platform: "ps5",      genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/990080/library_600x900.jpg",  year: 2023 },
+  { game_id: "c131", title: "Control",                    platform: "ps5",      genre: "Action-Aventure", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/870780/library_600x900.jpg",   year: 2019 },
+  { game_id: "c132", title: "Mass Effect LE",             platform: "steam",    genre: "RPG",             cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1328670/library_600x900.jpg", year: 2021 },
+  { game_id: "c133", title: "Vampire Survivors",          platform: "steam",    genre: "Rogue-lite",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1794680/library_600x900.jpg", year: 2022 },
+  { game_id: "c134", title: "Assassin's Creed Odyssey",   platform: "epic",     genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/812140/library_600x900.jpg",   year: 2018 },
+  { game_id: "c135", title: "Monster Hunter: World",      platform: "steam",    genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/582010/library_600x900.jpg",   year: 2018 },
+];
+
+const AFFILIATE_CONFIG = {
+  steam: { referral: "" },
+  epic: { affiliate: "" },
+  humble: { partner: "" },
+  isthereanydeal: {},
 };
 
-const THEMES = [
-  { id: "default", name: "Neon Violet", gradient: "linear-gradient(135deg, #a855f7, #7c3aed)", premium: false },
-  { id: "cyber", name: "Cyberpunk", gradient: "linear-gradient(135deg, #f59e0b, #ef4444)", premium: true, price: "1.99" },
-  { id: "ocean", name: "Deep Ocean", gradient: "linear-gradient(135deg, #06b6d4, #3b82f6)", premium: true, price: "1.99" },
-  { id: "emerald", name: "Emerald", gradient: "linear-gradient(135deg, #10b981, #059669)", premium: false },
-  { id: "midnight", name: "Midnight", gradient: "linear-gradient(135deg, #6366f1, #4338ca)", premium: true, price: "2.99" },
-  { id: "sunset", name: "Sunset", gradient: "linear-gradient(135deg, #f43f5e, #e11d48)", premium: true, price: "2.99" },
-  { id: "monochrome", name: "Monochrome", gradient: "linear-gradient(135deg, #6b7280, #374151)", premium: false },
-];
+function getSteamAppId(game) {
+  const m = (game.cover || "").match(/\/apps\/(\d+)\//);
+  return m ? m[1] : null;
+}
 
-const CATALOGUE = [
-  { game_id: "c105", title: "The Witcher 3: Wild Hunt",  platform: "steam",    genre: "RPG",             cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/292030/library_600x900.jpg",   year: 2015, price: "29.99\u20ac", storePath: "292030", sponsored: false },
-  { game_id: "c106", title: "Cyberpunk 2077",             platform: "steam",    genre: "RPG",             cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1091500/library_600x900.jpg",  year: 2020, price: "29.99\u20ac", storePath: "1091500", sponsored: false },
-  { game_id: "c107", title: "Dark Souls III",             platform: "steam",    genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/374320/library_600x900.jpg",   year: 2016, price: "19.99\u20ac", storePath: "374320", sponsored: false },
-  { game_id: "c108", title: "Sekiro: Shadows Die Twice",  platform: "ps5",      genre: "Action-Aventure", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/814380/library_600x900.jpg",   year: 2019, price: "59.99\u20ac", storePath: "814380", sponsored: false },
-  { game_id: "c109", title: "Horizon Forbidden West",     platform: "ps5",      genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2420110/library_600x900.jpg",  year: 2022, price: "49.99\u20ac", storePath: "2420110", sponsored: false },
-  { game_id: "c110", title: "Grand Theft Auto V",         platform: "epic",     genre: "Open World",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/271590/library_600x900.jpg",   year: 2013, price: "29.99\u20ac", storePath: "grand-theft-auto-v", sponsored: false },
-  { game_id: "c111", title: "Elden Ring",                 platform: "ps5",      genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1245620/library_600x900.jpg",  year: 2022, price: "59.99\u20ac", storePath: "elden-ring", sponsored: true },
-  { game_id: "c112", title: "God of War Ragnar\u00f6k",     platform: "ps5",      genre: "Action-Aventure", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2322010/library_600x900.jpg",  year: 2022, price: "59.99\u20ac", storePath: "2322010", sponsored: false },
-  { game_id: "c113", title: "Red Dead Redemption 2",      platform: "epic",     genre: "Open World",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1174180/library_600x900.jpg",  year: 2018, price: "29.99\u20ac", storePath: "red-dead-redemption-2", sponsored: false },
-  { game_id: "c114", title: "Hollow Knight",              platform: "steam",    genre: "Metroidvania",    cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/367520/library_600x900.jpg",   year: 2017, price: "14.99\u20ac", storePath: "367520", sponsored: false },
-  { game_id: "c115", title: "Baldur's Gate 3",           platform: "steam",    genre: "RPG",             cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1086940/library_600x900.jpg",  year: 2023, price: "59.99\u20ac", storePath: "1086940", sponsored: true },
-  { game_id: "c116", title: "DOOM Eternal",               platform: "steam",    genre: "FPS",             cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/782330/library_600x900.jpg",   year: 2020, price: "19.99\u20ac", storePath: "782330", sponsored: false },
-  { game_id: "c117", title: "Resident Evil 4",            platform: "steam",    genre: "Survival Horror", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2050650/library_600x900.jpg", year: 2023, price: "39.99\u20ac", storePath: "2050650", sponsored: false },
-  { game_id: "c118", title: "Street Fighter 6",           platform: "steam",    genre: "Combat",          cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1364780/library_600x900.jpg", year: 2023, price: "59.99\u20ac", storePath: "1364780", sponsored: false },
-  { game_id: "c119", title: "Ghost of Tsushima",          platform: "ps5",      genre: "Action-Aventure", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2215430/library_600x900.jpg", year: 2020, price: "59.99\u20ac", storePath: "2215430", sponsored: false },
-  { game_id: "c120", title: "Forza Horizon 5",            platform: "xbox",     genre: "Course",          cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1551360/library_600x900.jpg",  year: 2021, price: "59.99\u20ac", storePath: "forza-horizon-5", sponsored: false },
-  { game_id: "c121", title: "Halo Infinite",              platform: "xbox",     genre: "FPS",             cover: "Halo_infinite.jpg", year: 2021, price: "Free", storePath: "halo-infinite", sponsored: false },
-  { game_id: "c122", title: "Mario Kart 8 Deluxe",        platform: "nintendo", genre: "Course",          cover: "MK_8_deluxe.jpg",   year: 2017, price: "59.99\u20ac", storePath: "mario-kart-8-deluxe", sponsored: false },
-  { game_id: "c123", title: "Spider-Man 2",               platform: "ps5",      genre: "Action-Aventure", cover: "spider_man_2.jpg",   year: 2023, price: "79.99\u20ac", storePath: "marvels-spider-man-2", sponsored: false },
-  { game_id: "c124", title: "The Legend of Zelda: TOTK",  platform: "nintendo", genre: "Aventure",        cover: "TOTK.jpg",          year: 2023, price: "69.99\u20ac", storePath: "zelda-totk", sponsored: false },
-  { game_id: "c125", title: "Stray",                      platform: "ps5",      genre: "Aventure",        cover: "stray-smmq5.jpg",   year: 2022, price: "29.99\u20ac", storePath: "stray", sponsored: false },
-  { game_id: "c126", title: "Final Fantasy VII Remake",   platform: "ps5",      genre: "JRPG",            cover: "FFVIIRemake.png",   year: 2024, price: "69.99\u20ac", storePath: "final-fantasy-vii-remake", sponsored: false },
-  { game_id: "c127", title: "It Takes Two",               platform: "steam",    genre: "Aventure",        cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1426210/library_600x900.jpg", year: 2021, price: "19.99\u20ac", storePath: "1426210", sponsored: false },
-  { game_id: "c128", title: "Diablo IV",                  platform: "steam",    genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2344520/library_600x900.jpg", year: 2023, price: "69.99\u20ac", storePath: "2344520", sponsored: false },
-  { game_id: "c129", title: "Lies of P",                  platform: "ps5",      genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1627720/library_600x900.jpg", year: 2023, price: "59.99\u20ac", storePath: "1627720", sponsored: false },
-  { game_id: "c130", title: "Hogwarts Legacy",            platform: "ps5",      genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/990080/library_600x900.jpg",  year: 2023, price: "69.99\u20ac", storePath: "990080", sponsored: false },
-  { game_id: "c131", title: "Control",                    platform: "ps5",      genre: "Action-Aventure", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/870780/library_600x900.jpg",   year: 2019, price: "29.99\u20ac", storePath: "870780", sponsored: false },
-  { game_id: "c132", title: "Mass Effect LE",             platform: "steam",    genre: "RPG",             cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1328670/library_600x900.jpg", year: 2021, price: "19.99\u20ac", storePath: "1328670", sponsored: false },
-  { game_id: "c133", title: "Vampire Survivors",          platform: "steam",    genre: "Rogue-lite",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1794680/library_600x900.jpg", year: 2022, price: "4.99\u20ac", storePath: "1794680", sponsored: false },
-  { game_id: "c134", title: "Assassin's Creed Odyssey",   platform: "epic",     genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/812140/library_600x900.jpg",   year: 2018, price: "19.99\u20ac", storePath: "assassins-creed-odyssey", sponsored: false },
-  { game_id: "c135", title: "Monster Hunter: World",      platform: "steam",    genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/582010/library_600x900.jpg",   year: 2018, price: "29.99\u20ac", storePath: "582010", sponsored: false },
-];
+function getStoreLinks(game) {
+  const links = [];
+  const appId = getSteamAppId(game);
+  const title = encodeURIComponent(game.title);
+  if (appId) {
+    const ref = AFFILIATE_CONFIG.steam.referral;
+    links.push({ store: "Steam", url: `https://store.steampowered.com/app/${appId}${ref ? '?ref=' + ref : ''}`, color: "#1b2838", textColor: "#c7d5e0", icon: "steam" });
+  }
+  const epicAff = AFFILIATE_CONFIG.epic.affiliate;
+  links.push({ store: "Epic Games", url: `https://store.epicgames.com/en-US/p/${title}${epicAff ? '?affiliate=' + epicAff : ''}`, color: "#2a2a2a", textColor: "#ffffff", icon: "epic" });
+  const hmPart = AFFILIATE_CONFIG.humble.partner;
+  links.push({ store: "Humble Bundle", url: `https://www.humblebundle.com/store/search?search=${title}${hmPart ? '&partner=' + hmPart : ''}`, color: "#c5572e", textColor: "#ffffff", icon: "humble" });
+  links.push({ store: "IsThereAnyDeal", url: `https://isthereanydeal.com/search/?q=${title}`, color: "#353549", textColor: "#ffffff", icon: "itad" });
+  return links;
+}
 
 const FRIENDS = [
   { id: "f1", initials: "AX", name: "Lucas Auchard", online: true, games: [
@@ -700,21 +690,6 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings }) {
       ),
     ),
     h('div', { className: "flex-1 overflow-y-auto px-4 pb-4", style: { scrollbarWidth: "none" } },
-      catalog.filter(g => g.sponsored).length > 0 && search.length === 0 && h('div', { className: "mb-4" },
-        h('div', { className: "flex items-center gap-2 mb-2" }, h(Zap, { size: 12, style: { color: "#f59e0b" } }), h('span', { className: "text-[10px] font-black uppercase tracking-widest", style: { color: "#f59e0b" } }, "Sponsorisé")),
-        h('div', { className: "flex gap-3 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } }, catalog.filter(g => g.sponsored).map(game =>
-          h('div', { key: game.game_id, className: "flex-shrink-0 w-40 cursor-pointer hover:opacity-80 transition-opacity", onClick: () => onSelect({ ...game, userRating: ratings?.[game.game_id] || 0 }) },
-            h('div', { className: "relative rounded-xl overflow-hidden mb-2", style: { aspectRatio: "3/4" } },
-              h('img', { src: game.cover, className: "w-full h-full object-cover" }),
-              h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" }),
-              h('div', { className: "absolute bottom-2 left-2 right-2" },
-                h('p', { className: "text-white text-xs font-bold truncate" }, game.title),
-                game.price && h('p', { className: "text-[9px] font-bold mt-0.5", style: { color: "#22c55e" } }, game.price)
-              )
-            )
-          )
-        ))
-      ),
       filtered.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
         : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id, game: { ...game, userRating: ratings?.[game.game_id] || 0 }, onClick: () => onSelect(game), wishlistIds, onWishlist: onToggleWishlist })))
@@ -1073,7 +1048,7 @@ function ReviewsView({ games, onSelect }) {
   );
 }
 
-function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar, onUpdateEmail, onSyncComplete, showToast, currentTheme, onSelectTheme }) {
+function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar, onUpdateEmail, onSyncComplete, showToast }) {
   const [avatarModal, setAvatarModal] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || "");
   const [avatarSaving, setAvatarSaving] = useState(false);
@@ -1225,15 +1200,6 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
         )
       )
     ),
-    h('div', { className: "px-4 mb-4" },
-      h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5" }, h(Sliders, { size: 11 }), "Apparence"),
-      h('div', { className: "grid grid-cols-4 gap-2" }, THEMES.map(t =>
-        h('button', { key: t.id, onClick: () => { if (t.premium && !user?.unlockedThemes?.includes(t.id)) { showToast(`Thème premium : ${t.price}`); return; } onSelectTheme?.(t.id); }, className: "relative rounded-xl overflow-hidden aspect-square flex flex-col items-center justify-center transition-transform hover:scale-105", style: { background: t.gradient, outline: currentTheme === t.id ? `2px solid ${P1}` : "none", outlineOffset: 2 } },
-          h('span', { className: "text-[9px] font-bold text-white drop-shadow-lg" }, t.name),
-          t.premium && !user?.unlockedThemes?.includes(t.id) && h('div', { className: "absolute top-1 right-1 w-4 h-4 rounded-full flex items-center justify-center", style: { background: "rgba(0,0,0,0.6)" } }, h(Lock, { size: 8, className: "text-white" }))
-        )
-      ))
-    ),
     h('div', { className: "px-4 mb-4 flex items-center gap-3" },
       h('button', { onClick: () => { setEmail(user?.email || ''); setEmailModal(true); }, className: "text-[10px] font-medium flex items-center gap-1.5 hover:opacity-80 transition-opacity", style: { color: `${P1}aa` } }, h(Mail, { size: 11 }), user?.email ? "Changer l'email" : "Ajouter un email"),
       h('button', { onClick: onDeleteAccount, className: "text-[10px] font-medium flex items-center gap-1.5 hover:opacity-80 transition-opacity", style: { color: "#ef444488" } }, "Supprimer mon compte")
@@ -1336,17 +1302,6 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
       ),
       h('div', { className: "overflow-y-auto flex-1", style: { scrollbarWidth: "none" } },
         h('div', { className: "px-4 pt-4 pb-8" },
-          game.sponsored && h('div', { className: "mb-3 px-3 py-2 rounded-xl flex items-center gap-2", style: { background: "linear-gradient(135deg, rgba(245,158,11,0.15), rgba(239,68,68,0.15))", border: "1px solid rgba(245,158,11,0.3)" } },
-            h(Zap, { size: 12, style: { color: "#f59e0b" } }),
-            h('span', { className: "text-[10px] font-bold", style: { color: "#f59e0b" } }, "Sponsorisé"),
-            h('span', { className: "text-[9px] text-muted-foreground ml-auto" }, "Pub")
-          ),
-          getStoreUrl(game) && h('div', { className: "mb-4" },
-            h('a', { href: getStoreUrl(game), target: "_blank", onClick: () => trackAffiliateClick(game.game_id || game.id, game.platform), className: "flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.02]", style: { background: "linear-gradient(135deg, #22c55e, #16a34a)" } },
-              h(ExternalLink, { size: 14 }),
-              h('span', null, "Acheter", game.price && [" ", game.price])
-            )
-          ),
           h('div', { className: "mb-5" },
             h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2.5" }, "Statut"),
             h('div', { className: "flex flex-wrap gap-2" },
@@ -1375,6 +1330,19 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
             ),
             gameDetails?.website && h('a', { href: gameDetails.website, target: "_blank", className: "inline-flex items-center gap-1 mt-2 text-[10px] font-bold hover:opacity-80", style: { color: P1 } }, h(ExternalLink, { size: 10 }), "Site officiel")
           ),
+          (() => {
+            const links = getStoreLinks(game);
+            if (links.length === 0) return null;
+            return h('div', { className: "mb-4" },
+              h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2.5 flex items-center gap-1.5" }, h(Briefcase, { size: 10 }), "Où acheter"),
+              h('div', { className: "space-y-2" }, links.map(l =>
+                h('a', { key: l.store, href: l.url, target: "_blank", rel: "noopener", className: "flex items-center gap-3 p-2.5 rounded-xl transition-opacity hover:opacity-80", style: { background: l.color, border: `1px solid ${l.color}` } },
+                  h('span', { className: "text-[11px] font-bold flex-1", style: { color: l.textColor } }, l.store),
+                  h(ExternalLink, { size: 10, style: { color: l.textColor, opacity: 0.6 } })
+                )
+              ))
+            );
+          })(),
           game.game_id && h('button', { onClick: async () => { if (confirm("Supprimer ce jeu de votre biblioth\u00e8que ?")) { await onDeleteGame?.(game.game_id); } }, className: "w-full mb-3 py-2 text-[10px] font-bold rounded-xl flex items-center justify-center gap-1.5", style: { background: "rgba(239,68,68,0.1)", color: "#ef4444" } }, h(Trash2, { size: 11 }), "Retirer de ma biblioth\u00e8que"),
           h('div', { className: "border-t border-border pt-4" },
             h('div', { className: "flex items-center justify-between mb-4" }, h('h3', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Ma Critique"), !editing && h('button', { onClick: () => setEditing(true), className: "flex items-center gap-1.5 text-xs font-bold hover:opacity-80", style: { color: P1 } }, h(Edit3, { size: 12 }), game.hasReview ? "Modifier" : "R\u00e9diger")),
@@ -1567,7 +1535,6 @@ function App() {
   const [selectedFriend, setSelectedFriend] = useState(null);
   const [notifications, setNotifications] = useState(NOTIFICATIONS);
   const [toast, setToast] = useState(null);
-  const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('playpad_theme') || 'default');
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
@@ -1762,7 +1729,7 @@ function App() {
           view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
           view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
-          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadGames(); loadCatalog(); }, showToast, currentTheme, onSelectTheme: (id) => { setCurrentTheme(id); localStorage.setItem('playpad_theme', id); } })
+          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadGames(); loadCatalog(); }, showToast })
         )
       ),
       h(BottomNav, { view, setView }),

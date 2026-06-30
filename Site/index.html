@@ -304,14 +304,7 @@ const FRIENDS = [
   ]},
 ];
 
-const NOTIFICATIONS = [
-  { id: "n1", text: "PixelWizard a termine Dark Souls III", read: false, friendId: "f2" },
-  { id: "n2", text: "NeonRider a ajoute Sekiro a sa bibliotheque", read: false, friendId: "f3" },
-  { id: "n3", text: "CosmicCoyote joue a DOOM Eternal", read: false, friendId: "f4" },
-  { id: "n4", text: "Lucas Auchard a complete The Witcher 3", read: true, friendId: "f1" },
-  { id: "n5", text: "PixelWizard a mis a jour sa critique", read: true, friendId: "f2" },
-  { id: "n6", text: "NeonRider est en ligne", read: true, friendId: "f3" },
-];
+const NOTIFICATIONS = [];
 
 const PLATFORM_SYNC_DATA = [
   { platform: "ps5",      gameCount: 12, lastSync: "il y a 5 min" },
@@ -321,7 +314,7 @@ const PLATFORM_SYNC_DATA = [
   { platform: "xbox",     gameCount: 0,  lastSync: "\u2014" },
 ];
 
-function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast, user }) {
+function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast, user, onAddNotification }) {
   const genres = useMemo(() => ["all", ...new Set(games.map(g => g.genre).filter(Boolean))], [games]);
   const [showFilters, setShowFilters] = useState(false);
   const [filterGenre, setFilterGenre] = useState("all");
@@ -404,6 +397,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
       await API.syncGames(playniteGames);
       if (platformFilter) setConnected(c => ({ ...c, [platformFilter]: true }));
       onSyncComplete?.();
+      onAddNotification?.(`${playniteGames.length} jeux synchronisés depuis Playnite`, "sync");
       showToast(`Sync terminé : ${playniteGames.length} jeux ajoutés à la bibliothèque et au catalogue`);
     } catch (err) {
       showToast('Erreur : ' + err.message);
@@ -543,20 +537,32 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
           )
         )
       ),
-      showNotifications && h('div', { className: "rounded-2xl p-3", style: { background: "#1a1a2e", border: `1px solid ${P1}30`, position: "absolute", zIndex: 30, top: "100%", left: 16, right: 16 } },
-        h('div', { className: "flex items-center justify-between mb-2" },
-          h('p', { className: "text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5", style: { color: "#c4b5fd" } }, h(Bell, { size: 10 }), "Notifications"),
+      showNotifications && h('div', { className: "rounded-2xl p-3", style: { background: "#1a1a2e", border: `1px solid ${P1}30`, position: "absolute", zIndex: 30, top: "100%", left: 16, right: 16, maxHeight: "min(70vh, 420px)", display: "flex", flexDirection: "column" } },
+        h('div', { className: "flex items-center justify-between mb-2 flex-shrink-0" },
+          h('div', { className: "flex items-center gap-2" }, h(Bell, { size: 12, style: { color: P1 } }), h('span', { className: "text-[11px] font-bold uppercase tracking-wider", style: { color: "#c4b5fd" } }, "Notifications"), unread > 0 && h('span', { className: "px-1.5 py-0.5 text-[8px] font-black rounded-full text-white", style: { background: "#ef4444" } }, unread)),
           h('button', { onClick: () => setShowNotifications(false), className: "p-1 rounded hover:opacity-80", style: { color: "#8888aa" } }, h(X, { size: 12 }))
         ),
+        notifications.length > 0 && h('div', { className: "flex gap-1.5 mb-2 flex-shrink-0" },
+          h('button', { onClick: () => setNotifications(prev => prev.map(n => ({ ...n, read: true }))), className: "flex-1 px-2 py-1.5 text-[9px] font-bold rounded-lg flex items-center justify-center gap-1", style: { background: "rgba(34,197,94,0.1)", color: "#22c55e" } }, h(Check, { size: 9 }), "Tout lu"),
+          h('button', { onClick: () => setNotifications([]), className: "flex-1 px-2 py-1.5 text-[9px] font-bold rounded-lg flex items-center justify-center gap-1", style: { background: "rgba(239,68,68,0.1)", color: "#ef4444" } }, h(Trash2, { size: 9 }), "Tout supprimer")
+        ),
         notifications.length === 0
-          ? h('p', { className: "text-xs text-muted-foreground py-2" }, "Aucune notification")
-          : h('div', { className: "space-y-1 max-h-40 overflow-y-auto", style: { scrollbarWidth: "none" } }, notifications.map(n => h('div', { key: n.id, className: "flex items-start gap-2.5 py-1.5" },
-              h('div', { onClick: () => onMarkAsRead?.(n.id, n.friendId), className: "flex-1 flex items-start gap-2 cursor-pointer hover:opacity-80" },
-                h('div', { className: "w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0", style: { background: n.read ? "transparent" : "#22c55e", boxShadow: n.read ? "none" : "0 0 4px #22c55e80" } }),
-                h('p', { className: "text-[10px] text-foreground/80 leading-snug flex-1" }, n.text)
-              ),
-              h('button', { onClick: (e) => { e.stopPropagation(); setNotifications(prev => prev.filter(x => x.id !== n.id)); }, className: "p-1 rounded hover:opacity-80 flex-shrink-0", style: { color: "#8888aa" } }, h(X, { size: 10 }))
-            )))
+          ? h('div', { className: "flex flex-col items-center justify-center py-6 text-muted-foreground" }, h(Bell, { size: 24, className: "mb-2 opacity-20" }), h('p', { className: "text-[10px] font-medium" }, "Aucune notification"))
+          : h('div', { className: "space-y-1 overflow-y-auto flex-1", style: { scrollbarWidth: "none" } }, notifications.map(n => {
+              const typeConfig = { message: { icon: MessageSquare, color: "#c4b5fd", bg: "rgba(196,181,253,0.1)" }, friend: { icon: Users, color: "#4ade80", bg: "rgba(74,222,128,0.1)" }, sync: { icon: RefreshCw, color: "#f59e0b", bg: "rgba(245,158,11,0.1)" } };
+              const tc = typeConfig[n.type] || typeConfig.friend;
+              const TypeIcon = tc.icon;
+              const timeAgo = n.timestamp ? (() => { const diff = Date.now() - n.timestamp; if (diff < 60000) return "à l'instant"; if (diff < 3600000) return `il y a ${Math.floor(diff/60000)} min`; if (diff < 86400000) return `il y a ${Math.floor(diff/3600000)}h`; return `il y a ${Math.floor(diff/86400000)}j`; })() : "";
+              return h('div', { key: n.id, className: "flex items-start gap-2 py-2 px-2 rounded-xl transition-opacity " + (n.read ? "opacity-50" : ""), style: { background: n.read ? "transparent" : tc.bg } },
+                h('div', { className: "w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5", style: { background: tc.bg } }, h(TypeIcon, { size: 11, style: { color: tc.color } })),
+                h('div', { onClick: () => onMarkAsRead?.(n.id, n.friendId), className: "flex-1 min-w-0 cursor-pointer hover:opacity-80" },
+                  n.senderName && h('p', { className: "text-[10px] font-bold mb-0.5", style: { color: tc.color } }, n.senderName),
+                  h('p', { className: "text-[10px] text-foreground/80 leading-snug" }, n.text),
+                  timeAgo && h('p', { className: "text-[8px] text-muted-foreground mt-1" }, timeAgo)
+                ),
+                h('button', { onClick: (e) => { e.stopPropagation(); setNotifications(prev => prev.filter(x => x.id !== n.id)); }, className: "p-1 rounded hover:opacity-80 flex-shrink-0", style: { color: "#8888aa" } }, h(X, { size: 10 }))
+              );
+            }))
       )
     ),
     h('div', { className: "flex-1 overflow-y-auto px-4 pb-4", style: { scrollbarWidth: "none" } },
@@ -705,7 +711,7 @@ function CommunityView({ onSelectFriend, onSelectGame, onAddNotification }) {
             h('div', { className: "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border", style: { background: isOnline(r.last_seen) ? "#4ade80" : "#444466", borderColor: "#1a1a2e" } })
           ),
           h('span', { className: "text-xs font-bold text-foreground flex-1", style: { fontFamily: "'Rajdhani', sans-serif" } }, r.display_name),
-          h('button', { onClick: async () => { await API.acceptFriendRequest(r.id); load(); onAddNotification?.("Tu es maintenant ami avec " + r.display_name); }, className: "px-2.5 py-1 text-[10px] font-bold rounded-lg text-white", style: { background: GRAD } }, "Accepter")
+          h('button', { onClick: async () => { await API.acceptFriendRequest(r.id); load(); onAddNotification?.("Tu es maintenant ami avec " + r.display_name, "friend"); }, className: "px-2.5 py-1 text-[10px] font-bold rounded-lg text-white", style: { background: GRAD } }, "Accepter")
         ))
       ),
       h('div', { className: "relative" },
@@ -890,7 +896,7 @@ function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification }) {
                       setSuggesting(true);
                       await API.sendSuggestion(friend.id, game.game_id, game.title, game.cover, suggestMsg);
                       setSuggesting(false); setSuggestOpen(false); setSuggestSearch(""); setSuggestMsg("");
-                      onAddNotification?.(`Tu as propos\u00e9 "${game.title}" \u00e0 ${profile?.display_name || friend.display_name}`);
+                       onAddNotification?.(`Tu as propos\u00e9 "${game.title}" \u00e0 ${profile?.display_name || friend.display_name}`, "friend");
                     }, disabled: suggesting, className: "px-2 py-1 text-[9px] font-bold rounded-lg text-white whitespace-nowrap", style: { background: GRAD } }, suggesting ? "..." : "Proposer")
                   )
                 )
@@ -1523,7 +1529,7 @@ function App() {
         for (const m of (d.unread || [])) {
           if (!notifiedMsgIds.current.has(m.id)) {
             notifiedMsgIds.current.add(m.id);
-            setNotifications(prev => [{ id: 'msg-' + m.id, text: '💬 ' + (m.sender?.display_name || 'Quelqu\'un') + ' : ' + m.message, read: false, friendId: m.sender_id }, ...prev]);
+            setNotifications(prev => [{ id: 'msg-' + m.id, text: m.message, read: false, friendId: m.sender_id, type: 'message', timestamp: Date.now(), senderName: m.sender?.display_name || 'Quelqu\'un' }, ...prev]);
           }
         }
       }).catch(() => {});
@@ -1671,8 +1677,8 @@ function App() {
     h('div', { className: "app-content relative flex flex-col h-screen bg-background mx-auto" },
       h('div', { className: "flex-1 overflow-hidden" },
         h('div', { className: "h-full overflow-y-auto" },
-          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user }),
-          view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false }, ...prev ]); } }),
+          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); } }),
+          view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
           view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
           view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadGames(); loadCatalog(); }, showToast })
@@ -1692,7 +1698,7 @@ function App() {
         userId: user?.id,
         ratings,
       }),
-      selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => setSelectedFriend(null), isOnline, onAddNotification: (msg) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, friendId: selectedFriend.id }, ...prev ]); } }),
+      selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => setSelectedFriend(null), isOnline, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, friendId: selectedFriend.id, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
       toast && h('div', { className: "toast", style: { background: GRAD } }, toast)
     )
   );

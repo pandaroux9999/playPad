@@ -37,7 +37,8 @@
       </a>
       <div class="flex items-center gap-5 text-sm">
         <a href="#intro" class="no-underline" style="color: #94a3b8;">Intro</a>
-        <a href="#features" class="no-underline" style="color: #94a3b8;">Fonctionnalités</a>
+        <a href="#features" class="no-underline" style="color: #94a3b8;">Fonctionnalit&eacute;s</a>
+        <a href="#security" class="no-underline" style="color: #22c55e;">S&eacute;curit&eacute;</a>
         <a href="#architecture" class="no-underline" style="color: #94a3b8;">Architecture</a>
         <a href="#code" class="no-underline" style="color: #94a3b8;">Code</a>
         <a href="#setup" class="no-underline" style="color: #94a3b8;">Setup</a>
@@ -128,6 +129,39 @@
       </div>
     </section>
 
+    <section id="security">
+      <h2>S&eacute;curit&eacute;</h2>
+      <div class="card">
+        <p class="text-sm mb-3" style="color: #94a3b8;">Protections mises en place pour s&eacute;curiser l'application :</p>
+        <div class="grid gap-3" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+          <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Helmet</h4>
+            <p class="text-xs" style="color: #94a3b8;">Headers HTTP s&eacute;curis&eacute;s : HSTS, X-Content-Type-Options, X-Frame-Options, etc. Prot&egrave;ge contre les attaques XSS, clickjacking, MIME sniffing.</p>
+          </div>
+          <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Rate Limiting</h4>
+            <p class="text-xs" style="color: #94a3b8;">200 requ&ecirc;tes / 15 min (global). 10 tentatives / 15 min sur les routes d'auth (login, register, reset password). Prot&egrave;ge contre le brute-force et le spam.</p>
+          </div>
+          <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Admin Reset s&eacute;curis&eacute;</h4>
+            <p class="text-xs" style="color: #94a3b8;">La route <code>/api/admin/reset</code> est maintenant prot&eacute;g&eacute;e par une liste d'IDs admin (variable <code>ADMIN_IDS</code>). Sans cette variable, tous les users authentifi&eacute;s ont acc&egrave;s (mode d&eacute;v).</p>
+          </div>
+          <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Cookie Secure corrig&eacute;</h4>
+            <p class="text-xs" style="color: #94a3b8;">Le flag <code>secure</code> du cookie de session d&eacute;sormais d&eacute;pend uniquement de <code>NODE_ENV=production</code>. Auparavant, <code>PUBLIC_URL</code> d&eacute;clenchait le mode secure, cassant la connexion en HTTP local.</p>
+          </div>
+          <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Endpoint Debug prot&eacute;g&eacute;</h4>
+            <p class="text-xs" style="color: #94a3b8;"><code>/api/debug/env</code> n&eacute;cessite maintenant l'authentification + droits admin. Exposait pr&eacute;c&eacute;demment les variables d'env &agrave; tous les visiteurs.</p>
+          </div>
+          <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Sync limit&eacute;</h4>
+            <p class="text-xs" style="color: #94a3b8;">L'import de jeux est limit&eacute; &agrave; 5000 jeux par requ&ecirc;te pour &eacute;viter les abus m&eacute;moire et les attaques par d&eacute;nion de service.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="architecture">
       <h2>Architecture</h2>
       <div class="card">
@@ -159,6 +193,8 @@
             <li>express-session + SupabaseStore</li>
             <li>bcryptjs (hash mots de passe)</li>
             <li>@supabase/supabase-js</li>
+            <li>helmet (s&eacute;curit&eacute; headers HTTP)</li>
+            <li>express-rate-limit (protection brute-force)</li>
           </ul>
         </div>
         <div class="card">
@@ -230,6 +266,7 @@
 
       <h3>API REST &mdash; Routes principales</h3>
       <div class="card">
+        <p class="text-xs mb-2" style="color: #94a3b8;">Les routes marqu&eacute;es <span style="color: #ef4444;">*</span> sont prot&eacute;g&eacute;es par un rate-limit strict (10 req / 15 min).</p>
         <table class="w-full text-xs" style="border-collapse: collapse;">
           <thead>
             <tr style="border-bottom: 1px solid #2a2a44;">
@@ -239,20 +276,24 @@
             </tr>
           </thead>
           <tbody>
-            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/register</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Inscription</td></tr>
-            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/login</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Connexion</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/register</code> <span style="color: #ef4444;">*</span></td><td class="py-1.5 px-1" style="color: #94a3b8;">Inscription (rate-limit&eacute;)</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/login</code> <span style="color: #ef4444;">*</span></td><td class="py-1.5 px-1" style="color: #94a3b8;">Connexion (rate-limit&eacute;)</td></tr>
             <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/me</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Profil de l'utilisateur connect&eacute;</td></tr>
             <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/games</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Jeux de l'utilisateur</td></tr>
-            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/games/sync</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Importer des jeux (Playnite, manuel)</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/games/sync</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Importer des jeux (max 5000 par appel)</td></tr>
             <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/games/status</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Changer le statut d'un jeu</td></tr>
             <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/games/review</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Publier/&eacute;diter une critique</td></tr>
             <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/auth/steam</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Connexion Steam OpenID</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/auth/forgot-password</code> <span style="color: #ef4444;">*</span></td><td class="py-1.5 px-1" style="color: #94a3b8;">Demander un reset de mot de passe</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/auth/reset-password</code> <span style="color: #ef4444;">*</span></td><td class="py-1.5 px-1" style="color: #94a3b8;">R&eacute;initialiser le mot de passe</td></tr>
             <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/users/search</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Rechercher des utilisateurs</td></tr>
             <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/users/:id/profile</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Profil public d'un utilisateur</td></tr>
             <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/friends</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Liste d'amis</td></tr>
             <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/friends/request</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Envoyer une demande d'ami</td></tr>
             <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/catalog</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Catalogue partag&eacute;</td></tr>
-            <tr><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/heartbeat</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Mise &agrave; jour du statut en ligne</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/heartbeat</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Mise &agrave; jour du statut en ligne</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #ef4444;">DELETE</code></td><td class="py-1.5 px-1"><code>/api/admin/reset</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Reset total (admin only via ADMIN_IDS)</td></tr>
+            <tr><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/debug/env</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Debug variables (admin only via ADMIN_IDS)</td></tr>
           </tbody>
         </table>
       </div>
@@ -293,8 +334,11 @@ SUPABASE_URL            = https://xxx.supabase.co
 SUPABASE_ANON_KEY       = (cl&eacute; anon du projet Supabase)
 SUPABASE_SERVICE_ROLE_KEY = (cl&eacute; service_role, pour les op&eacute;rations admin)
 STEAM_API_KEY           = (cl&eacute; API Steam, optionnelle pour l'import)
+XBL_API_KEY             = (cl&eacute; API Xbox via xbl.io, optionnelle)
 PUBLIC_URL              = https://ton-app.render.com (pour le callback Steam)
-SESSION_SECRET          = (optionnel, pour les cookies de session)</pre>
+SESSION_SECRET          = (optionnel, pour les cookies de session)
+ADMIN_IDS               = (optionnel, IDs s&eacute;par&eacute;s par des virgules, ex: "1,3")</pre>
+        <p class="mt-2 text-xs" style="color: #94a3b8;"><strong>ADMIN_IDS</strong> : si d&eacute;fini, seuls ces utilisateurs peuvent appeler <code>/api/admin/reset</code> et <code>/api/debug/env</code>. Si vide, tous les users authentifi&eacute;s y ont acc&egrave;s (mode d&eacute;veloppement).</p>
       </div>
 
       <h3>Base de donn&eacute;es Supabase</h3>
@@ -340,7 +384,7 @@ node playnite-reader.js --push</pre>
     </section>
 
     <footer class="mt-12 pt-6 text-center text-xs" style="border-top: 1px solid #2a2a44; color: #475569;">
-      PlayPad &mdash; Application web de gestion de biblioth&egrave;que de jeux &mdash; Documentation g&eacute;n&eacute;r&eacute;e le 27 juin 2026
+      PlayPad &mdash; Application web de gestion de biblioth&egrave;que de jeux &mdash; Documentation g&eacute;n&eacute;r&eacute;e le 30 juin 2026
     </footer>
   </div>
 </body>

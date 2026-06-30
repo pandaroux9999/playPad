@@ -5,11 +5,38 @@ const bcrypt = require('bcryptjs');
 const path = require('path');
 const https = require('https');
 const querystring = require('querystring');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const db = require('./db');
 const SupabaseSessionStore = require('./session-store');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Sécurité : headers HTTP (CSP, HSTS, X-Frame-Options, etc.)
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
+
+// Sécurité : rate limiting global (100 req / 15 min par IP)
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de requêtes, réessaie dans 15 minutes.' },
+});
+app.use(globalLimiter);
+
+// Sécurité : rate limiting strict sur l'auth (10 tentatives / 15 min)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives de connexion, réessaie dans 15 minutes.' },
+});
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
@@ -22,7 +49,7 @@ app.use(session({
   saveUninitialized: false,
   store: sessionStore,
   cookie: {
-    secure: process.env.NODE_ENV === 'production' || !!process.env.PUBLIC_URL,
+    secure: process.env.NODE_ENV === 'production',
     maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax',
   },
@@ -37,7 +64,7 @@ function requireAuth(req, res, next) {
   next();
 }
 
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authLimiter, async (req, res) => {
   try {
     const { username, displayName, password, email } = req.body;
     console.log('[Register] Request:', { username, displayName, email });
@@ -69,7 +96,7 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email requis' });
@@ -99,7 +126,7 @@ app.post('/api/auth/forgot-username', async (req, res) => {
   }
 });
 
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
   try {
     const { token, newPassword } = req.body;
     if (!token || !newPassword) return res.status(400).json({ error: 'Token et nouveau mot de passe requis' });
@@ -118,7 +145,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', authLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     console.log('[Login] Request for username:', username);
@@ -175,6 +202,9 @@ app.post('/api/games/sync', requireAuth, async (req, res) => {
   const { games } = req.body;
   if (!Array.isArray(games)) {
     return res.status(400).json({ error: 'Format invalide' });
+  }
+  if (games.length > 5000) {
+    return res.status(400).json({ error: 'Trop de jeux à la fois (max 5000)' });
   }
   try {
     for (const game of games) {
@@ -332,6 +362,11 @@ app.delete('/api/games/platform/:platform', requireAuth, async (req, res) => {
 
 app.post('/api/admin/reset', requireAuth, async (req, res) => {
   try {
+    const user = await db.getUserById(req.session.userId);
+    const adminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (adminIds.length > 0 && !adminIds.includes(String(req.session.userId))) {
+      return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+    }
     await db.resetAllData();
     console.log('[Admin] Reset all games + catalog by user', req.session.userId);
     res.json({ ok: true });
@@ -1014,8 +1049,13 @@ app.get('/api/game-details/:gameId', requireAuth, async (req, res) => {
   }
 });
 
-// Debug endpoint — vérifier les variables d'environnement
-app.get('/api/debug/env', (req, res) => {
+// Debug endpoint — vérifier les variables d'environnement (admin only)
+app.get('/api/debug/env', requireAuth, async (req, res) => {
+  const user = await db.getUserById(req.session.userId);
+  const adminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (adminIds.length > 0 && !adminIds.includes(String(req.session.userId))) {
+    return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+  }
   res.json({
     SUPABASE_URL: !!process.env.SUPABASE_URL,
     SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,

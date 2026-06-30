@@ -1,5 +1,9 @@
 {
   "name": "playpad-server",
   "version": "1.0.0",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.2.0"
+  }
 }

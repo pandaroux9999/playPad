@@ -1049,6 +1049,13 @@ app.get('/api/game-details/:gameId', requireAuth, async (req, res) => {
   }
 });
 
+// Affiliate click tracking
+app.post('/api/affiliate/click', async (req, res) => {
+  const { gameId, platform, ts } = req.body;
+  console.log(`[AFFILIATE] Click: game=${gameId} platform=${platform} ts=${ts} ip=${req.ip}`);
+  res.json({ ok: true });
+});
+
 // Debug endpoint — vérifier les variables d'environnement (admin only)
 app.get('/api/debug/env', requireAuth, async (req, res) => {
   const user = await db.getUserById(req.session.userId);

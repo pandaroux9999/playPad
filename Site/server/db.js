@@ -516,6 +516,56 @@ async function dedupeCatalog() {
   return toDelete.length;
 }
 
+async function mergeCatalogDuplicatesByTitle() {
+  const { data, error } = await supabaseAdmin.from('catalog').select('*');
+  if (error) throw new Error(error.message);
+  if (!data || data.length < 2) return 0;
+  const groups = new Map();
+  for (const g of data) {
+    const key = g.title.toLowerCase().trim();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(g);
+  }
+  const tables = ['games','wishlist','top_three','community_reviews','game_suggestions','boosts','game_boosts'];
+  let totalDeleted = 0;
+  for (const [, entries] of groups) {
+    if (entries.length < 2) continue;
+    entries.sort((a, b) =>
+      ((b.description ? 2 : 0) + (b.developer ? 1 : 0) + (b.publisher ? 1 : 0) + (b.cover ? 1 : 0)) -
+      ((a.description ? 2 : 0) + (a.developer ? 1 : 0) + (a.publisher ? 1 : 0) + (a.cover ? 1 : 0))
+    );
+    const keep = entries[0];
+    for (const dup of entries.slice(1)) {
+      for (const table of tables) {
+        const { data: refs } = await supabaseAdmin.from(table).select('*').eq('game_id', dup.game_id);
+        if (!refs) continue;
+        for (const ref of refs) {
+          let uniqueFields = {};
+          if (['games','wishlist','community_reviews','boosts'].includes(table)) uniqueFields = { user_id: ref.user_id, game_id: keep.game_id };
+          else if (table === 'top_three') uniqueFields = { user_id: ref.user_id, position: ref.position };
+          else if (table === 'game_boosts') uniqueFields = { user_id: ref.user_id, week_start: ref.week_start };
+          const { data: existing } = Object.keys(uniqueFields).length > 0
+            ? await supabaseAdmin.from(table).select('id').match(uniqueFields).maybeSingle()
+            : { data: null };
+          if (existing) await supabaseAdmin.from(table).delete().eq('id', ref.id);
+          else await supabaseAdmin.from(table).update({ game_id: keep.game_id }).eq('id', ref.id);
+        }
+      }
+      const upd = {};
+      if (!keep.cover && dup.cover) upd.cover = dup.cover;
+      if (!keep.description && dup.description) upd.description = dup.description;
+      if (!keep.developer && dup.developer) upd.developer = dup.developer;
+      if (!keep.publisher && dup.publisher) upd.publisher = dup.publisher;
+      if (!keep.genre && dup.genre) upd.genre = dup.genre;
+      if (!keep.year && dup.year) upd.year = dup.year;
+      if (Object.keys(upd).length > 0) await supabaseAdmin.from('catalog').update(upd).eq('game_id', keep.game_id);
+      const { error: delErr } = await supabaseAdmin.from('catalog').delete().eq('game_id', dup.game_id);
+      if (!delErr) totalDeleted++;
+    }
+  }
+  return totalDeleted;
+}
+
 async function getCatalog() {
   const { data, error } = await supabaseAdmin
     .from('catalog')
@@ -858,6 +908,7 @@ module.exports = {
   resetAllData,
   ensureCatalogGame,
   dedupeCatalog,
+  mergeCatalogDuplicatesByTitle,
   getCatalog,
   getCatalogCount,
   updateGamePlatform,

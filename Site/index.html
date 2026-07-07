@@ -756,6 +756,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const [filterYearMin, setFilterYearMin] = useState("");
   const [filterYearMax, setFilterYearMax] = useState("");
   const [filterDeveloper, setFilterDeveloper] = useState("");
+  const [visibleCount, setVisibleCount] = useState(50);
   const [topBoosted, setTopBoosted] = useState([]);
   const [boostPoints, setBoostPoints] = useState(null);
   const [boostedGamesLocal, setBoostedGamesLocal] = useState(new Set());
@@ -769,6 +770,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     }).catch(() => {});
     API.getBoostPoints().then(d => setBoostPoints(d.points)).catch(() => {});
   }, []);
+  const loadMore = () => setVisibleCount(prev => prev + 50);
   const genres = useMemo(() => ["all", ...new Set(catalog.map(g => g.genre).filter(Boolean))], [catalog]);
   const platforms = ["all", "ps5", "steam", "epic", "nintendo", "xbox"];
   const filtered = useMemo(() => catalog.filter(g =>
@@ -782,7 +784,8 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     g.title.toLowerCase().includes(search.toLowerCase())
   ), [catalog, activePlatform, activeGenre, search, filterRatingMin, filterRatingMax, filterYearMin, filterYearMax, filterDeveloper]);
   const hasActiveFilters = activePlatform !== "all" || activeGenre !== "all" || filterRatingMin > 0 || filterRatingMax < 5 || filterYearMin || filterYearMax || filterDeveloper;
-  const clearFilters = () => { setActivePlatform("all"); setActiveGenre("all"); setFilterRatingMin(0); setFilterRatingMax(5); setFilterYearMin(""); setFilterYearMax(""); setFilterDeveloper(""); };
+  const clearFilters = () => { setActivePlatform("all"); setActiveGenre("all"); setFilterRatingMin(0); setFilterRatingMax(5); setFilterYearMin(""); setFilterYearMax(""); setFilterDeveloper(""); setVisibleCount(50); };
+  useEffect(() => { setVisibleCount(50); }, [activePlatform, activeGenre, search, filterRatingMin, filterRatingMax, filterYearMin, filterYearMax, filterDeveloper]);
   const handleBoost = async (gameId, e) => {
     if (e) e.stopPropagation();
     if (boostedGamesLocal.has(gameId)) { showToast?.('Tu as déjà boosté ce jeu'); return; }
@@ -889,7 +892,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
               boosterPoints > 0 && h('div', { className: "flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold", style: { background: `${P1}15`, color: P1 } }, h(Zap, { size: 10, fill: P1 }), boosterPoints + " point" + (boosterPoints > 1 ? "s" : "") + " booster")
             ),
             h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" },
-              filtered.map(game => {
+              filtered.slice(0, visibleCount).map(game => {
                 const hasBoosted = userBoostedSet?.has(game.game_id);
                 const boostCount = topBoosted.find(b => b.game_id === game.game_id)?.count || 0;
                 return h(GameCard, {
@@ -906,7 +909,8 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                   boosterActive: hasBoosted,
                 });
               })
-            )
+            ),
+            visibleCount < filtered.length && h('button', { onClick: loadMore, className: "w-full mt-3 py-2 text-[10px] font-bold rounded-xl flex items-center justify-center gap-1.5", style: { background: `${P1}15`, color: P1 } }, "Voir plus (" + (filtered.length - visibleCount) + ")")
           )
     )
   );

@@ -725,7 +725,7 @@ const CATALOG_PLATFORMS = [
   { id: 186, prefix: 'xbox' },
   { id: 1,  prefix: 'xbox' },
 ];
-const CATALOG_PAGES = 10; // 10 pages × 40 jeux = 400 jeux par plateforme
+const CATALOG_PAGES = 5; // 5 pages × 40 jeux = 200 jeux par plateforme
 let lastCatalogPopulate = 0;
 const CATALOG_COOLDOWN = 60000; // 1 min entre chaque peuplement
 
@@ -739,6 +739,7 @@ app.post('/api/catalog/populate', async (req, res) => {
     const rawgKey = process.env.RAWG_API_KEY;
     if (!rawgKey) return res.status(500).json({ error: 'RAWG_API_KEY non configurée — va sur https://rawg.io/signup' });
     const total = await populateCatalogFromRAWG(rawgKey);
+    db.mergeCatalogDuplicatesByTitle().catch(() => {});
     // Refresh descriptions in background
     refreshCatalogDescriptions().catch(() => {});
     res.json({ ok: true, count: total });
@@ -835,6 +836,7 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
       if (existing < 100) {
         console.log('[Catalog] Peuplement initial du catalogue via RAWG...');
         const count = await populateCatalogFromRAWG(rawgKey);
+        await db.mergeCatalogDuplicatesByTitle().catch(() => {});
         console.log(`[Catalog] ${count} jeux ajoutés au catalogue`);
       } else {
         console.log(`[Catalog] Catalogue déjà peuplé (${existing} jeux), skip`);

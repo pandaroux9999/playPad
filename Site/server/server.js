@@ -28,8 +28,8 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdn.tailwindcss.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https://cdn.cloudflare.steamstatic.com", "https://steamcdn-a.akamaihd.net"],
-      connectSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https://cdn.cloudflare.steamstatic.com", "https://steamcdn-a.akamaihd.net", "https://media.rawg.io"],
+      connectSrc: ["'self'", "http://localhost:3456"],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
@@ -714,6 +714,81 @@ app.get('/api/platform/xbox/diagnostic', requireAuth, async (req, res) => {
   res.json({ diagnostic: diag.join(' | ') });
 });
 
+// Nintendo — sync via RAWG Video Games Database (API gratuite sur https://rawg.io)
+app.post('/api/platform/nintendo/connect', requireAuth, async (req, res) => {
+  try {
+    const rawgKey = process.env.RAWG_API_KEY;
+    if (!rawgKey) return res.status(500).json({ error: 'RAWG_API_KEY non configurée — va sur https://rawg.io/signup pour obtenir une clé gratuite' });
+    const games = await fetchNintendoGames(rawgKey);
+    let added = 0, matched = 0;
+    for (const game of games) {
+      await db.upsertGame(req.session.userId, game);
+      await db.ensureCatalogGame(game);
+      added++;
+    }
+    // Marquer les jeux existants (même titre) avec le badge Nintendo
+    const rawGames = await db.getAllUserGames(req.session.userId);
+    for (const rg of rawGames) {
+      if (rg.platform && rg.platform.includes('nintendo')) continue;
+      const match = games.find(g => g.title.toLowerCase() === rg.title.toLowerCase().trim());
+      if (match && rg.game_id) {
+        const newPlatform = rg.platform ? `${rg.platform},nintendo` : 'nintendo';
+        await db.upsertGame(req.session.userId, { ...rg, platform: newPlatform });
+        matched++;
+      }
+    }
+    res.json({ ok: true, count: added, matched });
+  } catch (err) {
+    console.error('[NintendoConnect] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+async function fetchNintendoGames(apiKey) {
+  const games = [];
+  let page = 1;
+  const perPage = 40;
+  while (page <= 5) {
+    const url = `https://api.rawg.io/api/games?key=${apiKey}&platforms=7&page=${page}&page_size=${perPage}&ordering=-rating`;
+    try {
+      const data = await rawgApiGet(url);
+      if (!data || !data.results) break;
+      for (const item of data.results) {
+        if (!item.name) continue;
+        games.push({
+          game_id: `nintendo-${item.id}`,
+          title: item.name,
+          platform: 'nintendo',
+          cover: item.background_image || '',
+          genre: (item.genres || []).map(g => g.name).join(', '),
+          year: item.released ? (parseInt(item.released.split('-')[0]) || 0) : 0,
+          developer: '',
+          publisher: '',
+        });
+      }
+      if (!data.next) break;
+      page++;
+    } catch (e) {
+      console.error('[NintendoFetch] Page error:', page, e.message);
+      break;
+    }
+  }
+  return games;
+}
+
+function rawgApiGet(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
+      let d = '';
+      resp.on('data', c => d += c);
+      resp.on('end', () => {
+        try { resolve(JSON.parse(d)); }
+        catch (e) { reject(e); }
+      });
+    }).on('error', reject);
+  });
+}
+
 // Récupère les jeux Xbox via xbl.io (clé gratuite sur https://xbl.io)
 // Retourne { games: [], diagnostic: '...' }
 async function fetchXboxGames(apiKey, gamertag) {
@@ -1237,6 +1312,7 @@ app.listen(PORT, () => {
   console.log('[Server] PUBLIC_URL:', process.env.PUBLIC_URL || '⚠️ NON DÉFINI — Steam OpenID va échouer ! Définir PUBLIC_URL dans les env vars Render');
   console.log('[Server] STEAM_API_KEY:', process.env.STEAM_API_KEY ? 'defined' : 'NON DÉFINI — Steam import ne marchera pas');
   console.log('[Server] XBL_API_KEY:', process.env.XBL_API_KEY ? 'defined' : 'NON DÉFINI — Xbox import ne marchera pas');
+  console.log('[Server] RAWG_API_KEY:', process.env.RAWG_API_KEY ? 'defined' : 'NON DÉFINI — Nintendo import ne marchera pas');
   if (!process.env.PUBLIC_URL) {
     console.warn('⚠️  PUBLIC_URL manquant. Steam OpenID redirigera vers localhost au lieu de l\'URL publique.');
     console.warn('    Ajoute PUBLIC_URL=https://ton-app.render.com dans les env vars Render.');

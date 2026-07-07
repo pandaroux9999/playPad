@@ -93,6 +93,15 @@ async function getUserById(id) {
   return data;
 }
 
+async function getAllUserGames(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('games')
+    .select('*')
+    .eq('user_id', userId);
+  checkResult({ data, error });
+  return data || [];
+}
+
 async function getGames(userId) {
   const { data, error } = await supabaseAdmin
     .from('games')
@@ -508,6 +517,15 @@ async function deleteGame(userId, gameId) {
   if (error) throw new Error(error.message);
 }
 
+async function updateGamePlatform(userId, gameId, platform) {
+  const { error } = await supabaseAdmin
+    .from('games')
+    .update({ platform })
+    .eq('user_id', userId)
+    .eq('game_id', gameId);
+  if (error) throw new Error(error.message);
+}
+
 async function deletePlatformGames(userId, platform) {
   const { error } = await supabaseAdmin
     .from('games')
@@ -801,11 +819,13 @@ module.exports = {
   sendGameSuggestion,
   getGameSuggestions,
   removeGameSuggestion,
+  getAllUserGames,
   deleteAllUserGames,
   deleteGame,
   resetAllData,
   ensureCatalogGame,
   getCatalog,
+  updateGamePlatform,
   deletePlatformGames,
   updateLastSeen,
   setSteamId,

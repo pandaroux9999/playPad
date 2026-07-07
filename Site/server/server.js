@@ -795,45 +795,42 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
     }
   } catch (e) {}
 
-  const dateRanges = [
-    { label: 'pre2000', start: '1970-01-01', end: '1999-12-31', pages: 10 },
-    { label: '2000s',   start: '2000-01-01', end: '2009-12-31', pages: 15 },
-    { label: '2010sA',  start: '2010-01-01', end: '2014-12-31', pages: 20 },
-    { label: '2010sB',  start: '2015-01-01', end: '2019-12-31', pages: 20 },
-    { label: '2020s',   start: '2020-01-01', end: '2026-12-31', pages: 25 },
-  ];
-  const orderings = ['-added', '-rating'];
+  const yearRanges = [];
+  for (let y = 1980; y <= 2026; y += 2) {
+    const end = Math.min(y + 1, 2026);
+    yearRanges.push({ label: String(y), start: `${y}-01-01`, end: `${end}-12-31`, pages: 10 });
+  }
+  // catch-all for games missing dates
+  yearRanges.push({ label: 'nodate', start: '1970-01-01', end: '2026-12-31', pages: 15 });
 
   for (const plat of targets) {
-    for (const range of dateRanges) {
-      for (const order of orderings) {
-        let page = 1;
-        while (page <= range.pages) {
-          const url = `https://api.rawg.io/api/games?key=${apiKey}&platforms=${plat.id}&dates=${range.start},${range.end}&page=${page}&page_size=40&ordering=${order}`;
-          try {
-            const data = await rawgApiGet(url);
-            if (!data || !data.results) break;
-            for (const item of data.results) {
-              if (!item.name || seen.has(item.id)) { if (item.name) skipped++; continue; }
-              seen.add(item.id);
-              await db.ensureCatalogGame({
-                game_id: `${plat.prefix}-${item.id}`,
-                title: item.name,
-                platform: plat.prefix,
-                cover: item.background_image || '',
-                genre: (item.genres || []).map(g => g.name).join(', '),
-                year: item.released ? (parseInt(item.released.split('-')[0]) || 0) : 0,
-                developer: '',
-                publisher: '',
-              });
-              total++;
-            }
-            if (!data.next) break;
-            page++;
-          } catch (e) {
-            console.error(`[RAWG] Error ${plat.prefix} ${range.label} ${order} page ${page}:`, e.message);
-            break;
+    for (const range of yearRanges) {
+      let page = 1;
+      while (page <= range.pages) {
+        const url = `https://api.rawg.io/api/games?key=${apiKey}&platforms=${plat.id}&dates=${range.start},${range.end}&page=${page}&page_size=40&ordering=-added`;
+        try {
+          const data = await rawgApiGet(url);
+          if (!data || !data.results) break;
+          for (const item of data.results) {
+            if (!item.name || seen.has(item.id)) { if (item.name) skipped++; continue; }
+            seen.add(item.id);
+            await db.ensureCatalogGame({
+              game_id: `${plat.prefix}-${item.id}`,
+              title: item.name,
+              platform: plat.prefix,
+              cover: item.background_image || '',
+              genre: (item.genres || []).map(g => g.name).join(', '),
+              year: item.released ? (parseInt(item.released.split('-')[0]) || 0) : 0,
+              developer: '',
+              publisher: '',
+            });
+            total++;
           }
+          if (!data.next) break;
+          page++;
+        } catch (e) {
+          console.error(`[RAWG] Error ${plat.prefix} ${range.label} page ${page}:`, e.message);
+          break;
         }
       }
     }

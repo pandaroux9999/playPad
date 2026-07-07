@@ -745,7 +745,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   );
 }
 
-function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topThreeIds, onToggleTopThree, showToast, boosterPoints, onBoostGame, boostedGames, userBoostedSet }) {
+function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topThreeIds, onToggleTopThree, showToast, boosterPoints, onBoostGame, boostedGames, userBoostedSet, refreshKey }) {
   const [search, setSearch] = useState("");
   const [activePlatform, setActivePlatform] = useState("all");
   const [activeGenre, setActiveGenre] = useState("all");
@@ -768,7 +768,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       if ((d.top || []).length > 0) setShowBoostSection(true);
     }).catch(() => {});
     API.getBoostPoints().then(d => setBoostPoints(d.points)).catch(() => {});
-  }, []);
+  }, [refreshKey]);
 
   const genres = useMemo(() => ["all", ...new Set(catalog.map(g => g.genre).filter(Boolean))], [catalog]);
   const platforms = ["all", "ps5", "steam", "epic", "nintendo", "xbox"];
@@ -1790,6 +1790,7 @@ function App() {
   const [boosterPoints, setBoosterPoints] = useState(0);
   const [boostedGames, setBoostedGames] = useState([]);
   const [userBoostedSet, setUserBoostedSet] = useState(new Set());
+  const [catalogRefreshKey, setCatalogRefreshKey] = useState(0);
   const refreshBooster = useCallback(async () => {
     try {
       const [bpData, topData] = await Promise.all([API.getBoosterPoints(), API.getTopBoosted()]);
@@ -1836,7 +1837,7 @@ function App() {
     }).then(([bpData, topData]) => {
       setBoosterPoints(bpData.points || 0);
       setBoostedGames(topData.top || []);
-      API.populateCatalog().catch(() => {});
+      API.populateCatalog().then(() => { setCatalogRefreshKey(k => k + 1); }).catch(() => {});
     }).catch((err) => {
       console.log('[App] No session (expected if not logged in):', err?.message);
     }).finally(() => {
@@ -2038,9 +2039,9 @@ function App() {
         h('div', { className: "h-full overflow-y-auto" },
           view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); }, wishlistIds, onToggleWishlist: handleToggleWishlist, topThreeIds, onToggleTopThree: handleToggleTopThree }),
           view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
-          view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
+          view === "catalogue" && h(CatalogueView, { key: 'cat', refreshKey: catalogRefreshKey, onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
-          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadGames(); loadCatalog(); }, showToast })
+          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast })
         )
       ),
       h(BottomNav, { view, setView }),

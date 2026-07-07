@@ -746,7 +746,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
     h('div', { className: "flex-1 overflow-y-auto px-4 pb-4", style: { scrollbarWidth: "none" } },
       filtered.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
-        : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: () => onSelect(game), wishlistIds, onWishlist: onToggleWishlist, topThreeIds, onCrown: onToggleTopThree })))
+        : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: () => onSelect(game), wishlistIds, onWishlist: onToggleWishlist, topThreeIds, onCrown: onToggleTopThree, onBuy: handleBuy })))
     )
   );
 }
@@ -910,7 +910,6 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                   boosted: boostedGamesLocal.has(game.game_id),
                   boosterBtn: boosterPoints > 0 && !hasBoosted ? () => onBoostGame?.(game.game_id) : null,
                   boosterActive: hasBoosted,
-                  onBuy: handleBuy,
                 });
               })
             )

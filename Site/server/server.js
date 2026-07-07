@@ -724,7 +724,7 @@ const CATALOG_PLATFORMS = [
   { id: 186, prefix: 'xbox' },
   { id: 1,  prefix: 'xbox' },
 ];
-const CATALOG_PAGES = 3; // 3 pages × 40 jeux = 120 jeux par plateforme
+const CATALOG_PAGES = 10; // 10 pages × 40 jeux = 400 jeux par plateforme
 let lastCatalogPopulate = 0;
 const CATALOG_COOLDOWN = 60000; // 1 min entre chaque peuplement
 
@@ -752,6 +752,14 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
   await db.dedupeCatalog().catch(() => {});
   let total = 0;
   const seen = new Set();
+  // Seed seen with existing catalog numeric IDs to avoid re-insertion under different prefixes
+  try {
+    const existing = await db.getCatalog();
+    for (const g of existing) {
+      const m = g.game_id.match(/(\d+)$/);
+      if (m) seen.add(m[1]);
+    }
+  } catch (e) {}
   for (const plat of targets) {
     let page = 1;
     while (page <= CATALOG_PAGES) {
@@ -1208,7 +1216,10 @@ app.get('/api/game-details/:gameId', requireAuth, async (req, res) => {
     const description = d.short_description || d.about_the_game || '';
     // Save to catalog for future requests
     if (description) {
-      await db.ensureCatalogGame({ game_id: gameId, title: '', description }).catch(() => {});
+      const { data: existing } = await db.supabaseAdmin.from('catalog').select('title').eq('game_id', gameId).maybeSingle();
+      if (existing?.title) {
+        await db.ensureCatalogGame({ game_id: gameId, title: existing.title, description }).catch(() => {});
+      }
     }
     res.json({
       details: {

@@ -84,8 +84,8 @@ const API = {
   connectSteam: (steamId) => API.request('POST', '/api/platform/steam/connect', { steamId }),
   resyncSteam: () => API.request('POST', '/api/platform/steam/resync'),
   connectXbox: (gamertag) => API.request('POST', '/api/platform/xbox/connect', { gamertag }),
-  connectNintendo: () => API.request('POST', '/api/platform/nintendo/connect'),
   xboxDiagnostic: (gamertag) => API.request('GET', '/api/platform/xbox/diagnostic?gamertag=' + encodeURIComponent(gamertag)),
+  populateCatalog: () => API.request('POST', '/api/catalog/populate'),
   setStatus: (gameId, status) => API.request('POST', '/api/games/status', { gameId, status }),
   saveReview: (gameId, rating, reviewText, reviewPublic, gameTitle, gameCover) => API.request('POST', '/api/games/review', { gameId, rating, reviewText, reviewPublic, gameTitle, gameCover }),
   getWishlist: () => API.request('GET', '/api/wishlist'),
@@ -549,17 +549,8 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
           const cfg = PLATFORM_CONFIG[platform];
            const isConnected = connected[platform];
           const isXbox = platform === "xbox";
-          const isNintendo = platform === "nintendo";
           const onConnect = platform === "steam"
             ? () => { window.location.href = "/api/auth/steam"; }
-            : isNintendo
-            ? async () => {
-                try {
-                  const r = await API.connectNintendo();
-                  setConnected(c => ({ ...c, nintendo: true })); onSyncComplete?.();
-                  showToast(`Nintendo connecté · ${r.count} jeux ajoutés${r.matched ? ', ' + r.matched + ' existants marqués' : ''}`);
-                } catch (err) { showToast('Erreur Nintendo: ' + (err.message || 'inconnue')); }
-              }
             : async () => {
               const label = isXbox ? 'Gamertag Xbox' : 'identifiant';
               const current = isXbox ? user?.xbox_gamertag : '';
@@ -587,10 +578,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
                     )
                     : (isXbox && user?.xbox_gamertag
                       ? h('button', { onClick: async (e) => { e.stopPropagation(); setSyncing('xbox'); try { const r = await API.connectXbox(user.xbox_gamertag); if (r.diagnostic) showToast('Diagnostic: ' + r.diagnostic); if (r.warning) showToast(r.warning); showToast(`${r.count} jeux Xbox synchronisés`); onSyncComplete?.(); } catch (err) { showToast('Erreur Xbox: ' + (err.message || 'inconnue')); } finally { setSyncing(null); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, syncing === 'xbox' ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
-                      : (isNintendo
-                        ? h('button', { onClick: async (e) => { e.stopPropagation(); setSyncing('nintendo'); try { const r = await API.connectNintendo(); showToast(`Nintendo re-sync: ${r.count} ajoutés, ${r.matched} existants`); onSyncComplete?.(); } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); } finally { setSyncing(null); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, syncing === 'nintendo' ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
-                        : null
-                      )
+                      : null
                     ),
                   isXbox && user?.xbox_gamertag && h('button', { onClick: async (e) => { e.stopPropagation(); try { const r = await API.xboxDiagnostic(user.xbox_gamertag); showToast('Xbox: ' + r.diagnostic); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center hover:opacity-80", style: { background: "rgba(139,92,246,0.1)", color: "#8B5CF6", width: 24, height: 24 } }, h(Search, { size: 10 })),
                   h('button', { onClick: async (e) => { e.stopPropagation(); if (!confirm(`Supprimer tous les jeux ${cfg.name} de votre bibliothèque ?`)) return; await API.disconnectPlatform(platform); setConnected(c => ({ ...c, [platform]: false })); onSyncComplete?.(); showToast(`Jeux ${cfg.name} retirés`); }, className: "p-1.5 rounded-lg hover:opacity-80", style: { background: "rgba(239,68,68,0.15)" } }, h(Trash2, { size: 10, style: { color: "#ef4444" } }))]
@@ -622,6 +610,9 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
             h(Upload, { size: 10, style: { color: `${P1}aa` } }),
             h('span', { className: "text-[9px] font-medium", style: { color: `${P1}aa` } }, "Importer un fichier JSON (export Playnite)"),
             h('input', { type: "file", accept: ".json", style: { display: "none" }, onChange: handleFileImport })
+          ),
+          h('div', { className: "mt-2 pt-2 border-t border-border flex items-center justify-between" },
+            h('button', { onClick: async () => { try { const r = await API.populateCatalog(); showToast(`Catalogue enrichi : ${r.count} jeux ajoutés`); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "text-[9px] font-medium hover:opacity-80", style: { color: `${P1}80` } }, "Enrichir le catalogue (RAWG)")
           )
         )
       ),
@@ -1301,7 +1292,6 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
                   let r;
                   if (p.id === 'steam') r = await API.resyncSteam();
                   else if (p.id === 'xbox' && user?.xbox_gamertag) r = await API.connectXbox(user.xbox_gamertag);
-                  else if (p.id === 'nintendo') r = await API.connectNintendo();
                   if (r?.count !== undefined) showToast(`${r.count} jeux ${p.name} synchronisés`);
                   onSyncComplete?.();
                 } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); }
@@ -1310,8 +1300,6 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
               syncingPlatform === p.id ? h(Loader, { size: 11, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 11, style: { color: P1 } }))
             : (p.id === 'steam'
               ? h('a', { href: "/api/auth/steam", className: "px-2.5 py-1 text-[9px] font-bold rounded-md text-white whitespace-nowrap", style: { background: GRAD } }, "Connecter")
-              : p.id === 'nintendo'
-              ? h('button', { onClick: async () => { try { const r = await API.connectNintendo(); showToast(`Nintendo: ${r.count} jeux ajoutés${r.matched ? ', ' + r.matched + ' existants' : ''}`); onSyncComplete?.(); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "px-2.5 py-1 text-[9px] font-bold rounded-md text-white whitespace-nowrap", style: { background: GRAD } }, "Connecter")
               : null)
         )),
         bridgeStatus !== 'unknown' && h('div', { className: "pt-2 mt-1 border-t border-border flex items-center gap-2 px-2" },

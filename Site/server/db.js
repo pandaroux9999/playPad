@@ -500,6 +500,14 @@ async function getCatalog() {
   return data || [];
 }
 
+async function getCatalogCount() {
+  const { count, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*', { count: 'exact', head: true });
+  if (error) throw new Error(error.message);
+  return count || 0;
+}
+
 async function deleteAllUserGames(userId) {
   const { error } = await supabaseAdmin
     .from('games')
@@ -825,6 +833,7 @@ module.exports = {
   resetAllData,
   ensureCatalogGame,
   getCatalog,
+  getCatalogCount,
   updateGamePlatform,
   deletePlatformGames,
   updateLastSeen,

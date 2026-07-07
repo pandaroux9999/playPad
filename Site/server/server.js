@@ -714,67 +714,85 @@ app.get('/api/platform/xbox/diagnostic', requireAuth, async (req, res) => {
   res.json({ diagnostic: diag.join(' | ') });
 });
 
-// Nintendo — sync via RAWG Video Games Database (API gratuite sur https://rawg.io)
-app.post('/api/platform/nintendo/connect', requireAuth, async (req, res) => {
+// Catalogue — importe les jeux populaires depuis RAWG API dans le catalogue global
+// (utilise RAWG platform IDs: 4=PC, 7=Nintendo Switch, 187=PS5, 186=Xbox Series, 1=Xbox One, 18=PS4)
+const CATALOG_PLATFORMS = [
+  { id: 4,  prefix: 'pc' },
+  { id: 7,  prefix: 'nintendo' },
+  { id: 187, prefix: 'ps5' },
+  { id: 18, prefix: 'ps4' },
+  { id: 186, prefix: 'xboxseries' },
+  { id: 1,  prefix: 'xboxone' },
+];
+const CATALOG_PAGES = 3; // 3 pages × 40 jeux = 120 jeux par plateforme
+
+app.post('/api/catalog/populate', async (req, res) => {
   try {
     const rawgKey = process.env.RAWG_API_KEY;
-    if (!rawgKey) return res.status(500).json({ error: 'RAWG_API_KEY non configurée — va sur https://rawg.io/signup pour obtenir une clé gratuite' });
-    const games = await fetchNintendoGames(rawgKey);
-    let added = 0, matched = 0;
-    for (const game of games) {
-      await db.upsertGame(req.session.userId, game);
-      await db.ensureCatalogGame(game);
-      added++;
-    }
-    // Marquer les jeux existants (même titre) avec le badge Nintendo
-    const rawGames = await db.getAllUserGames(req.session.userId);
-    for (const rg of rawGames) {
-      if (rg.platform && rg.platform.includes('nintendo')) continue;
-      const match = games.find(g => g.title.toLowerCase() === rg.title.toLowerCase().trim());
-      if (match && rg.game_id) {
-        const newPlatform = rg.platform ? `${rg.platform},nintendo` : 'nintendo';
-        await db.upsertGame(req.session.userId, { ...rg, platform: newPlatform });
-        matched++;
-      }
-    }
-    res.json({ ok: true, count: added, matched });
+    if (!rawgKey) return res.status(500).json({ error: 'RAWG_API_KEY non configurée — va sur https://rawg.io/signup' });
+    const total = await populateCatalogFromRAWG(rawgKey);
+    res.json({ ok: true, count: total });
   } catch (err) {
-    console.error('[NintendoConnect] Error:', err.message);
+    console.error('[CatalogPopulate] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-async function fetchNintendoGames(apiKey) {
-  const games = [];
-  let page = 1;
-  const perPage = 40;
-  while (page <= 5) {
-    const url = `https://api.rawg.io/api/games?key=${apiKey}&platforms=7&page=${page}&page_size=${perPage}&ordering=-rating`;
-    try {
-      const data = await rawgApiGet(url);
-      if (!data || !data.results) break;
-      for (const item of data.results) {
-        if (!item.name) continue;
-        games.push({
-          game_id: `nintendo-${item.id}`,
-          title: item.name,
-          platform: 'nintendo',
-          cover: item.background_image || '',
-          genre: (item.genres || []).map(g => g.name).join(', '),
-          year: item.released ? (parseInt(item.released.split('-')[0]) || 0) : 0,
-          developer: '',
-          publisher: '',
-        });
+async function populateCatalogFromRAWG(apiKey, platformFilter) {
+  const targets = platformFilter
+    ? CATALOG_PLATFORMS.filter(p => p.id === platformFilter || p.prefix === platformFilter)
+    : CATALOG_PLATFORMS;
+  let total = 0;
+  for (const plat of targets) {
+    let page = 1;
+    while (page <= CATALOG_PAGES) {
+      const url = `https://api.rawg.io/api/games?key=${apiKey}&platforms=${plat.id}&page=${page}&page_size=40&ordering=-rating`;
+      try {
+        const data = await rawgApiGet(url);
+        if (!data || !data.results) break;
+        for (const item of data.results) {
+          if (!item.name) continue;
+          await db.ensureCatalogGame({
+            game_id: `${plat.prefix}-${item.id}`,
+            title: item.name,
+            platform: plat.prefix,
+            cover: item.background_image || '',
+            genre: (item.genres || []).map(g => g.name).join(', '),
+            year: item.released ? (parseInt(item.released.split('-')[0]) || 0) : 0,
+            developer: '',
+            publisher: '',
+          });
+          total++;
+        }
+        if (!data.next) break;
+        page++;
+      } catch (e) {
+        console.error(`[RAWG] Page error ${plat.prefix} page ${page}:`, e.message);
+        break;
       }
-      if (!data.next) break;
-      page++;
-    } catch (e) {
-      console.error('[NintendoFetch] Page error:', page, e.message);
-      break;
     }
   }
-  return games;
+  return total;
 }
+
+// Peuple le catalogue au démarrage si vide
+(async () => {
+  try {
+    const rawgKey = process.env.RAWG_API_KEY;
+    if (rawgKey) {
+      const existing = await db.getCatalogCount();
+      if (existing < 100) {
+        console.log('[Catalog] Peuplement initial du catalogue via RAWG...');
+        const count = await populateCatalogFromRAWG(rawgKey);
+        console.log(`[Catalog] ${count} jeux ajoutés au catalogue`);
+      } else {
+        console.log(`[Catalog] Catalogue déjà peuplé (${existing} jeux), skip`);
+      }
+    }
+  } catch (e) {
+    console.error('[Catalog] Erreur peuplement initial:', e.message);
+  }
+})();
 
 function rawgApiGet(url) {
   return new Promise((resolve, reject) => {
@@ -1312,7 +1330,7 @@ app.listen(PORT, () => {
   console.log('[Server] PUBLIC_URL:', process.env.PUBLIC_URL || '⚠️ NON DÉFINI — Steam OpenID va échouer ! Définir PUBLIC_URL dans les env vars Render');
   console.log('[Server] STEAM_API_KEY:', process.env.STEAM_API_KEY ? 'defined' : 'NON DÉFINI — Steam import ne marchera pas');
   console.log('[Server] XBL_API_KEY:', process.env.XBL_API_KEY ? 'defined' : 'NON DÉFINI — Xbox import ne marchera pas');
-  console.log('[Server] RAWG_API_KEY:', process.env.RAWG_API_KEY ? 'defined' : 'NON DÉFINI — Nintendo import ne marchera pas');
+  console.log('[Server] RAWG_API_KEY:', process.env.RAWG_API_KEY ? 'defined' : 'NON DÉFINI — catalogue RAWG indisponible');
   if (!process.env.PUBLIC_URL) {
     console.warn('⚠️  PUBLIC_URL manquant. Steam OpenID redirigera vers localhost au lieu de l\'URL publique.');
     console.warn('    Ajoute PUBLIC_URL=https://ton-app.render.com dans les env vars Render.');

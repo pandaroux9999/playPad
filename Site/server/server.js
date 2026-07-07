@@ -725,7 +725,7 @@ const CATALOG_PLATFORMS = [
   { id: 186, prefix: 'xbox' },
   { id: 1,  prefix: 'xbox' },
 ];
-const CATALOG_PAGES = 15; // 15 pages × 40 jeux = 600 jeux par plateforme
+const CATALOG_PAGES = 20; // 20 pages × 40 jeux = 800 jeux par plateforme (max RAWG)
 let lastCatalogPopulate = 0;
 const CATALOG_COOLDOWN = 60000; // 1 min entre chaque peuplement
 
@@ -785,6 +785,7 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
     : CATALOG_PLATFORMS;
   await db.dedupeCatalog().catch(() => {});
   let total = 0;
+  let skipped = 0;
   const seen = new Set();
   // Seed seen with existing catalog numeric IDs to avoid re-insertion under different prefixes
   try {
@@ -802,7 +803,7 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
         const data = await rawgApiGet(url);
         if (!data || !data.results) break;
         for (const item of data.results) {
-          if (!item.name || seen.has(item.id)) continue;
+          if (!item.name || seen.has(item.id)) { if (item.name) skipped++; continue; }
           seen.add(item.id);
           await db.ensureCatalogGame({
             game_id: `${plat.prefix}-${item.id}`,
@@ -824,6 +825,7 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
       }
     }
   }
+  console.log(`[Catalog] ${total} ajoutés, ${skipped} ignorés (déjà présents)`);
   return total;
 }
 

@@ -1837,12 +1837,11 @@ function App() {
     }).then(([bpData, topData]) => {
       setBoosterPoints(bpData.points || 0);
       setBoostedGames(topData.top || []);
-      API.populateCatalog().then(() => { setCatalogRefreshKey(k => k + 1); }).catch(() => {});
     }).catch((err) => {
       console.log('[App] No session (expected if not logged in):', err?.message);
     }).finally(() => {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('steam') === 'ok') { showToast(`${params.get('count') || 0} jeux Steam importés`); }
+      if (params.get('steam') === 'ok') { showToast(`${params.get('count') || 0} jeux Steam importés`); setCatalogRefreshKey(k => k + 1); }
       else if (params.get('steam') === 'error') { showToast('Erreur Steam: ' + (params.get('msg') || '?')); }
       if (params.has('steam')) { window.history.replaceState({}, '', window.location.pathname); }
       setLoading(false);

@@ -471,19 +471,20 @@ async function removeGameSuggestion(id) {
 }
 
 async function ensureCatalogGame(game) {
-  const { game_id, title, platform, cover, genre, year, developer, publisher } = game;
+  const { game_id, title, platform, cover, genre, year, developer, publisher, description } = game;
   if (!game_id || !title) return;
   const payload = { game_id, title, platform: platform || '', cover: cover || '', genre: genre || '', year: year || 0, developer: developer || '', publisher: publisher || '' };
+  if (description) payload.description = description;
   const { error } = await supabaseAdmin
     .from('catalog')
     .upsert(payload, { onConflict: 'game_id', ignoreDuplicates: false });
   if (error && error.code !== '23505') {
-    // Retry without developer/publisher if columns don't exist
-    if (error.message && error.message.includes('developer')) {
+    if (error.message && (error.message.includes('developer') || error.message.includes('description'))) {
+      const fallback = { game_id, title, platform: platform || '', cover: cover || '', genre: genre || '', year: year || 0 };
+      if (description && !error.message.includes('description')) fallback.description = description;
       const { error: e2 } = await supabaseAdmin
         .from('catalog')
-        .upsert({ game_id, title, platform: platform || '', cover: cover || '', genre: genre || '', year: year || 0 },
-          { onConflict: 'game_id', ignoreDuplicates: false });
+        .upsert(fallback, { onConflict: 'game_id', ignoreDuplicates: false });
       if (e2 && e2.code !== '23505') throw new Error(e2.message);
       return;
     }

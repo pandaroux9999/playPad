@@ -1177,20 +1177,42 @@ app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
 // Détails enrichis d'un jeu (Steam Store API) — sans clé API, gratuit
 app.get('/api/game-details/:gameId', requireAuth, async (req, res) => {
   try {
-    let appid = req.params.gameId.replace('steam-', '');
-    // Try to extract Steam App ID from the game's cover URL
+    const gameId = req.params.gameId;
+    // Try to get cached description from catalog
+    const { data: catEntry } = await db.supabaseAdmin
+      .from('catalog')
+      .select('description')
+      .eq('game_id', gameId)
+      .maybeSingle();
+    if (catEntry?.description) {
+      return res.json({
+        details: {
+          description: catEntry.description,
+          developers: [],
+          publishers: [],
+          platforms: [], price: null, metacritic: null, recommendations: 0,
+          release_date: '', header_image: '', website: '',
+        }
+      });
+    }
+    let appid = gameId.replace('steam-', '');
     const { cover } = req.query;
     if (cover) {
       const m = cover.match(/steam\/apps\/(\d+)/);
       if (m) appid = m[1];
     }
     if (!appid || !/^\d+$/.test(appid)) return res.json({ details: null });
-    const details = await steamStoreGet(appid);
-    if (!details || !details.success || !details.data) return res.json({ details: null });
-    const d = details.data;
+    const steamDetails = await steamStoreGet(appid);
+    if (!steamDetails || !steamDetails.success || !steamDetails.data) return res.json({ details: null });
+    const d = steamDetails.data;
+    const description = d.short_description || d.about_the_game || '';
+    // Save to catalog for future requests
+    if (description) {
+      await db.ensureCatalogGame({ game_id: gameId, title: '', description }).catch(() => {});
+    }
     res.json({
       details: {
-        description: d.short_description || d.about_the_game || '',
+        description,
         developers: d.developers || [],
         publishers: d.publishers || [],
         platforms: Object.entries(d.platforms || {}).filter(([, v]) => v).map(([k]) => k),
@@ -1211,23 +1233,23 @@ app.get('/api/game-details/:gameId', requireAuth, async (req, res) => {
 // ============ GAME PRICES (RAWG Stores + CheapShark) ============
 
 const STORE_INFO = {
-  1:  { name: 'Steam', domain: 'store.steampowered.com', platform: 'steam', commission: false },
-  2:  { name: 'GOG', domain: 'gog.com', platform: 'pc', commission: false },
-  3:  { name: 'PlayStation Store', domain: 'store.playstation.com', platform: 'ps5', commission: false },
-  5:  { name: 'Nintendo eShop', domain: 'nintendo.com', platform: 'nintendo', commission: false },
-  7:  { name: 'Xbox Store', domain: 'xbox.com', platform: 'xbox', commission: false },
-  11: { name: 'Epic Games', domain: 'store.epicgames.com', platform: 'pc', commission: true },
-  10: { name: 'Itch.io', domain: 'itch.io', platform: 'pc', commission: false },
+  1:  { name: 'Steam', domain: 'store.steampowered.com', platform: 'steam' },
+  2:  { name: 'GOG', domain: 'gog.com', platform: 'pc' },
+  3:  { name: 'PlayStation Store', domain: 'store.playstation.com', platform: 'ps5' },
+  5:  { name: 'Nintendo eShop', domain: 'nintendo.com', platform: 'nintendo' },
+  7:  { name: 'Xbox Store', domain: 'xbox.com', platform: 'xbox' },
+  11: { name: 'Epic Games', domain: 'store.epicgames.com', platform: 'pc' },
+  10: { name: 'Itch.io', domain: 'itch.io', platform: 'pc' },
 };
 
 const CHEAPSHARK_STORES = {
-  11: { name: 'Humble Store', domain: 'humblebundle.com', platform: 'pc', commission: true },
-  13: { name: 'WinGameStore', domain: 'wingamestore.com', platform: 'pc', commission: true },
-  28: { name: 'Plug In Digital', domain: 'plugindigital.com', platform: 'pc', commission: true },
-  33: { name: 'GreenManGaming', domain: 'greenmangaming.com', platform: 'pc', commission: true },
-  34: { name: 'GameBillet', domain: 'gamebillet.com', platform: 'pc', commission: true },
-  35: { name: 'Voidu', domain: 'voidu.com', platform: 'pc', commission: true },
-  36: { name: 'Fanatical', domain: 'fanatical.com', platform: 'pc', commission: true },
+  11: { name: 'Humble Store', domain: 'humblebundle.com', platform: 'pc' },
+  13: { name: 'WinGameStore', domain: 'wingamestore.com', platform: 'pc' },
+  28: { name: 'Plug In Digital', domain: 'plugindigital.com', platform: 'pc' },
+  33: { name: 'GreenManGaming', domain: 'greenmangaming.com', platform: 'pc' },
+  34: { name: 'GameBillet', domain: 'gamebillet.com', platform: 'pc' },
+  35: { name: 'Voidu', domain: 'voidu.com', platform: 'pc' },
+  36: { name: 'Fanatical', domain: 'fanatical.com', platform: 'pc' },
 };
 
 app.get('/api/game-prices/:gameId', async (req, res) => {
@@ -1269,7 +1291,7 @@ app.get('/api/game-prices/:gameId', async (req, res) => {
             // Deal détaillé
             const deal = await cheapsharkGet(`https://www.cheapshark.com/api/1.0/deals?id=${game.cheapestDealID}`);
             if (deal?.gameInfo) {
-              const info = CHEAPSHARK_STORES[parseInt(deal.gameInfo.storeID)] || { name: 'Boutique en ligne', domain: '', platform: 'pc', commission: false };
+              const info = CHEAPSHARK_STORES[parseInt(deal.gameInfo.storeID)] || { name: 'Boutique en ligne', domain: '', platform: 'pc' };
               offers.push({
                 store: info,
                 url: `https://www.cheapshark.com/redirect?dealID=${game.cheapestDealID}`,
@@ -1283,7 +1305,7 @@ app.get('/api/game-prices/:gameId', async (req, res) => {
           // Toutes les offres disponibles
           if (game.deals) {
             for (const d of game.deals) {
-              const info = CHEAPSHARK_STORES[parseInt(d.storeID)] || { name: `Store #${d.storeID}`, domain: '', platform: 'pc', commission: false };
+              const info = CHEAPSHARK_STORES[parseInt(d.storeID)] || { name: `Store #${d.storeID}`, domain: '', platform: 'pc' };
               if (offers.some(o => o.store.name === info.name)) continue;
               offers.push({
                 store: info,
@@ -1303,11 +1325,11 @@ app.get('/api/game-prices/:gameId', async (req, res) => {
     if (offers.length === 0) {
       const platform = gameId.split('-')[0];
       const fallbacks = {
-        steam: { name: 'Steam', domain: 'store.steampowered.com', platform: 'steam', commission: false },
-        nintendo: { name: 'Nintendo eShop', domain: 'nintendo.com', platform: 'nintendo', commission: false },
-        xbox: { name: 'Xbox Store', domain: 'xbox.com', platform: 'xbox', commission: false },
-        ps5: { name: 'PlayStation Store', domain: 'store.playstation.com', platform: 'ps5', commission: false },
-        ps4: { name: 'PlayStation Store', domain: 'store.playstation.com', platform: 'ps4', commission: false },
+        steam: { name: 'Steam', domain: 'store.steampowered.com', platform: 'steam' },
+        nintendo: { name: 'Nintendo eShop', domain: 'nintendo.com', platform: 'nintendo' },
+        xbox: { name: 'Xbox Store', domain: 'xbox.com', platform: 'xbox' },
+        ps5: { name: 'PlayStation Store', domain: 'store.playstation.com', platform: 'ps5' },
+        ps4: { name: 'PlayStation Store', domain: 'store.playstation.com', platform: 'ps4' },
       };
       if (fallbacks[platform]) {
         offers.push({

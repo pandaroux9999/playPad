@@ -313,7 +313,7 @@ function PurchasePanel({ game, offers, onClose }) {
       case 'price-asc': return list.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
       case 'price-desc': return list.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
       case 'name': return list.sort((a, b) => a.store.name.localeCompare(b.store.name));
-      case 'commission': return list.sort((a, b) => (a.store.commission === b.store.commission ? 0 : a.store.commission ? -1 : 1));
+
       default: return list;
     }
   }, [offers, sort]);
@@ -332,8 +332,8 @@ function PurchasePanel({ game, offers, onClose }) {
       // Tri
       h('div', { className: "flex items-center gap-1.5 px-3 py-2 border-b border-border" },
         h('span', { className: "text-[9px] text-muted-foreground font-medium" }, "Trier :"),
-        ['price-asc', 'price-desc', 'name', 'commission'].map(key => {
-          const labels = { 'price-asc': 'Prix ↑', 'price-desc': 'Prix ↓', 'name': 'Magasin', 'commission': 'Commission' };
+        ['price-asc', 'price-desc', 'name'].map(key => {
+          const labels = { 'price-asc': 'Prix ↑', 'price-desc': 'Prix ↓', 'name': 'Magasin' };
           return h('button', { key, onClick: () => setSort(key), className: "px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors", style: { background: sort === key ? `${P1}30` : "transparent", color: sort === key ? P1 : "#8888aa" } }, labels[key]);
         })
       ),
@@ -352,7 +352,7 @@ function PurchasePanel({ game, offers, onClose }) {
           h('div', { className: "flex-1 min-w-0" },
             h('div', { className: "flex items-center gap-1" },
               h('span', { className: "text-[11px] font-bold text-foreground" }, offer.store.name),
-              !offer.store.commission && h('span', { className: "text-[7px] px-1 py-px rounded font-medium", style: { background: "rgba(100,100,140,0.15)", color: "#666" } }, "direct"),
+
             ),
             offer.price !== null
               ? h('div', { className: "flex items-center gap-1 mt-0.5" },
@@ -365,10 +365,7 @@ function PurchasePanel({ game, offers, onClose }) {
           h(ExternalLink, { size: 10, style: { color: "#8888aa" } })
         ))
       ),
-      // Footer commission discrète
-      h('div', { className: "px-3 py-1.5 border-t border-border text-center" },
-        h('p', { className: "text-[8px] text-muted-foreground/50" }, "Certains liens peuvent rapporter une commission · les prix sont indicatifs")
-      )
+
     )
   );
 }
@@ -1511,7 +1508,7 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
         h('button', { onClick: onClose, className: "sheet-close-btn absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center", style: { background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(X, { size: 16, className: "text-white" })),
         h('button', { onClick: () => onToggleWishlist?.(game), className: "absolute top-4 left-4 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110", style: { background: inWishlist ? "rgba(239,68,68,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Heart, { size: 14, fill: inWishlist ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
         h('button', { onClick: () => handleTopThree(game), className: "absolute top-4 left-14 w-8 h-8 rounded-full flex items-center justify-center", style: { background: inTopThree ? "rgba(245,158,11,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Crown, { size: 14, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
-        h('button', { onClick: (e) => { e.stopPropagation(); handleBuy(game); }, className: "absolute top-4 left-[7.5rem] w-8 h-8 rounded-full flex items-center justify-center", style: { background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(ShoppingCart, { size: 14, className: "text-green-400" })),
+
         h('div', { className: "absolute bottom-0 left-0 right-0 px-4 pb-3" },
           h('div', { className: "flex items-center gap-2 mb-1" }, h(PlatformBadge, { platforms: game.platforms || (game.platform ? [game.platform] : []) }), h('span', { className: "text-xs px-2 py-0.5 rounded-md font-bold", style: { background: (statusCfg || STATUS_CONFIG.not_started).color + "28", color: (statusCfg || STATUS_CONFIG.not_started).color } }, (statusCfg || STATUS_CONFIG.not_started).label)),
           h('h2', { className: "text-lg font-black text-white leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
@@ -1534,7 +1531,10 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
             [{ icon: h(Clock, { size: 11, style: { color: P2 } }), val: `${game.playtime || 0}h`, sub: "jou\u00e9es" },{ icon: h(Trophy, { size: 11, className: "text-amber-400" }), val: String(game.year || "\u2014"), sub: "sortie" },{ icon: h(Star, { size: 11, fill: "#f59e0b", stroke: "#f59e0b" }), val: game.userRating ? `${game.userRating}/5` : "\u2014", sub: "ta note" },{ icon: h(Star, { size: 11, fill: globalRating ? "#8B5CF6" : "none", stroke: "#8B5CF6" }), val: globalRating ? globalRating.toFixed(1) : "\u2014", sub: "globale" }].map(({ icon, val, sub }) => h('div', { key: sub, className: "bg-secondary/50 rounded-xl p-2 text-center" }, h('div', { className: "flex justify-center mb-0.5" }, icon), h('p', { className: "text-xs font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, val), h('p', { className: "text-[9px] text-muted-foreground" }, sub)))
           ),
           h('div', { className: "border-t border-border pt-4 mb-4" },
-            h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2.5 flex items-center gap-1.5" }, h(Info, { size: 10 }), "D\u00e9tails"),
+            h('div', { className: "flex items-center gap-3 mb-2.5" },
+              h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5" }, h(Info, { size: 10 }), "D\u00e9tails"),
+              h('button', { onClick: () => handleBuy(game), className: "text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 hover:opacity-80", style: { color: "#22c55e" } }, h(ShoppingCart, { size: 10 }), "Achat")
+            ),
             gameDetails?.description && h('p', { className: "text-[11px] text-foreground/70 leading-relaxed mb-3" }, gameDetails.description),
             h('div', { className: "grid grid-cols-2 gap-2 text-[10px]" },
               (gameDetails?.developers?.length > 0) && h('div', null, h('span', { className: "text-muted-foreground" }, "D\u00e9veloppeur"), h('p', { className: "font-bold text-foreground" }, gameDetails.developers.join(', '))),

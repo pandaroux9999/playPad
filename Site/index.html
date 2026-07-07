@@ -710,9 +710,6 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
             h('span', { className: "text-[9px] font-medium", style: { color: `${P1}aa` } }, "Importer un fichier JSON (export Playnite)"),
             h('input', { type: "file", accept: ".json", style: { display: "none" }, onChange: handleFileImport })
           ),
-          h('div', { className: "mt-2 pt-2 border-t border-border flex items-center justify-between" },
-            h('button', { onClick: async () => { try { const r = await API.populateCatalog(); showToast(`Catalogue enrichi : ${r.count} jeux ajoutés`); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "text-[9px] font-medium hover:opacity-80", style: { color: `${P1}80` } }, "Enrichir le catalogue (RAWG)")
-          )
         )
       ),
       showNotifications && h('div', { className: "rounded-2xl p-3", style: { background: "#1a1a2e", border: `1px solid ${P1}30`, position: "absolute", zIndex: 30, top: "100%", left: 16, right: 16, maxHeight: "min(70vh, 420px)", display: "flex", flexDirection: "column" } },
@@ -1828,6 +1825,7 @@ function App() {
     }).then(([bpData, topData]) => {
       setBoosterPoints(bpData.points || 0);
       setBoostedGames(topData.top || []);
+      API.populateCatalog().catch(() => {});
     }).catch((err) => {
       console.log('[App] No session (expected if not logged in):', err?.message);
     }).finally(() => {

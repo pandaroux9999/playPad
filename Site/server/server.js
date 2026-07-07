@@ -725,9 +725,16 @@ const CATALOG_PLATFORMS = [
   { id: 1,  prefix: 'xbox' },
 ];
 const CATALOG_PAGES = 3; // 3 pages × 40 jeux = 120 jeux par plateforme
+let lastCatalogPopulate = 0;
+const CATALOG_COOLDOWN = 60000; // 1 min entre chaque peuplement
 
 app.post('/api/catalog/populate', async (req, res) => {
   try {
+    const now = Date.now();
+    if (now - lastCatalogPopulate < CATALOG_COOLDOWN) {
+      return res.json({ ok: true, count: 0, cooldown: true });
+    }
+    lastCatalogPopulate = now;
     const rawgKey = process.env.RAWG_API_KEY;
     if (!rawgKey) return res.status(500).json({ error: 'RAWG_API_KEY non configurée — va sur https://rawg.io/signup' });
     const total = await populateCatalogFromRAWG(rawgKey);
@@ -742,7 +749,9 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
   const targets = platformFilter
     ? CATALOG_PLATFORMS.filter(p => p.id === platformFilter || p.prefix === platformFilter)
     : CATALOG_PLATFORMS;
+  await db.dedupeCatalog().catch(() => {});
   let total = 0;
+  const seen = new Set();
   for (const plat of targets) {
     let page = 1;
     while (page <= CATALOG_PAGES) {
@@ -751,7 +760,8 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
         const data = await rawgApiGet(url);
         if (!data || !data.results) break;
         for (const item of data.results) {
-          if (!item.name) continue;
+          if (!item.name || seen.has(item.id)) continue;
+          seen.add(item.id);
           await db.ensureCatalogGame({
             game_id: `${plat.prefix}-${item.id}`,
             title: item.name,

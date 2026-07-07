@@ -491,6 +491,30 @@ async function ensureCatalogGame(game) {
   }
 }
 
+async function dedupeCatalog() {
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('game_id, title')
+    .order('game_id');
+  if (error) throw new Error(error.message);
+  if (!data || data.length < 2) return 0;
+  const seen = new Map();
+  const toDelete = [];
+  for (const row of data) {
+    const match = row.game_id.match(/(\d+)$/);
+    const key = match ? match[1] : row.game_id;
+    if (seen.has(key)) toDelete.push(row.game_id);
+    else seen.set(key, true);
+  }
+  if (toDelete.length === 0) return 0;
+  const { error: delErr } = await supabaseAdmin
+    .from('catalog')
+    .delete()
+    .in('game_id', toDelete);
+  if (delErr) throw new Error(delErr.message);
+  return toDelete.length;
+}
+
 async function getCatalog() {
   const { data, error } = await supabaseAdmin
     .from('catalog')
@@ -832,6 +856,7 @@ module.exports = {
   deleteGame,
   resetAllData,
   ensureCatalogGame,
+  dedupeCatalog,
   getCatalog,
   getCatalogCount,
   updateGamePlatform,

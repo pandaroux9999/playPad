@@ -1837,6 +1837,7 @@ function App() {
     }).then(([bpData, topData]) => {
       setBoosterPoints(bpData.points || 0);
       setBoostedGames(topData.top || []);
+      API.populateCatalog().then(() => { setCatalogRefreshKey(k => k + 1); }).catch(() => {});
     }).catch((err) => {
       console.log('[App] No session (expected if not logged in):', err?.message);
     }).finally(() => {

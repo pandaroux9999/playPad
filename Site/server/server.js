@@ -737,12 +737,18 @@ app.post('/api/catalog/populate', async (req, res) => {
     }
     lastCatalogPopulate = now;
     const rawgKey = process.env.RAWG_API_KEY;
-    if (!rawgKey) return res.status(500).json({ error: 'RAWG_API_KEY non configurée — va sur https://rawg.io/signup' });
-    const total = await populateCatalogFromRAWG(rawgKey);
+    const existingCount = await db.getCatalogCount();
+    let total = 0;
+    let steamTotal = 0;
+    // Skip RAWG if catalog already has enough entries (Steam app list covers it)
+    if (existingCount < 500 && rawgKey) {
+      total = await populateCatalogFromRAWG(rawgKey);
+    }
+    steamTotal = await populateSteamFromAppList();
     db.mergeCatalogDuplicatesByTitle().then(n => { if (n > 0) console.log(`[Catalog] ${n} doublons fusionnés`); }).catch(e => console.error('[Catalog] Merge error:', e.message));
     // Refresh descriptions in background
     refreshCatalogDescriptions().catch(() => {});
-    res.json({ ok: true, count: total });
+    res.json({ ok: true, count: total, steamCount: steamTotal });
   } catch (err) {
     console.error('[CatalogPopulate] Error:', err.message);
     res.status(500).json({ error: err.message });
@@ -839,6 +845,38 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
   return total;
 }
 
+async function populateSteamFromAppList() {
+  const steamKey = process.env.STEAM_API_KEY;
+  if (!steamKey) { console.log('[SteamAppList] STEAM_API_KEY non configurée, skip'); return 0; }
+  let total = 0;
+  let skipped = 0;
+  try {
+    const data = await rawgApiGet('https://api.steampowered.com/ISteamApps/GetAppList/v2/?key=' + steamKey + '&format=json');
+    if (!data?.applist?.apps) { console.log('[SteamAppList] Réponse invalide'); return 0; }
+    // Fetch existing steam game_ids from catalog
+    const existing = await db.getCatalog();
+    const existingIds = new Set(existing.filter(g => g.game_id.startsWith('steam-')).map(g => g.game_id));
+    const nonGameKeywords = ['soundtrack', 'dlc', 'demo', 'wallpaper', 'video', 'tool', 'sdk', 'editor', 'workshop', 'trailer', 'artbook', 'bundle', 'season pass', 'expansion pack', 'sample', 'tutorial'];
+    const batch = [];
+    for (const app of data.applist.apps) {
+      const gameId = `steam-${app.appid}`;
+      if (existingIds.has(gameId)) continue;
+      const name = (app.name || '').trim();
+      if (!name) continue;
+      if (nonGameKeywords.some(kw => name.toLowerCase().includes(kw))) continue;
+      batch.push({ game_id: gameId, title: name, platform: 'steam', cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${app.appid}/library_600x900.jpg`, genre: '', year: 0, developer: '', publisher: '' });
+      existingIds.add(gameId);
+      if (batch.length >= 500) {
+        for (const g of batch) { await db.ensureCatalogGame(g); total++; }
+        batch.length = 0;
+      }
+    }
+    for (const g of batch) { await db.ensureCatalogGame(g); total++; }
+    console.log(`[SteamAppList] ${total} jeux Steam ajoutés`);
+  } catch (e) { console.error('[SteamAppList] Error:', e.message); }
+  return total;
+}
+
 // Peuple le catalogue au démarrage si vide
 (async () => {
   try {
@@ -848,8 +886,9 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
       if (existing < 100) {
         console.log('[Catalog] Peuplement initial du catalogue via RAWG...');
         const count = await populateCatalogFromRAWG(rawgKey);
+        const steamCount = await populateSteamFromAppList();
         await db.mergeCatalogDuplicatesByTitle().catch(() => {});
-        console.log(`[Catalog] ${count} jeux ajoutés au catalogue`);
+        console.log(`[Catalog] ${count} jeux RAWG + ${steamCount} jeux Steam ajoutés au catalogue`);
       } else {
         console.log(`[Catalog] Catalogue déjà peuplé (${existing} jeux), skip`);
       }

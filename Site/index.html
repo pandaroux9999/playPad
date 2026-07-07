@@ -320,7 +320,7 @@ function PurchasePanel({ game, offers, onClose }) {
 
   return h('div', { className: "fixed inset-0 z-50 flex items-center justify-center p-4" },
     h('div', { className: "absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
-    h('div', { className: "relative bg-card border border-border rounded-2xl w-full max-w-sm max-h-[80vh] overflow-y-auto", style: { zIndex: 1 } },
+    h('div', { className: "relative bg-card border border-border rounded-2xl w-full max-w-lg max-h-[90vh] sm:max-h-[80vh] overflow-y-auto", style: { zIndex: 1 } },
       // En-tête
       h('div', { className: "flex items-center justify-between p-3 border-b border-border sticky top-0 bg-card z-10" },
         h('div', { className: "flex items-center gap-2 min-w-0" },

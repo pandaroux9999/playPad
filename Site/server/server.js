@@ -210,6 +210,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Identifiant ou mot de passe incorrect' });
     }
     req.session.userId = user.id;
+    refreshCatalogDescriptions().catch(() => {});
     console.log('[Login] Success:', username, 'id:', user.id);
     res.json({ user: { id: user.id, username: user.username, display_name: user.display_name, email: user.email, created_at: user.created_at } });
   } catch (err) {
@@ -738,12 +739,44 @@ app.post('/api/catalog/populate', async (req, res) => {
     const rawgKey = process.env.RAWG_API_KEY;
     if (!rawgKey) return res.status(500).json({ error: 'RAWG_API_KEY non configurée — va sur https://rawg.io/signup' });
     const total = await populateCatalogFromRAWG(rawgKey);
+    // Refresh descriptions in background
+    refreshCatalogDescriptions().catch(() => {});
     res.json({ ok: true, count: total });
   } catch (err) {
     console.error('[CatalogPopulate] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
+let lastDescriptionRefresh = 0;
+const DESCRIPTION_REFRESH_COOLDOWN = 300000; // 5 min
+
+async function refreshCatalogDescriptions() {
+  const now = Date.now();
+  if (now - lastDescriptionRefresh < DESCRIPTION_REFRESH_COOLDOWN) return;
+  lastDescriptionRefresh = now;
+  try {
+    const catalog = await db.getCatalog();
+    const toUpdate = catalog.filter(g => !g.description && g.game_id.startsWith('steam-'));
+    console.log(`[Catalog] Refresh descriptions: ${toUpdate.length} jeux Steam sans description`);
+    for (const game of toUpdate.slice(0, 20)) { // max 20 par refresh pour éviter rate limit
+      try {
+        const appid = game.game_id.replace('steam-', '');
+        if (!/^\d+$/.test(appid)) continue;
+        const d = await steamStoreGet(appid);
+        if (d?.data) {
+          const description = d.data.short_description || d.data.about_the_game || '';
+          if (description) {
+            await db.ensureCatalogGame({ game_id: game.game_id, title: game.title, description }).catch(() => {});
+          }
+        }
+      } catch (e) { /* skip */ }
+    }
+    console.log(`[Catalog] Descriptions rafraîchies`);
+  } catch (e) {
+    console.error('[Catalog] Refresh descriptions error:', e.message);
+  }
+}
 
 async function populateCatalogFromRAWG(apiKey, platformFilter) {
   const targets = platformFilter
@@ -1247,10 +1280,14 @@ const STORE_INFO = {
   1:  { name: 'Steam', domain: 'store.steampowered.com', platform: 'steam' },
   2:  { name: 'GOG', domain: 'gog.com', platform: 'pc' },
   3:  { name: 'PlayStation Store', domain: 'store.playstation.com', platform: 'ps5' },
+  4:  { name: 'App Store', domain: 'apps.apple.com', platform: 'pc' },
   5:  { name: 'Nintendo eShop', domain: 'nintendo.com', platform: 'nintendo' },
+  6:  { name: 'Google Play', domain: 'play.google.com', platform: 'pc' },
   7:  { name: 'Xbox Store', domain: 'xbox.com', platform: 'xbox' },
-  11: { name: 'Epic Games', domain: 'store.epicgames.com', platform: 'pc' },
+  8:  { name: 'Microsoft Store', domain: 'apps.microsoft.com', platform: 'pc' },
+  9:  { name: 'Apple Arcade', domain: 'apple.com/apple-arcade', platform: 'pc' },
   10: { name: 'Itch.io', domain: 'itch.io', platform: 'pc' },
+  11: { name: 'Epic Games', domain: 'store.epicgames.com', platform: 'pc' },
 };
 
 const CHEAPSHARK_STORES = {
@@ -1288,7 +1325,7 @@ app.get('/api/game-prices/:gameId', async (req, res) => {
             });
           }
         }
-      } catch (e) { /* RAWG stores indisponible */ }
+      } catch (e) { console.error('[GamePrices] RAWG stores error:', e.message); }
     }
 
     // 2. CheapShark (pour les jeux Steam)
@@ -1329,7 +1366,7 @@ app.get('/api/game-prices/:gameId', async (req, res) => {
             }
           }
         }
-      } catch (e) { /* CheapShark indisponible */ }
+      } catch (e) { console.error('[GamePrices] CheapShark error:', e.message); }
     }
 
     // 3. Fallback : store officiel selon la plateforme

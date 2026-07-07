@@ -133,3 +133,22 @@ CREATE TABLE IF NOT EXISTS sessions (
   session_data JSONB NOT NULL,
   expires TIMESTAMPTZ
 );
+
+-- Points boosters pour les utilisateurs (1 point offert à la première connexion)
+CREATE TABLE IF NOT EXISTS booster_points (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  points INTEGER DEFAULT 0,
+  claimed_first_login BOOLEAN DEFAULT FALSE,
+  UNIQUE(user_id)
+);
+
+-- Boost de jeux par les utilisateurs (un boost = 1 point par jeu par semaine)
+CREATE TABLE IF NOT EXISTS game_boosts (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_id TEXT NOT NULL,
+  week_start DATE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, game_id, week_start)
+);

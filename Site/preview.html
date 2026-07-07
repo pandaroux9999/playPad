@@ -125,11 +125,11 @@ const STATUS_CONFIG = {
 };
 
 const PLATFORM_LOGO_URLS = {
-  ps5: "src/imports/icons8-playstation-32.png",
-  steam: "src/imports/icons8-steam-48.png",
-  epic: "src/imports/icons8-epic-games-48.png",
-  nintendo: "src/imports/icons8-nintendo-switch-48.png",
-  xbox: "src/imports/icons8-xbox-48.png",
+  ps5: "img/icons8-playstation-32.png",
+  steam: "img/icons8-steam-48.png",
+  epic: "img/icons8-epic-games-48.png",
+  nintendo: "img/icons8-nintendo-switch-48.png",
+  xbox: "img/icons8-xbox-48.png",
 };
 
 const C = {
@@ -141,9 +141,9 @@ const C = {
   forza5:       "https://cdn.cloudflare.steamstatic.com/steam/apps/1551360/library_600x900.jpg",
   bg3:          "https://cdn.cloudflare.steamstatic.com/steam/apps/1086940/library_600x900.jpg",
   zeldaTotk:    "https://placehold.co/600x900/1a1a2e/e60012?text=Zelda+TOTK",
-  marioKart8:   "src/imports/MK_8_deluxe.jpg",
-  spiderMan2:   "src/imports/spider_man_2.jpg",
-  haloInfinite: "src/imports/Halo_infinite.jpg",
+  marioKart8:   "img/MK_8_deluxe.jpg",
+  spiderMan2:   "img/spider_man_2.jpg",
+  haloInfinite: "img/Halo_infinite.jpg",
   fortnite:     "https://placehold.co/600x900/2d2d2d/ffffff?text=Fortnite",
   witcher3:     "https://cdn.cloudflare.steamstatic.com/steam/apps/292030/library_600x900.jpg",
   sekiro:       "https://cdn.cloudflare.steamstatic.com/steam/apps/814380/library_600x900.jpg",
@@ -153,9 +153,9 @@ const C = {
   doomEternal:  "https://cdn.cloudflare.steamstatic.com/steam/apps/782330/library_600x900.jpg",
   residentEvil4:"https://cdn.cloudflare.steamstatic.com/steam/apps/2050650/library_600x900.jpg",
   streetFighter6:"https://cdn.cloudflare.steamstatic.com/steam/apps/1364780/library_600x900.jpg",
-  ff7Remake:    "src/imports/FFVIIRemake.png",
+  ff7Remake:    "img/FFVIIRemake.png",
   deathStranding:"https://cdn.cloudflare.steamstatic.com/steam/apps/1190460/library_600x900.jpg",
-  metroExodus:  "src/imports/Metro_Exodus.png",
+  metroExodus:  "img/Metro_Exodus.png",
   diablo4:      "https://cdn.cloudflare.steamstatic.com/steam/apps/2344520/library_600x900.jpg",
   haloMCC:      "https://cdn.cloudflare.steamstatic.com/steam/apps/976730/library_600x900.jpg",
   seaOfThieves: "https://cdn.cloudflare.steamstatic.com/steam/apps/1172620/library_600x900.jpg",
@@ -163,7 +163,7 @@ const C = {
   ghostTsushima:"https://cdn.cloudflare.steamstatic.com/steam/apps/2215430/library_600x900.jpg",
   monsterHunter:"https://cdn.cloudflare.steamstatic.com/steam/apps/582010/library_600x900.jpg",
   vampSurvivors:"https://cdn.cloudflare.steamstatic.com/steam/apps/1794680/library_600x900.jpg",
-  stray:        "src/imports/stray.jpg",
+  stray:        "img/stray.jpg",
   itTakesTwo:   "https://cdn.cloudflare.steamstatic.com/steam/apps/1426210/library_600x900.jpg",
   control:      "https://cdn.cloudflare.steamstatic.com/steam/apps/870780/library_600x900.jpg",
   liesOfP:      "https://cdn.cloudflare.steamstatic.com/steam/apps/1627720/library_600x900.jpg",
@@ -354,7 +354,7 @@ function LibraryView({ games, onSelect, notifications, onMarkAsRead }) {
   return h('div', { className: "flex flex-col h-full view-enter" },
     h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
       h('div', { className: "flex items-center gap-2.5 mb-3" },
-        h('img', { src: "src/imports/logo_hackaton.png", alt: "PlayPad", className: "w-9 h-9 object-contain" }),
+        h('img', { src: "img/logo_hackaton.png", alt: "PlayPad", className: "w-9 h-9 object-contain" }),
         h('div', null,
           h('h1', { className: "text-xl font-black text-foreground leading-none", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Ma Biblioth\u00e8que"),
           h('p', { className: "text-xs text-muted-foreground mt-0.5" }, h('span', { className: "font-bold", style: { color: P1 } }, games.length), " jeux \u00b7 ", h('span', { className: "font-bold", style: { color: P2 } }, `${totalHours}h`), " jou\u00e9es")
@@ -514,7 +514,7 @@ function ProfileView({ games, wishlist, onWishlist, onSelect, topThree, onToggle
         )
       ),
       h('div', { className: "flex items-center gap-2 mt-4 pt-3 border-t border-border" },
-        h('img', { src: "src/imports/logo_hackaton.png", alt: "PlayPad", className: "w-5 h-5 object-contain opacity-70" }),
+        h('img', { src: "img/logo_hackaton.png", alt: "PlayPad", className: "w-5 h-5 object-contain opacity-70" }),
         h('span', { className: "text-xs font-black flex-1", style: { fontFamily: "'Rajdhani', sans-serif" } },
           h('span', { style: { color: "#ffffff" } }, "PLAY"), h('span', { style: { background: GRAD, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" } }, "pad")),
         onLogout && h('button', { onClick: onLogout, className: "text-[10px] font-medium flex items-center gap-1 hover:opacity-80 transition-opacity", style: { color: "#ef4444" } }, h(LogOut, { size: 12 }), "Quitter")
@@ -571,7 +571,7 @@ function CatalogueView({ onSelect, wishlist, onWishlist }) {
   return h('div', { className: "flex flex-col h-full view-enter" },
     h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
       h('div', { className: "flex items-center gap-2.5 mb-3" },
-        h('img', { src: "src/imports/logo_hackaton.png", alt: "PlayPad", className: "w-9 h-9 object-contain" }),
+        h('img', { src: "img/logo_hackaton.png", alt: "PlayPad", className: "w-9 h-9 object-contain" }),
         h('div', null,
           h('h1', { className: "text-xl font-black text-foreground leading-none", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Catalogue Complet"),
           h('p', { className: "text-xs text-muted-foreground mt-0.5" }, h('span', { className: "font-bold", style: { color: P1 } }, CATALOGUE_GAMES.length), " jeux disponibles")
@@ -832,7 +832,7 @@ function App() {
       ),
       h('div', { className: "relative overflow-hidden bg-background flex flex-col items-center justify-center p-8", style: { width: 390, height: 844, borderRadius: 50, border: "1px solid rgba(255,255,255,0.09)", boxShadow: "0 40px 80px -10px rgba(0,0,0,0.9)" } },
         h('div', { className: "absolute top-3 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-full z-20" }),
-        h('img', { src: "src/imports/logo_hackaton.png", alt: "PlayPad", className: "w-14 h-14 object-contain mb-3" }),
+        h('img', { src: "img/logo_hackaton.png", alt: "PlayPad", className: "w-14 h-14 object-contain mb-3" }),
         h('h1', { className: "text-2xl font-black mb-1", style: { fontFamily: "'Rajdhani', sans-serif", color: "#fff" } },
           h('span', null, "PLAY"), h('span', { style: { background: GRAD, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" } }, "pad")
         ),

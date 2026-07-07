@@ -590,6 +590,7 @@ async function getConversations(userId) {
   return Object.values(conv).sort((a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at));
 }
 
+<<<<<<< HEAD
 // === BOOST SYSTÈME ===
 
 async function getBoostPoints(userId) {
@@ -597,11 +598,42 @@ async function getBoostPoints(userId) {
     .from('users')
     .select('boost_points, last_boost_week')
     .eq('id', userId)
+=======
+// ============ BOOSTER SYSTEM ============
+
+function getWeekStart() {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(now);
+  monday.setDate(diff);
+  return monday.toISOString().split('T')[0];
+}
+
+async function getBoosterPoints(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('booster_points')
+    .select('points, claimed_first_login')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data || { points: 0, claimed_first_login: false };
+}
+
+async function claimFirstLoginPoints(userId) {
+  const existing = await getBoosterPoints(userId);
+  if (existing.claimed_first_login) return existing;
+  const { data, error } = await supabaseAdmin
+    .from('booster_points')
+    .upsert({ user_id: userId, points: 1, claimed_first_login: true }, { onConflict: 'user_id' })
+    .select('points, claimed_first_login')
+>>>>>>> ffa1c9428b7ae159c2bd015fcca91bed3a2f3803
     .single();
   if (error) throw new Error(error.message);
   return data;
 }
 
+<<<<<<< HEAD
 async function resetWeeklyBoostPoints(userId) {
   const now = new Date();
   const year = now.getFullYear();
@@ -682,6 +714,78 @@ async function getGameBoostCount(gameId) {
     .eq('game_id', gameId);
   if (error) return 0;
   return count || 0;
+=======
+async function boostGame(userId, gameId) {
+  const weekStart = getWeekStart();
+  const pointsData = await getBoosterPoints(userId);
+  if (pointsData.points < 1) throw new Error('Pas assez de points booster');
+
+  const { data: existing } = await supabaseAdmin
+    .from('game_boosts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('game_id', gameId)
+    .eq('week_start', weekStart)
+    .maybeSingle();
+
+  if (existing) throw new Error('Tu as déjà boosté ce jeu cette semaine');
+
+  const { error: boostError } = await supabaseAdmin
+    .from('game_boosts')
+    .insert({ user_id: userId, game_id: gameId, week_start: weekStart });
+  if (boostError) throw new Error(boostError.message);
+
+  await supabaseAdmin
+    .from('booster_points')
+    .update({ points: pointsData.points - 1 })
+    .eq('user_id', userId);
+
+  return true;
+}
+
+async function getTopBoostedGames() {
+  const weekStart = getWeekStart();
+  const { data, error } = await supabaseAdmin
+    .from('game_boosts')
+    .select('game_id, week_start')
+    .eq('week_start', weekStart);
+  if (error) throw new Error(error.message);
+
+  const counts = {};
+  for (const row of data || []) {
+    counts[row.game_id] = (counts[row.game_id] || 0) + 1;
+  }
+
+  const sorted = Object.entries(counts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10);
+
+  const result = [];
+  for (const [gameId, boostCount] of sorted) {
+    const { data: cat } = await supabaseAdmin
+      .from('catalog')
+      .select('*')
+      .eq('game_id', gameId)
+      .maybeSingle();
+    if (cat) {
+      result.push({ ...cat, boost_count: boostCount });
+    }
+  }
+  return result;
+}
+
+async function getUserBoostStatus(userId, gameId) {
+  const weekStart = getWeekStart();
+  const { data, error } = await supabaseAdmin
+    .from('game_boosts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('game_id', gameId)
+    .eq('week_start', weekStart)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return !!data;
+>>>>>>> ffa1c9428b7ae159c2bd015fcca91bed3a2f3803
 }
 
 module.exports = {
@@ -731,9 +835,17 @@ module.exports = {
   getMessages,
   markMessagesRead,
   getConversations,
+<<<<<<< HEAD
   getBoostPoints,
   resetWeeklyBoostPoints,
   boostGame,
   getTopBoosted,
   getGameBoostCount,
+=======
+  getBoosterPoints,
+  claimFirstLoginPoints,
+  boostGame,
+  getTopBoostedGames,
+  getUserBoostStatus,
+>>>>>>> ffa1c9428b7ae159c2bd015fcca91bed3a2f3803
 };

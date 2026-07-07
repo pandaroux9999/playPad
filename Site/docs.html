@@ -38,6 +38,7 @@
       <div class="flex items-center gap-5 text-sm">
         <a href="#intro" class="no-underline" style="color: #94a3b8;">Intro</a>
         <a href="#features" class="no-underline" style="color: #94a3b8;">Fonctionnalit&eacute;s</a>
+        <a href="#boost" class="no-underline" style="color: #f59e0b;">Boost</a>
         <a href="#security" class="no-underline" style="color: #22c55e;">S&eacute;curit&eacute;</a>
         <a href="#architecture" class="no-underline" style="color: #94a3b8;">Architecture</a>
         <a href="#code" class="no-underline" style="color: #94a3b8;">Code</a>
@@ -65,7 +66,7 @@
 
       <h3>Capture d'&eacute;cran</h3>
       <div class="card">
-        <img src="appli.png" alt="Aperçu de l'application" class="w-full rounded-xl" style="max-width: 800px;" onerror="this.style.display='none'">
+        <img src="img/appli.png" alt="Aperçu de l'application" class="w-full rounded-xl" style="max-width: 800px;" onerror="this.style.display='none'">
       </div>
     </section>
 
@@ -86,7 +87,7 @@
             <div class="feature-icon gradient-bg text-white text-xs font-black">C</div>
             <div>
               <h4 class="font-bold text-sm mb-1">Communaut&eacute;</h4>
-              <p class="text-xs" style="color: #94a3b8;">Recherche d'utilisateurs, demandes d'ami, liste d'amis, statut en ligne (point vert), suggestions de jeux.</p>
+              <p class="text-xs" style="color: #94a3b8;">Recherche d'utilisateurs, demandes d'ami, liste d'amis, statut en ligne (point vert), suggestions de jeux, messages priv&eacute;s.</p>
             </div>
           </div>
         </div>
@@ -110,10 +111,19 @@
         </div>
         <div class="card">
           <div class="flex items-start gap-3">
+            <div class="feature-icon gradient-bg text-white text-xs font-black">B</div>
+            <div>
+              <h4 class="font-bold text-sm mb-1">Boost communautaire</h4>
+              <p class="text-xs" style="color: #94a3b8;">3 points de boost par semaine pour mettre en avant vos jeux favoris. Top 10 des jeux boost&eacute;s visible dans le catalogue.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="flex items-start gap-3">
             <div class="feature-icon gradient-bg text-white text-xs font-black">P</div>
             <div>
               <h4 class="font-bold text-sm mb-1">Profil</h4>
-              <p class="text-xs" style="color: #94a3b8;">Avatar (fichier ou URL), Top 3, wishlist, connexion Steam, &eacute;dition du profil.</p>
+              <p class="text-xs" style="color: #94a3b8;">Avatar, Top 3, wishlist, connexion Steam/Xbox, &eacute;dition email.</p>
             </div>
           </div>
         </div>
@@ -126,6 +136,15 @@
             </div>
           </div>
         </div>
+        <div class="card">
+          <div class="flex items-start gap-3">
+            <div class="feature-icon gradient-bg text-white text-xs font-black">X</div>
+            <div>
+              <h4 class="font-bold text-sm mb-1">Xbox</h4>
+              <p class="text-xs" style="color: #94a3b8;">Connexion via Gamertag, import des jeux Xbox via xbl.io.</p>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -135,28 +154,44 @@
         <p class="text-sm mb-3" style="color: #94a3b8;">Protections mises en place pour s&eacute;curiser l'application :</p>
         <div class="grid gap-3" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
           <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
-            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Helmet</h4>
-            <p class="text-xs" style="color: #94a3b8;">Headers HTTP s&eacute;curis&eacute;s : HSTS, X-Content-Type-Options, X-Frame-Options, etc. Prot&egrave;ge contre les attaques XSS, clickjacking, MIME sniffing.</p>
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Helmet + CSP</h4>
+            <p class="text-xs" style="color: #94a3b8;">Headers HTTP s&eacute;curis&eacute;s (HSTS, X-Frame-Options, X-Content-Type-Options). CSP actif : restreint les sources de scripts, styles, images, connexions, bloque les iframes/objets.</p>
           </div>
           <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
             <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Rate Limiting</h4>
-            <p class="text-xs" style="color: #94a3b8;">200 requ&ecirc;tes / 15 min (global). 10 tentatives / 15 min sur les routes d'auth (login, register, reset password). Prot&egrave;ge contre le brute-force et le spam.</p>
+            <p class="text-xs" style="color: #94a3b8;">200 req / 15 min (global). 10 req / 15 min sur auth (login, register, forgot-password, forgot-username, reset-password).</p>
           </div>
           <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
-            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Admin Reset s&eacute;curis&eacute;</h4>
-            <p class="text-xs" style="color: #94a3b8;">La route <code>/api/admin/reset</code> est maintenant prot&eacute;g&eacute;e par une liste d'IDs admin (variable <code>ADMIN_IDS</code>). Sans cette variable, tous les users authentifi&eacute;s ont acc&egrave;s (mode d&eacute;v).</p>
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Mot de passe s&eacute;curis&eacute;</h4>
+            <p class="text-xs" style="color: #94a3b8;">8 caract&egrave;res min., 1 majuscule, 1 minuscule, 1 chiffre. Hach&eacute; avec bcrypt (10 rounds). Validation c&ocirc;t&eacute; client + serveur.</p>
           </div>
           <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
-            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Cookie Secure corrig&eacute;</h4>
-            <p class="text-xs" style="color: #94a3b8;">Le flag <code>secure</code> du cookie de session d&eacute;sormais d&eacute;pend uniquement de <code>NODE_ENV=production</code>. Auparavant, <code>PUBLIC_URL</code> d&eacute;clenchait le mode secure, cassant la connexion en HTTP local.</p>
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Secret de session obligatoire</h4>
+            <p class="text-xs" style="color: #94a3b8;"><code>SESSION_SECRET</code> est d&eacute;sormais obligatoire (min 16 caract&egrave;res). Le serveur refuse de d&eacute;marrer sans. Cookie <code>httpOnly</code> activ&eacute;.</p>
           </div>
           <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
-            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Endpoint Debug prot&eacute;g&eacute;</h4>
-            <p class="text-xs" style="color: #94a3b8;"><code>/api/debug/env</code> n&eacute;cessite maintenant l'authentification + droits admin. Exposait pr&eacute;c&eacute;demment les variables d'env &agrave; tous les visiteurs.</p>
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Protection anti-&eacute;num&eacute;ration</h4>
+            <p class="text-xs" style="color: #94a3b8;">Les endpoints forgot-password/username retournent un message g&eacute;n&eacute;rique, que l'email existe ou non. Login utilise un hash bcrypt factice pour &eacute;viter les timing attacks.</p>
           </div>
           <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
-            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Sync limit&eacute;</h4>
-            <p class="text-xs" style="color: #94a3b8;">L'import de jeux est limit&eacute; &agrave; 5000 jeux par requ&ecirc;te pour &eacute;viter les abus m&eacute;moire et les attaques par d&eacute;nion de service.</p>
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Admin endpoints prot&eacute;g&eacute;s</h4>
+            <p class="text-xs" style="color: #94a3b8;"><code>/api/admin/reset</code> et <code>/api/debug/env</code> n&eacute;cessitent <code>ADMIN_IDS</code> d&eacute;fini ET l'ID de l'utilisateur dans la liste. Si ADMIN_IDS est vide, l'acc&egrave;s est refus&eacute;.</p>
+          </div>
+          <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Email valid&eacute;</h4>
+            <p class="text-xs" style="color: #94a3b8;">Format d'email valid&eacute; par regex c&ocirc;t&eacute; client ET serveur lors de l'inscription.</p>
+          </div>
+          <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">CORS restreint</h4>
+            <p class="text-xs" style="color: #94a3b8;">CORS limit&eacute; &agrave; l'origine d&eacute;finie par <code>PUBLIC_URL</code> (ou localhost en d&eacute;v), au lieu de refl&eacute;ter n'importe quelle origine.</p>
+          </div>
+          <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">XSS &eacute;limin&eacute;</h4>
+            <p class="text-xs" style="color: #94a3b8;">Le composant <code>PlatformLogo</code> a &eacute;t&eacute; migr&eacute; de <code>dangerouslySetInnerHTML</code> vers de vrais &eacute;l&eacute;ments React.</p>
+          </div>
+          <div class="card" style="margin-bottom: 0; border-color: rgba(34,197,94,0.2);">
+            <h4 class="font-bold text-sm mb-1" style="color: #22c55e;">Playnite Bridge authentifi&eacute;</h4>
+            <p class="text-xs" style="color: #94a3b8;">Le serveur local Playnite Bridge n&eacute;cessite d&eacute;sormais une cl&eacute; API (<code>BRIDGE_API_KEY</code>) pour acc&eacute;der aux donn&eacute;es.</p>
           </div>
         </div>
       </div>
@@ -201,7 +236,7 @@
           <h4 class="font-bold text-sm mb-2" style="color: #34d399;">Base de donn&eacute;es</h4>
           <ul class="text-xs" style="color: #94a3b8; padding-left: 1rem;">
             <li>Supabase (PostgreSQL)</li>
-            <li>9 tables + 2 index</li>
+            <li>10 tables + 2 index</li>
             <li>Session store personnalis&eacute;</li>
           </ul>
         </div>
@@ -235,7 +270,7 @@
   index.html           <span style="color: #64748b;"># Frontend React SPA complet (~1800 lignes)</span>
   preview.html         <span style="color: #64748b;"># Maquette de design avec donn&eacute;es mock</span>
   GameSheet.tsx        <span style="color: #64748b;"># Composant exp&eacute;rimental (TanStack)</span>
-  logo_hackaton.png    <span style="color: #64748b;"># Logo de l'application</span>
+  img/logo_hackaton.png    <span style="color: #64748b;"># Logo de l'application</span>
 
 <span style="color: #f59e0b;">Site/server/</span>
   server.js            <span style="color: #64748b;"># Serveur Express (routes API, auth, Steam)</span>
@@ -261,6 +296,7 @@
 <span style="color: #22c55e;">friends</span> (id, user_id FK, friend_id FK, status, created_at)
 <span style="color: #22c55e;">game_suggestions</span> (id, from_user_id FK, to_user_id FK, game_id, message)
 <span style="color: #22c55e;">catalog</span> (id, game_id UNIQUE, title, platform, cover, genre, year)
+<span style="color: #22c55e;">boosts</span> (id, user_id FK, catalog_game_id FK, week_start DATE, created_at)
 <span style="color: #22c55e;">sessions</span> (sid PK, session_data JSONB, expires)</pre>
       </div>
 
@@ -294,8 +330,21 @@
             <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/heartbeat</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Mise &agrave; jour du statut en ligne</td></tr>
             <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #ef4444;">DELETE</code></td><td class="py-1.5 px-1"><code>/api/admin/reset</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Reset total (admin only via ADMIN_IDS)</td></tr>
             <tr><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/debug/env</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Debug variables (admin only via ADMIN_IDS)</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #f59e0b;">POST</code></td><td class="py-1.5 px-1"><code>/api/boost/:gameId</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Booster un jeu du catalogue (1 pt)</td></tr>
+            <tr style="border-bottom: 1px solid #1a1a2e;"><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/boost/top</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Top 10 des jeux boost&eacute;s cette semaine</td></tr>
+            <tr><td class="py-1.5 px-1"><code style="color: #22c55e;">GET</code></td><td class="py-1.5 px-1"><code>/api/boost/remaining</code></td><td class="py-1.5 px-1" style="color: #94a3b8;">Points de boost restants pour l'utilisateur</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <h3 id="boost">Fonctionnalit&eacute; cl&eacute; : Boost communautaire</h3>
+      <div class="card">
+        <p class="text-xs" style="color: #94a3b8;">Chaque utilisateur dispose de <strong>3 points de boost par semaine</strong> (lundi &agrave; dimanche) pour mettre en avant des jeux du catalogue.</p>
+        <pre class="mt-2">// Fonctionnement
+1. L'utilisateur consulte ses boosts restants via GET /api/boost/remaining
+2. POST /api/boost/:gameId &rarr; d&eacute;pense 1 point sur ce jeu (historique dans boosts)
+3. Le Top 10 des jeux boost&eacute;s est visible dans le catalogue</pre>
+        <p class="mt-2 text-xs" style="color: #94a3b8;">Les points sont r&eacute;initialis&eacute;s chaque lundi. Un m&ecirc;me jeu peut recevoir plusieurs boosts de la m&ecirc;me personne (1 boost par appel, max 3/semaine).</p>
       </div>
 
       <h3>Fonctionnalit&eacute; cl&eacute; : Connexion Steam</h3>
@@ -336,9 +385,12 @@ SUPABASE_SERVICE_ROLE_KEY = (cl&eacute; service_role, pour les op&eacute;rations
 STEAM_API_KEY           = (cl&eacute; API Steam, optionnelle pour l'import)
 XBL_API_KEY             = (cl&eacute; API Xbox via xbl.io, optionnelle)
 PUBLIC_URL              = https://ton-app.render.com (pour le callback Steam)
-SESSION_SECRET          = (optionnel, pour les cookies de session)
-ADMIN_IDS               = (optionnel, IDs s&eacute;par&eacute;s par des virgules, ex: "1,3")</pre>
-        <p class="mt-2 text-xs" style="color: #94a3b8;"><strong>ADMIN_IDS</strong> : si d&eacute;fini, seuls ces utilisateurs peuvent appeler <code>/api/admin/reset</code> et <code>/api/debug/env</code>. Si vide, tous les users authentifi&eacute;s y ont acc&egrave;s (mode d&eacute;veloppement).</p>
+SESSION_SECRET          = (obligatoire, min 16 caract&egrave;res, pour les cookies de session)
+ADMIN_IDS               = (IDs s&eacute;par&eacute;s par des virgules, ex: "1,3")
+BRIDGE_API_KEY          = (cl&eacute; API pour le Playnite Bridge local)</pre>
+        <p class="mt-2 text-xs" style="color: #94a3b8;"><strong>SESSION_SECRET</strong> : obligatoire, le serveur refuse de d&eacute;marrer sans (min 16 caract&egrave;res).<br>
+        <strong>ADMIN_IDS</strong> : si d&eacute;fini et non vide, seuls ces utilisateurs peuvent appeler <code>/api/admin/reset</code> et <code>/api/debug/env</code>. Si vide, acc&egrave;s refus&eacute; &agrave; tous.<br>
+        <strong>BRIDGE_API_KEY</strong> : cl&eacute; n&eacute;cessaire pour authentifier le serveur local Playnite Bridge.</p>
       </div>
 
       <h3>Base de donn&eacute;es Supabase</h3>
@@ -361,13 +413,18 @@ ADMIN_IDS               = (optionnel, IDs s&eacute;par&eacute;s par des virgules
 
       <h3>Playnite Bridge (import local)</h3>
       <div class="card">
-        <p class="text-xs" style="color: #94a3b8;">Le dossier <code>playnite-bridge/</code> contient un script Node.js qui lit la base SQLite de Playnite et pousse les jeux vers le serveur PlayPad.</p>
+        <p class="text-xs" style="color: #94a3b8;">Le dossier <code>playnite-bridge/</code> contient un script Node.js qui lit la base SQLite de Playnite et pousse les jeux vers le serveur PlayPad, ainsi qu'un serveur local optionnel.</p>
         <pre>cd playnite-bridge
 yarn install
+
 # Pousser les jeux directement vers Render :
 PLAYPAD_URL=https://ton-app.render.com \
 PLAYPAD_USER=mon_login PLAYPAD_PASS=mon_mdp \
-node playnite-reader.js --push</pre>
+node playnite-reader.js --push
+
+# Serveur local (authentifi&eacute; par BRIDGE_API_KEY) :
+BRIDGE_API_KEY=ma_cle_api node playnite-server.js</pre>
+        <p class="mt-2 text-xs" style="color: #94a3b8;">Le serveur local Playnite Bridge se lance avec <code>node playnite-server.js</code> et sert les donn&eacute;es Playnite sur le r&eacute;seau local.</p>
       </div>
     </section>
 
@@ -384,7 +441,7 @@ node playnite-reader.js --push</pre>
     </section>
 
     <footer class="mt-12 pt-6 text-center text-xs" style="border-top: 1px solid #2a2a44; color: #475569;">
-      PlayPad &mdash; Application web de gestion de biblioth&egrave;que de jeux &mdash; Documentation g&eacute;n&eacute;r&eacute;e le 30 juin 2026
+      PlayPad &mdash; Application web de gestion de biblioth&egrave;que de jeux &mdash; Documentation g&eacute;n&eacute;r&eacute;e le 7 juillet 2026
     </footer>
   </div>
 </body>

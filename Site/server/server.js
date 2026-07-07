@@ -126,7 +126,8 @@ app.post('/api/register', authLimiter, async (req, res) => {
     const userId = await db.createUser(username, displayName, hashed, email);
     const user = await db.getUserById(userId);
     req.session.userId = userId;
-    console.log('[Register] Success:', username, 'id:', userId);
+    await db.claimFirstLoginPoints(userId);
+    console.log('[Register] Success:', username, 'id:', userId, '+ 1 booster point');
     res.json({ user });
   } catch (err) {
     console.error('[Register] Error:', err.message, err.stack);
@@ -1091,6 +1092,55 @@ app.get('/api/game-details/:gameId', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[GameDetails] Error:', err.message);
     res.json({ details: null });
+  }
+});
+
+// ============ BOOSTER SYSTEM ============
+
+app.get('/api/booster/points', requireAuth, async (req, res) => {
+  try {
+    const data = await db.getBoosterPoints(req.session.userId);
+    if (!data.claimed_first_login) {
+      await db.claimFirstLoginPoints(req.session.userId);
+      data.points = 1;
+      data.claimed_first_login = true;
+    }
+    res.json({ points: data.points });
+  } catch (err) {
+    console.error('[BoosterPoints] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/booster/boost', requireAuth, async (req, res) => {
+  try {
+    const { gameId } = req.body;
+    if (!gameId) return res.status(400).json({ error: 'gameId requis' });
+    await db.boostGame(req.session.userId, gameId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[BoosterBoost] Error:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/booster/top', async (req, res) => {
+  try {
+    const top = await db.getTopBoostedGames();
+    res.json({ top });
+  } catch (err) {
+    console.error('[BoosterTop] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/booster/status/:gameId', requireAuth, async (req, res) => {
+  try {
+    const boosted = await db.getUserBoostStatus(req.session.userId, req.params.gameId);
+    res.json({ boosted });
+  } catch (err) {
+    console.error('[BoosterStatus] Error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

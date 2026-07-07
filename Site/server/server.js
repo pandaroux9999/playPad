@@ -386,6 +386,16 @@ app.get('/api/catalog', async (req, res) => {
   }
 });
 
+app.delete('/api/games', requireAuth, async (req, res) => {
+  try {
+    await db.deleteAllUserGames(req.session.userId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[GameDeleteAll] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/games/:gameId', requireAuth, async (req, res) => {
   try {
     await db.deleteGame(req.session.userId, req.params.gameId);

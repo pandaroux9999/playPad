@@ -491,6 +491,14 @@ async function getCatalog() {
   return data || [];
 }
 
+async function deleteAllUserGames(userId) {
+  const { error } = await supabaseAdmin
+    .from('games')
+    .delete()
+    .eq('user_id', userId);
+  if (error) throw new Error(error.message);
+}
+
 async function deleteGame(userId, gameId) {
   const { error } = await supabaseAdmin
     .from('games')
@@ -793,6 +801,7 @@ module.exports = {
   sendGameSuggestion,
   getGameSuggestions,
   removeGameSuggestion,
+  deleteAllUserGames,
   deleteGame,
   resetAllData,
   ensureCatalogGame,

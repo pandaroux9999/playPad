@@ -267,8 +267,8 @@ function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown
     game.hasReview && h('div', { className: "absolute top-2.5 left-2.5 w-5 h-5 rounded-full flex items-center justify-center", style: { background: GRAD } }, h(Edit3, { size: 10, className: "text-white" })),
     onWishlist && h('button', { onClick: e => { e.stopPropagation(); onWishlist(game); }, className: "absolute top-9 left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: inWishlist ? "rgba(239,68,68,0.9)" : "rgba(0,0,0,0.5)" } }, h(Heart, { size: 11, fill: inWishlist ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
     onCrown && h('button', { onClick: e => { e.stopPropagation(); onCrown(game); }, className: "absolute top-[60px] left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: inTopThree ? "rgba(245,158,11,0.9)" : "rgba(0,0,0,0.5)" } }, h(Crown, { size: 11, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
-    onBoost && h('button', { onClick: (e) => onBoost(e), className: "absolute top-[88px] left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: boosted ? "rgba(250,204,21,0.9)" : "rgba(0,0,0,0.5)" } },
-      h('span', { className: "text-[10px]" }, boosted ? "\u2728" : "+")
+    onBoost && h('button', { onClick: (e) => onBoost(e), className: "absolute top-[88px] left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-all hover:scale-125 hover:shadow-[0_0_8px_rgba(250,204,21,0.5)]", style: { background: boosted ? "rgba(250,204,21,0.9)" : "rgba(0,0,0,0.6)", border: `1px solid ${boosted ? "rgba(250,204,21,0.5)" : "rgba(255,255,255,0.15)"}` } },
+      h(Zap, { size: 10, fill: boosted ? "#1a1a2e" : "none", stroke: boosted ? "#1a1a2e" : "#fbbf24", strokeWidth: 2 })
     ),
     boostCount > 0 && h('div', { className: "absolute bottom-1 left-1 px-1 py-0.5 rounded-md text-[7px] font-bold flex items-center gap-0.5", style: { background: "rgba(250,204,21,0.7)", color: "#1a1a2e" } }, "\u2728", boostCount),
     h('div', { className: "absolute bottom-0 left-0 right-0 p-2.5" },
@@ -539,7 +539,10 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
       showSync && h('div', { className: "rounded-2xl p-3.5", style: { background: "#1a1a2e", border: `1px solid ${P1}30`, position: "absolute", zIndex: 20, top: "100%", left: 16, right: 16 } },
         h('div', { className: "flex items-center justify-between mb-2" },
           h('div', { className: "flex items-center gap-2" }, h(Zap, { size: 12, style: { color: P1 } }), h('span', { className: "text-xs font-bold", style: { color: "#c4b5fd" } }, `${connectedCount} plateforme(s) connect\u00e9e(s)`)),
-          h('button', { onClick: () => syncFromBridge(), disabled: !!syncing, className: "sync-btn px-3 py-1 text-white text-[10px] font-bold rounded-lg flex items-center gap-1.5", style: { background: GRAD, opacity: syncing ? 0.5 : 1 } }, syncing === 'all' ? h(Loader, { size: 10, className: "animate-spin" }) : h(RefreshCw, { size: 10 }), "Tout sync")
+          h('div', { className: "flex items-center gap-1" },
+            h('button', { onClick: async () => { if (!confirm('Supprimer TOUS les jeux de votre bibliothèque ? Cette action est irréversible.')) return; try { await API.request('DELETE', '/api/games'); showToast('Tous les jeux ont été supprimés'); onSyncComplete?.(); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "px-2 py-1 text-[9px] font-bold rounded-lg flex items-center gap-1", style: { background: "rgba(239,68,68,0.15)", color: "#ef4444" } }, h(Trash2, { size: 9 }), "Reset"),
+            h('button', { onClick: () => syncFromBridge(), disabled: !!syncing, className: "sync-btn px-3 py-1 text-white text-[10px] font-bold rounded-lg flex items-center gap-1.5", style: { background: GRAD, opacity: syncing ? 0.5 : 1 } }, syncing === 'all' ? h(Loader, { size: 10, className: "animate-spin" }) : h(RefreshCw, { size: 10 }), "Tout sync")
+          )
         ),
           h('div', { className: "space-y-1.5" }, PLATFORM_SYNC_DATA.map(({ platform, gameCount, lastSync }) => {
           const cfg = PLATFORM_CONFIG[platform];
@@ -685,12 +688,12 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const clearFilters = () => { setActivePlatform("all"); setActiveGenre("all"); setFilterRatingMin(0); setFilterRatingMax(5); setFilterYearMin(""); setFilterYearMax(""); setFilterDeveloper(""); };
   const handleBoost = async (gameId, e) => {
     if (e) e.stopPropagation();
-    if (boostedGames.has(gameId)) { showToast?.('Tu as déjà boosté ce jeu'); return; }
+    if (boostedGamesLocal.has(gameId)) { showToast?.('Tu as déjà boosté ce jeu'); return; }
     if (boostPoints <= 0) { showToast?.('Tu n\'as plus de points cette semaine'); return; }
     try {
-      const r = await API.boostGame(gameId);
-      setBoostPoints(r.remaining);
-      setBoostedGames(prev => new Set(prev).add(gameId));
+      await API.boostGame(gameId);
+      setBoostPoints(prev => Math.max(0, (prev || 0) - 1));
+      setBoostedGamesLocal(prev => new Set(prev).add(gameId));
       showToast?.('Jeu boosté ! +1 point communautaire');
       API.getTopBoosted().then(d => setTopBoosted(d.top || [])).catch(() => {});
     } catch (err) { showToast?.(err.message); }

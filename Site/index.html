@@ -743,7 +743,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
     h('div', { className: "flex-1 overflow-y-auto px-4 pb-4", style: { scrollbarWidth: "none" } },
       filtered.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
-        : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: () => onSelect(game), wishlistIds, onWishlist: onToggleWishlist, topThreeIds, onCrown: onToggleTopThree, onBuy: handleBuy })))
+        : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: () => onSelect(game), wishlistIds, onWishlist: onToggleWishlist, topThreeIds, onCrown: onToggleTopThree })))
     )
   );
 }
@@ -1432,6 +1432,15 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
 }
 
 function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, userId, ratings }) {
+  const [buyGame, setBuyGame] = useState(null);
+  const [buyOffers, setBuyOffers] = useState([]);
+  const handleBuy = async (g) => {
+    try {
+      const r = await API.getGamePrices(g.game_id || g.id);
+      setBuyOffers(r.offers || []);
+      setBuyGame(g);
+    } catch (err) { console.error(err); }
+  };
   const [editing, setEditing] = useState(false);
   const [draftRating, setDraftRating] = useState(game.userRating);
   const [draftReview, setDraftReview] = useState(game.review_text || game.reviewText || "");
@@ -1502,6 +1511,7 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
         h('button', { onClick: onClose, className: "sheet-close-btn absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center", style: { background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(X, { size: 16, className: "text-white" })),
         h('button', { onClick: () => onToggleWishlist?.(game), className: "absolute top-4 left-4 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110", style: { background: inWishlist ? "rgba(239,68,68,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Heart, { size: 14, fill: inWishlist ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
         h('button', { onClick: () => handleTopThree(game), className: "absolute top-4 left-14 w-8 h-8 rounded-full flex items-center justify-center", style: { background: inTopThree ? "rgba(245,158,11,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Crown, { size: 14, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
+        h('button', { onClick: (e) => { e.stopPropagation(); handleBuy(game); }, className: "absolute top-4 left-[7.5rem] w-8 h-8 rounded-full flex items-center justify-center", style: { background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(ShoppingCart, { size: 14, className: "text-green-400" })),
         h('div', { className: "absolute bottom-0 left-0 right-0 px-4 pb-3" },
           h('div', { className: "flex items-center gap-2 mb-1" }, h(PlatformBadge, { platforms: game.platforms || (game.platform ? [game.platform] : []) }), h('span', { className: "text-xs px-2 py-0.5 rounded-md font-bold", style: { background: (statusCfg || STATUS_CONFIG.not_started).color + "28", color: (statusCfg || STATUS_CONFIG.not_started).color } }, (statusCfg || STATUS_CONFIG.not_started).label)),
           h('h2', { className: "text-lg font-black text-white leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),

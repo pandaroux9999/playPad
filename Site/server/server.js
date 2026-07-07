@@ -13,13 +13,31 @@ const SupabaseSessionStore = require('./session-store');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Validation du secret de session au démarrage
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET || SESSION_SECRET.length < 16) {
+  console.error('SESSION_SECRET est obligatoire et doit faire au moins 16 caractères. Définis-le dans .env ou les variables d\'environnement.');
+  process.exit(1);
+}
+
 // Sécurité : headers HTTP (CSP, HSTS, X-Frame-Options, etc.)
 app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdn.tailwindcss.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https://cdn.cloudflare.steamstatic.com", "https://steamcdn-a.akamaihd.net"],
+      connectSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
+    },
+  },
 }));
 
-// Sécurité : rate limiting global (100 req / 15 min par IP)
+// Sécurité : rate limiting global (200 req / 15 min par IP)
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
@@ -35,16 +53,17 @@ const authLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Trop de tentatives de connexion, réessaie dans 15 minutes.' },
+  message: { error: 'Trop de tentatives, réessaie dans 15 minutes.' },
 });
 
-app.use(cors({ origin: true, credentials: true }));
+const corsOrigin = process.env.PUBLIC_URL || 'http://localhost:3000';
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json());
 
 app.set('trust proxy', 1);
 const sessionStore = new SupabaseSessionStore();
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'playpad-secret-key-change-in-production',
+  secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   store: sessionStore,
@@ -52,6 +71,7 @@ app.use(session({
     secure: process.env.NODE_ENV === 'production',
     maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax',
+    httpOnly: true,
   },
 }));
 
@@ -64,6 +84,20 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// Validation de la complexité du mot de passe
+function validatePassword(password) {
+  if (password.length < 8) return 'Le mot de passe doit contenir au moins 8 caractères';
+  if (!/[A-Z]/.test(password)) return 'Le mot de passe doit contenir au moins une majuscule';
+  if (!/[a-z]/.test(password)) return 'Le mot de passe doit contenir au moins une minuscule';
+  if (!/[0-9]/.test(password)) return 'Le mot de passe doit contenir au moins un chiffre';
+  return null;
+}
+
+// Validation du format d'email
+function validateEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 app.post('/api/register', authLimiter, async (req, res) => {
   try {
     const { username, displayName, password, email } = req.body;
@@ -71,8 +105,12 @@ app.post('/api/register', authLimiter, async (req, res) => {
     if (!username || !displayName || !password || !email) {
       return res.status(400).json({ error: 'Tous les champs sont requis' });
     }
-    if (password.length < 4) {
-      return res.status(400).json({ error: 'Mot de passe trop court (min 4 caractères)' });
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
+    }
+    if (!validateEmail(email)) {
+      return res.status(400).json({ error: 'Format d\'email invalide' });
     }
     const existingUser = await db.getUserByUsername(username);
     if (existingUser) {
@@ -101,28 +139,33 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email requis' });
     const user = await db.getUserByEmail(email);
-    if (!user) return res.status(404).json({ error: 'Aucun compte trouvé avec cet email' });
-    const token = await db.createResetToken(user.id, 'password');
-    const resetLink = (process.env.PUBLIC_URL || 'http://localhost:3000') + '/reset-password?token=' + token;
-    console.log('[ForgotPassword] Token for', email, ':', resetLink);
-    res.json({ ok: true, resetLink, message: 'Lien de réinitialisation généré (vérifie la console serveur)' });
+    if (user) {
+      const token = await db.createResetToken(user.id, 'password');
+      console.log('[ForgotPassword] Token créé pour', email);
+      // En production, envoie le lien par email ici
+    }
+    // Toujours retourner le même message (pas de fuite d'info)
+    res.json({ ok: true, message: 'Si un compte existe avec cet email, un lien de réinitialisation a été généré (vérifie la console serveur en développement).' });
   } catch (err) {
     console.error('[ForgotPassword] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur lors de la réinitialisation' });
   }
 });
 
-app.post('/api/auth/forgot-username', async (req, res) => {
+app.post('/api/auth/forgot-username', authLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email requis' });
     const user = await db.getUserByEmail(email);
-    if (!user) return res.status(404).json({ error: 'Aucun compte trouvé avec cet email' });
-    console.log('[ForgotUsername] Username for', email, ':', user.username);
-    res.json({ ok: true, username: user.username, message: 'Identifiant trouvé !' });
+    if (user) {
+      console.log('[ForgotUsername] Demande pour', email);
+      // En production, envoie l'identifiant par email ici
+    }
+    // Toujours retourner le même message
+    res.json({ ok: true, message: 'Si un compte existe avec cet email, les instructions ont été envoyées (vérifie la console serveur en développement).' });
   } catch (err) {
     console.error('[ForgotUsername] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur lors de la récupération' });
   }
 });
 
@@ -130,18 +173,19 @@ app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
   try {
     const { token, newPassword } = req.body;
     if (!token || !newPassword) return res.status(400).json({ error: 'Token et nouveau mot de passe requis' });
-    if (newPassword.length < 4) return res.status(400).json({ error: 'Mot de passe trop court (min 4 caractères)' });
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) return res.status(400).json({ error: passwordError });
     const rt = await db.getResetToken(token);
     if (!rt) return res.status(400).json({ error: 'Token invalide ou expiré' });
     const hashed = await bcrypt.hash(newPassword, 10);
     const { error } = await db.supabaseAdmin.from('users').update({ password: hashed }).eq('id', rt.user_id);
     if (error) throw new Error(error.message);
     await db.markResetTokenUsed(token);
-    console.log('[ResetPassword] Success for user_id:', rt.user_id);
+    console.log('[ResetPassword] Mot de passe réinitialisé avec succès');
     res.json({ ok: true, message: 'Mot de passe réinitialisé avec succès' });
   } catch (err) {
     console.error('[ResetPassword] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur lors de la réinitialisation du mot de passe' });
   }
 });
 
@@ -155,6 +199,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
     const user = await db.getUserByUsername(username);
     if (!user) {
       console.log('[Login] User not found:', username);
+      await bcrypt.compare(password, '$2a$10$' + 'x'.repeat(53));
       return res.status(401).json({ error: 'Identifiant ou mot de passe incorrect' });
     }
     console.log('[Login] User found, comparing password');
@@ -364,8 +409,8 @@ app.post('/api/admin/reset', requireAuth, async (req, res) => {
   try {
     const user = await db.getUserById(req.session.userId);
     const adminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
-    if (adminIds.length > 0 && !adminIds.includes(String(req.session.userId))) {
-      return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+    if (adminIds.length === 0 || !adminIds.includes(String(req.session.userId))) {
+      return res.status(403).json({ error: 'Accès réservé aux administrateurs. Définis ADMIN_IDS dans les variables d\'environnement.' });
     }
     await db.resetAllData();
     console.log('[Admin] Reset all games + catalog by user', req.session.userId);
@@ -1053,8 +1098,8 @@ app.get('/api/game-details/:gameId', requireAuth, async (req, res) => {
 app.get('/api/debug/env', requireAuth, async (req, res) => {
   const user = await db.getUserById(req.session.userId);
   const adminIds = (process.env.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
-  if (adminIds.length > 0 && !adminIds.includes(String(req.session.userId))) {
-    return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+  if (adminIds.length === 0 || !adminIds.includes(String(req.session.userId))) {
+    return res.status(403).json({ error: 'Accès réservé aux administrateurs. Définis ADMIN_IDS dans les variables d\'environnement.' });
   }
   res.json({
     SUPABASE_URL: !!process.env.SUPABASE_URL,
@@ -1065,6 +1110,63 @@ app.get('/api/debug/env', requireAuth, async (req, res) => {
     PUBLIC_URL: process.env.PUBLIC_URL || null,
     SESSION_SECRET: !!process.env.SESSION_SECRET,
   });
+});
+
+// ============ BOOST COMMUNAUTAIRE ============
+
+app.get('/api/boost/points', requireAuth, async (req, res) => {
+  try {
+    let bp = await db.getBoostPoints(req.session.userId);
+    const now = new Date();
+    const year = now.getFullYear();
+    const jan1 = new Date(year, 0, 1);
+    const week = Math.ceil((((now - jan1) / 86400000) + jan1.getDay() + 1) / 7);
+    if (bp.last_boost_week < week) {
+      const points = await db.resetWeeklyBoostPoints(req.session.userId);
+      return res.json({ points, reset: true });
+    }
+    res.json({ points: bp.boost_points, reset: false });
+  } catch (err) {
+    console.error('[BoostPoints] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/boost', requireAuth, async (req, res) => {
+  try {
+    const { gameId } = req.body;
+    if (!gameId) return res.status(400).json({ error: 'gameId requis' });
+    const result = await db.boostGame(req.session.userId, gameId);
+    console.log('[Boost] User', req.session.userId, 'boosted', gameId);
+    res.json({ ok: true, remaining: result.remaining });
+  } catch (err) {
+    console.error('[Boost] Error:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/boost/top', async (req, res) => {
+  try {
+    const top = await db.getTopBoosted(10);
+    const enriched = await Promise.all(top.map(async (b) => {
+      const { data } = await db.supabaseAdmin.from('catalog').select('*').eq('game_id', b.game_id).maybeSingle();
+      return { ...b, game: data || null };
+    }));
+    res.json({ top: enriched.filter(b => b.game) });
+  } catch (err) {
+    console.error('[BoostTop] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/boost/count/:gameId', async (req, res) => {
+  try {
+    const count = await db.getGameBoostCount(req.params.gameId);
+    res.json({ gameId: req.params.gameId, count });
+  } catch (err) {
+    console.error('[BoostCount] Error:', err.message);
+    res.json({ gameId: req.params.gameId, count: 0 });
+  }
 });
 
 app.listen(PORT, () => {

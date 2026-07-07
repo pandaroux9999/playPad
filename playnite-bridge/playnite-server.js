@@ -12,6 +12,7 @@
  * Environment variables:
  *   PLAYNITE_BRIDGE_PORT  - Port to listen on (default: 3456)
  *   PLAYNITE_DB_PATH      - Custom path to library.db (default: %AppData%\Playnite\library.db)
+ *   BRIDGE_API_KEY        - OBLIGATOIRE : clé API pour sécuriser l'accès (sinon 403)
  *
  * Future extensibility (add new sources):
  *   Each source adapter exports { readGames(config) } → Array<Game>
@@ -27,8 +28,25 @@ const cors = require('cors');
 const { readPlayniteGames, filterByPlatform, groupByPlatform, getDefaultDbPath } = require('./playnite-reader');
 
 const PORT = parseInt(process.env.PLAYNITE_BRIDGE_PORT, 10) || 3456;
+const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY;
+
+if (!BRIDGE_API_KEY || BRIDGE_API_KEY.length < 8) {
+  console.error('BRIDGE_API_KEY est obligatoire (min 8 caractères). Définis-la dans les variables d\'environnement.');
+  process.exit(1);
+}
+
 const app = express();
 app.use(cors());
+
+// Middleware d'authentification par API key
+function requireBridgeAuth(req, res, next) {
+  const auth = req.headers['authorization'];
+  const token = auth && auth.startsWith('Bearer ') ? auth.slice(7) : req.query.apiKey;
+  if (!token || token !== BRIDGE_API_KEY) {
+    return res.status(403).json({ error: 'Accès refusé. Fournis un header Authorization: Bearer <BRIDGE_API_KEY> ou ?apiKey=<clé>' });
+  }
+  next();
+}
 
 // Middleware: wrap the reader call with error handling
 function withPlayniteDb(fn) {
@@ -48,7 +66,7 @@ function withPlayniteDb(fn) {
 }
 
 // GET /games — Return the full list of games from Playnite
-app.get('/games', withPlayniteDb((req, res, games) => {
+app.get('/games', requireBridgeAuth, withPlayniteDb((req, res, games) => {
   res.json({
     games,
     total: games.length,
@@ -58,7 +76,7 @@ app.get('/games', withPlayniteDb((req, res, games) => {
 }));
 
 // GET /games/:platform — Filter by platform alias (steam, epic, xbox, etc.)
-app.get('/games/:platform', withPlayniteDb((req, res, games) => {
+app.get('/games/:platform', requireBridgeAuth, withPlayniteDb((req, res, games) => {
   const platform = req.params.platform.toLowerCase();
   const filtered = filterByPlatform(games, platform);
   res.json({
@@ -69,7 +87,7 @@ app.get('/games/:platform', withPlayniteDb((req, res, games) => {
 }));
 
 // GET /platforms — List all available platforms and game counts
-app.get('/platforms', withPlayniteDb((req, res, games) => {
+app.get('/platforms', requireBridgeAuth, withPlayniteDb((req, res, games) => {
   const groups = groupByPlatform(games);
   const platforms = Object.entries(groups).map(([id, list]) => ({
     id,

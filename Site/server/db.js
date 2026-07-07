@@ -590,6 +590,100 @@ async function getConversations(userId) {
   return Object.values(conv).sort((a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at));
 }
 
+// === BOOST SYSTÈME ===
+
+async function getBoostPoints(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select('boost_points, last_boost_week')
+    .eq('id', userId)
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function resetWeeklyBoostPoints(userId) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const jan1 = new Date(year, 0, 1);
+  const week = Math.ceil((((now - jan1) / 86400000) + jan1.getDay() + 1) / 7);
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .update({ boost_points: 3, last_boost_week: week })
+    .eq('id', userId)
+    .select('boost_points')
+    .single();
+  if (error) throw new Error(error.message);
+  return data.boost_points;
+}
+
+async function boostGame(userId, gameId) {
+  const { data: existing } = await supabaseAdmin
+    .from('boosts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('game_id', gameId)
+    .maybeSingle();
+  if (existing) throw new Error('Tu as déjà boosté ce jeu');
+
+  const { data: user } = await supabaseAdmin
+    .from('users')
+    .select('boost_points')
+    .eq('id', userId)
+    .single();
+  if (!user || user.boost_points < 1) throw new Error('Tu n\'as plus de points de boost cette semaine');
+
+  const { error: boostError } = await supabaseAdmin
+    .from('boosts')
+    .insert({ user_id: userId, game_id: gameId });
+  if (boostError) throw new Error(boostError.message);
+
+  const { error: deductError } = await supabaseAdmin
+    .from('users')
+    .update({ boost_points: user.boost_points - 1 })
+    .eq('id', userId);
+  if (deductError) throw new Error(deductError.message);
+
+  return { remaining: user.boost_points - 1 };
+}
+
+async function getTopBoosted(limit = 10) {
+  const { data, error } = await supabaseAdmin
+    .from('boosts')
+    .select('game_id, count:game_id', { count: 'plain' })
+    .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+    .limit(0);
+  if (error) {
+    // Fallback: count sans filtre de date si la table est récente
+    const { data: all, error: e2 } = await supabaseAdmin
+      .from('boosts')
+      .select('game_id');
+    if (e2) throw new Error(e2.message);
+    return aggregateBoostCounts(all, limit);
+  }
+  return aggregateBoostCounts(data, limit);
+}
+
+function aggregateBoostCounts(rows, limit) {
+  const counts = {};
+  for (const r of rows || []) {
+    counts[r.game_id] = (counts[r.game_id] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([game_id, count]) => ({ game_id, count }));
+}
+
+async function getGameBoostCount(gameId) {
+  const { count, error } = await supabaseAdmin
+    .from('boosts')
+    .select('*', { count: 'exact', head: true })
+    .eq('game_id', gameId);
+  if (error) return 0;
+  return count || 0;
+}
+
 module.exports = {
   supabaseAdmin,
   createUser,
@@ -637,4 +731,9 @@ module.exports = {
   getMessages,
   markMessagesRead,
   getConversations,
+  getBoostPoints,
+  resetWeeklyBoostPoints,
+  boostGame,
+  getTopBoosted,
+  getGameBoostCount,
 };

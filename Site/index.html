@@ -118,6 +118,10 @@ const API = {
   getConversations: () => API.request('GET', '/api/messages/conversations'),
   getUnreadMessages: () => API.request('GET', '/api/messages/unread'),
   getGameDetails: (gameId, cover) => API.request('GET', `/api/game-details/${gameId}?cover=${encodeURIComponent(cover || '')}`),
+  getBoostPoints: () => API.request('GET', '/api/boost/points'),
+  boostGame: (gameId) => API.request('POST', '/api/boost', { gameId }),
+  getTopBoosted: () => API.request('GET', '/api/boost/top'),
+  getBoostCount: (gameId) => API.request('GET', `/api/boost/count/${gameId}`),
 };
 
 function Icon(paths, viewBox = "0 0 24 24") {
@@ -193,16 +197,35 @@ const STATUS_CONFIG = {
 const STATUS_OPTIONS = ["playing", "completed", "backlog", "dropped"];
 
 function PlatformLogo({ platform, size = 24 }) {
-  const svgs = {
-    ps5: '<svg viewBox="0 0 24 24" fill="none" stroke="#003791" stroke-width="1.5"><path d="M5.5 5h13A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5v-9A2.5 2.5 0 0 1 5.5 5z"/><circle cx="8" cy="12" r="1.5" fill="#003791"/><circle cx="16" cy="12" r="1.5" fill="#003791"/><path d="M10 9h4" stroke="#003791"/></svg>',
-    steam: '<svg viewBox="0 0 24 24" fill="none" stroke="#1b2838" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 8v4l3 2"/></svg>',
-    epic: '<svg viewBox="0 0 24 24" fill="none" stroke="#313131" stroke-width="1.5"><path d="M12 3L3 8v8l9 5 9-5V8l-9-5z"/><path d="M12 3v9l5 3"/></svg>',
-    nintendo: '<svg viewBox="0 0 24 24" fill="none" stroke="#e60012" stroke-width="1.5"><rect x="4" y="3" width="7" height="18" rx="3"/><rect x="13" y="3" width="7" height="18" rx="3"/><circle cx="7.5" cy="12" r="1" fill="#e60012"/><circle cx="16.5" cy="9" r="1" fill="#e60012"/></svg>',
-    xbox: '<svg viewBox="0 0 24 24" fill="none" stroke="#107c10" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M8 8c2 2 2 6 4 6s2-4 4-6" stroke="#107c10"/></svg>',
+  const props = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", strokeWidth: 1.5, style: { display: 'inline-block', verticalAlign: 'middle' } };
+  const icons = {
+    ps5: h('svg', { ...props, stroke: "#003791" },
+      h('path', { d: "M5.5 5h13A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5v-9A2.5 2.5 0 0 1 5.5 5z" }),
+      h('circle', { cx: 8, cy: 12, r: 1.5, fill: "#003791", stroke: "none" }),
+      h('circle', { cx: 16, cy: 12, r: 1.5, fill: "#003791", stroke: "none" }),
+      h('path', { d: "M10 9h4", stroke: "#003791" })
+    ),
+    steam: h('svg', { ...props, stroke: "#1b2838" },
+      h('circle', { cx: 12, cy: 12, r: 9 }),
+      h('circle', { cx: 12, cy: 12, r: 4 }),
+      h('path', { d: "M12 8v4l3 2" })
+    ),
+    epic: h('svg', { ...props, stroke: "#313131" },
+      h('path', { d: "M12 3L3 8v8l9 5 9-5V8l-9-5z" }),
+      h('path', { d: "M12 3v9l5 3" })
+    ),
+    nintendo: h('svg', { ...props, stroke: "#e60012" },
+      h('rect', { x: 4, y: 3, width: 7, height: 18, rx: 3 }),
+      h('rect', { x: 13, y: 3, width: 7, height: 18, rx: 3 }),
+      h('circle', { cx: 7.5, cy: 12, r: 1, fill: "#e60012", stroke: "none" }),
+      h('circle', { cx: 16.5, cy: 9, r: 1, fill: "#e60012", stroke: "none" })
+    ),
+    xbox: h('svg', { ...props, stroke: "#107c10" },
+      h('circle', { cx: 12, cy: 12, r: 9 }),
+      h('path', { d: "M8 8c2 2 2 6 4 6s2-4 4-6", stroke: "#107c10" })
+    ),
   };
-  const svg = svgs[platform];
-  if (!svg) return null;
-  return h('span', { dangerouslySetInnerHTML: { __html: svg }, style: { width: size + 'px', height: size + 'px', display: 'inline-block', lineHeight: 0 } });
+  return icons[platform] || null;
 }
 
 function PlatformBadge({ platform, platforms, small }) {
@@ -230,7 +253,7 @@ function StarRating({ rating, size = 14, interactive = false, onChange }) {
   ));
 }
 
-function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown, small }) {
+function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown, small, boostCount, onBoost, boosted }) {
   const status = game.status ? STATUS_CONFIG[game.status] : null;
   const inWishlist = wishlistIds?.has(game.game_id || game.id);
   const inTopThree = topThreeIds?.has(game.game_id || game.id);
@@ -244,6 +267,10 @@ function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown
     game.hasReview && h('div', { className: "absolute top-2.5 left-2.5 w-5 h-5 rounded-full flex items-center justify-center", style: { background: GRAD } }, h(Edit3, { size: 10, className: "text-white" })),
     onWishlist && h('button', { onClick: e => { e.stopPropagation(); onWishlist(game); }, className: "absolute top-9 left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: inWishlist ? "rgba(239,68,68,0.9)" : "rgba(0,0,0,0.5)" } }, h(Heart, { size: 11, fill: inWishlist ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
     onCrown && h('button', { onClick: e => { e.stopPropagation(); onCrown(game); }, className: "absolute top-[60px] left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: inTopThree ? "rgba(245,158,11,0.9)" : "rgba(0,0,0,0.5)" } }, h(Crown, { size: 11, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
+    onBoost && h('button', { onClick: (e) => onBoost(e), className: "absolute top-[88px] left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: boosted ? "rgba(250,204,21,0.9)" : "rgba(0,0,0,0.5)" } },
+      h('span', { className: "text-[10px]" }, boosted ? "\u2728" : "+")
+    ),
+    boostCount > 0 && h('div', { className: "absolute bottom-1 left-1 px-1 py-0.5 rounded-md text-[7px] font-bold flex items-center gap-0.5", style: { background: "rgba(250,204,21,0.7)", color: "#1a1a2e" } }, "\u2728", boostCount),
     h('div', { className: "absolute bottom-0 left-0 right-0 p-2.5" },
       h(PlatformBadge, { platform: game.platform, small }),
       h('p', { className: "text-white text-xs font-bold leading-tight mt-1.5 line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
@@ -349,7 +376,7 @@ const PLATFORM_SYNC_DATA = [
   { platform: "xbox",     gameCount: 0,  lastSync: "\u2014" },
 ];
 
-function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast, user, onAddNotification }) {
+function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast, user, onAddNotification, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree }) {
   const genres = useMemo(() => ["all", ...new Set(games.map(g => g.genre).filter(Boolean))], [games]);
   const [showFilters, setShowFilters] = useState(false);
   const [filterGenre, setFilterGenre] = useState("all");
@@ -381,14 +408,20 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const connectedCount = Object.values(connected).filter(Boolean).length;
   const unread = notifications.filter(n => !n.read).length;
   const [bridgeUrl, setBridgeUrl] = useState(() => localStorage.getItem('playnite_bridge_url') || 'http://localhost:3456');
+  const [bridgeApiKey, setBridgeApiKey] = useState(() => localStorage.getItem('playnite_bridge_api_key') || '');
   const [showBridgeConfig, setShowBridgeConfig] = useState(false);
   const [bridgeOnline, setBridgeOnline] = useState(null);
+  const bridgeAuth = (url) => {
+    const u = new URL(url);
+    if (bridgeApiKey) u.searchParams.set('apiKey', bridgeApiKey);
+    return u.toString();
+  };
 
   useEffect(() => {
-    fetch(bridgeUrl + '/health', { signal: AbortSignal.timeout(3000) })
+    fetch(bridgeAuth(bridgeUrl + '/health'), { signal: AbortSignal.timeout(3000) })
       .then(r => setBridgeOnline(r.ok))
       .catch(() => setBridgeOnline(false));
-  }, [bridgeUrl]);
+  }, [bridgeUrl, bridgeApiKey]);
   const handleFileImport = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -410,7 +443,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
 
   const syncFromBridge = async (platformFilter) => {
     try {
-      const url = platformFilter ? `${bridgeUrl}/games/${platformFilter}` : `${bridgeUrl}/games`;
+      const url = bridgeAuth(platformFilter ? `${bridgeUrl}/games/${platformFilter}` : `${bridgeUrl}/games`);
       const res = await fetch(url);
       if (!res.ok) throw new Error('Pont Playnite inaccessible');
       const data = await res.json();
@@ -558,10 +591,13 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
             ),
             bridgeOnline && h('button', { onClick: async () => { setSyncing('all'); try { await syncFromBridge(); } catch(e) {} setSyncing(null); }, className: "ml-auto px-2 py-0.5 text-[9px] font-bold rounded-md text-white", style: { background: GRAD } }, "Sync")
           ),
-          !showBridgeConfig && h('button', { onClick: () => setShowBridgeConfig(true), className: "text-[9px] font-medium hover:opacity-80", style: { color: `${P1}80` } }, "Configurer l'URL du bridge"),
-          showBridgeConfig && h('div', { className: "flex gap-1.5 mt-1" },
-            h('input', { value: bridgeUrl, onChange: e => { setBridgeUrl(e.target.value); localStorage.setItem('playnite_bridge_url', e.target.value); }, placeholder: "http://localhost:3456", className: "flex-1 bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-[10px] text-foreground placeholder-muted-foreground outline-none" }),
-            h('button', { onClick: () => { setShowBridgeConfig(false); fetch(bridgeUrl + '/health', { signal: AbortSignal.timeout(3000) }).then(r => setBridgeOnline(r.ok)).catch(() => setBridgeOnline(false)); }, className: "px-2 py-1.5 text-[9px] font-bold rounded-lg text-white", style: { background: GRAD } }, "OK")
+          !showBridgeConfig && h('button', { onClick: () => setShowBridgeConfig(true), className: "text-[9px] font-medium hover:opacity-80", style: { color: `${P1}80` } }, "Configurer le bridge"),
+          showBridgeConfig && h('div', { className: "flex flex-col gap-1.5 mt-1" },
+            h('div', { className: "flex gap-1.5" },
+              h('input', { value: bridgeUrl, onChange: e => { setBridgeUrl(e.target.value); localStorage.setItem('playnite_bridge_url', e.target.value); }, placeholder: "URL (ex: http://localhost:3456)", className: "flex-1 bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-[10px] text-foreground placeholder-muted-foreground outline-none" }),
+              h('input', { value: bridgeApiKey, onChange: e => { setBridgeApiKey(e.target.value); localStorage.setItem('playnite_bridge_api_key', e.target.value); }, type: "password", placeholder: "Cl\u00e9 API", className: "w-24 bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-[10px] text-foreground placeholder-muted-foreground outline-none" })
+            ),
+            h('button', { onClick: () => { setShowBridgeConfig(false); fetch(bridgeAuth(bridgeUrl + '/health'), { signal: AbortSignal.timeout(3000) }).then(r => setBridgeOnline(r.ok)).catch(() => setBridgeOnline(false)); }, className: "w-full px-2 py-1 text-[9px] font-bold rounded-lg text-white", style: { background: GRAD } }, "OK")
           )
         ),
         h('div', { className: "mt-2 pt-2 border-t border-border" },
@@ -603,12 +639,12 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
     h('div', { className: "flex-1 overflow-y-auto px-4 pb-4", style: { scrollbarWidth: "none" } },
       filtered.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
-        : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: () => onSelect(game) })))
+        : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: () => onSelect(game), wishlistIds, onWishlist: onToggleWishlist, topThreeIds, onCrown: onToggleTopThree })))
     )
   );
 }
 
-function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings }) {
+function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topThreeIds, onToggleTopThree, showToast }) {
   const [search, setSearch] = useState("");
   const [activePlatform, setActivePlatform] = useState("all");
   const [activeGenre, setActiveGenre] = useState("all");
@@ -619,7 +655,18 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings }) {
   const [filterYearMin, setFilterYearMin] = useState("");
   const [filterYearMax, setFilterYearMax] = useState("");
   const [filterDeveloper, setFilterDeveloper] = useState("");
-  useEffect(() => { API.getCatalog().then(d => setCatalog(d.catalog || [])).catch(() => {}); }, []);
+  const [topBoosted, setTopBoosted] = useState([]);
+  const [boostPoints, setBoostPoints] = useState(null);
+  const [boostedGames, setBoostedGames] = useState(new Set());
+  const [showBoostSection, setShowBoostSection] = useState(false);
+  useEffect(() => {
+    API.getCatalog().then(d => setCatalog(d.catalog || [])).catch(() => {});
+    API.getTopBoosted().then(d => {
+      setTopBoosted(d.top || []);
+      if ((d.top || []).length > 0) setShowBoostSection(true);
+    }).catch(() => {});
+    API.getBoostPoints().then(d => setBoostPoints(d.points)).catch(() => {});
+  }, []);
   const genres = useMemo(() => ["all", ...new Set(catalog.map(g => g.genre).filter(Boolean))], [catalog]);
   const platforms = ["all", "ps5", "steam", "epic", "nintendo", "xbox"];
   const filtered = useMemo(() => catalog.filter(g =>
@@ -634,6 +681,18 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings }) {
   ), [catalog, activePlatform, activeGenre, search, filterRatingMin, filterRatingMax, filterYearMin, filterYearMax, filterDeveloper]);
   const hasActiveFilters = activePlatform !== "all" || activeGenre !== "all" || filterRatingMin > 0 || filterRatingMax < 5 || filterYearMin || filterYearMax || filterDeveloper;
   const clearFilters = () => { setActivePlatform("all"); setActiveGenre("all"); setFilterRatingMin(0); setFilterRatingMax(5); setFilterYearMin(""); setFilterYearMax(""); setFilterDeveloper(""); };
+  const handleBoost = async (gameId, e) => {
+    if (e) e.stopPropagation();
+    if (boostedGames.has(gameId)) { showToast?.('Tu as déjà boosté ce jeu'); return; }
+    if (boostPoints <= 0) { showToast?.('Tu n\'as plus de points cette semaine'); return; }
+    try {
+      const r = await API.boostGame(gameId);
+      setBoostPoints(r.remaining);
+      setBoostedGames(prev => new Set(prev).add(gameId));
+      showToast?.('Jeu boosté ! +1 point communautaire');
+      API.getTopBoosted().then(d => setTopBoosted(d.top || [])).catch(() => {});
+    } catch (err) { showToast?.(err.message); }
+  };
 
   return h('div', { className: "flex flex-col h-full view-enter" },
     h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
@@ -641,7 +700,12 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings }) {
         h('img', { src: "logo_hackaton.png", alt: "PlayPad", className: "w-9 h-9 object-contain" }),
         h('div', null,
           h('h1', { className: "text-xl font-black text-foreground leading-none", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Catalogue Complet"),
-          h('p', { className: "text-xs text-muted-foreground mt-0.5" }, h('span', { className: "font-bold", style: { color: P1 } }, catalog.length), " jeux disponibles")
+          h('p', { className: "text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5" },
+            h('span', { className: "font-bold", style: { color: P1 } }, catalog.length), " jeux",
+            boostPoints !== null && h('span', { className: "text-[10px] px-1.5 py-0.5 rounded-full font-bold", style: { background: GRAD, color: "#fff" } },
+              boostPoints, " boost", boostPoints > 1 ? "s" : "", "\u2728"
+            )
+          )
         )
       ),
       h('div', { className: "relative mb-3 flex gap-2" },
@@ -690,9 +754,42 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings }) {
       ),
     ),
     h('div', { className: "flex-1 overflow-y-auto px-4 pb-4", style: { scrollbarWidth: "none" } },
+      showBoostSection && topBoosted.length > 0 && h('div', { className: "mb-4" },
+        h('div', { className: "flex items-center justify-between mb-2" },
+          h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5" }, "\u2728 Boost\u00e9s de la semaine"),
+          h('button', { onClick: () => setShowBoostSection(false), className: "text-[9px] font-medium hover:opacity-80", style: { color: `${P1}80` } }, "Masquer")
+        ),
+        h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
+          topBoosted.slice(0, 10).map(b => {
+            const game = b.game;
+            if (!game) return null;
+            const rank = topBoosted.indexOf(b) + 1;
+            const medal = rank === 1 ? "\u{1F947}" : rank === 2 ? "\u{1F948}" : rank === 3 ? "\u{1F949}" : null;
+            return h('div', { key: b.game_id, onClick: () => onSelect(game), className: "flex-shrink-0 w-24 cursor-pointer hover:opacity-80 transition-opacity" },
+              h('div', { className: "relative rounded-xl overflow-hidden mb-1", style: { aspectRatio: "3/4", background: "#1a1a2e" } },
+                game.cover && h('img', { src: game.cover, alt: game.title, className: "w-full h-full object-cover" }),
+                h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" }),
+                rank <= 3 && h('span', { className: "absolute top-1 left-1 text-[16px]" }, medal),
+                h('span', { className: "absolute bottom-1 right-1 text-[9px] font-bold px-1 py-0.5 rounded-md", style: { background: `${P1}cc`, color: "#fff" } }, "#", rank)
+              ),
+              h('p', { className: "text-[9px] font-bold text-foreground leading-tight line-clamp-2" }, game.title),
+              h('p', { className: "text-[8px] text-muted-foreground" }, b.count, " boost", b.count > 1 ? "s" : "")
+            );
+          })
+        )
+      ),
       filtered.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
-        : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id, game: { ...game, userRating: ratings?.[game.game_id] || 0 }, onClick: () => onSelect(game), wishlistIds, onWishlist: onToggleWishlist })))
+        : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, {
+            key: game.game_id,
+            game: { ...game, userRating: ratings?.[game.game_id] || 0 },
+            onClick: () => onSelect(game),
+            wishlistIds, onWishlist: onToggleWishlist,
+            topThreeIds, onCrown: onToggleTopThree,
+            boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
+            onBoost: (e) => handleBoost(game.game_id, e),
+            boosted: boostedGames.has(game.game_id),
+          })))
     )
   );
 }
@@ -1271,17 +1368,7 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
     } catch (e) {}
   };
 
-  const handleTopThree = async (g) => {
-    const id = g.game_id || g.id;
-    const already = topThreeIds?.has(id);
-    if (already) {
-      await API.setTopThree(id, null);
-    } else if ((topThreeIds?.size || 0) < 3) {
-      const pos = (topThreeIds?.size || 0) + 1;
-      await API.setTopThree(id, pos);
-    } else {
-      return;
-    }
+  const handleTopThree = (g) => {
     onToggleTopThree?.(g);
   };
 
@@ -1396,11 +1483,13 @@ function BottomNav({ view, setView }) {
   );
 }
 
-function AuthPage({ onLoginSuccess }) {
+function AuthPage({ onLoginSuccess, resetToken, onResetComplete }) {
   const [isRegister, setIsRegister] = useState(false);
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newPassword2, setNewPassword2] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -1409,6 +1498,43 @@ function AuthPage({ onLoginSuccess }) {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
+  const validatePassword = (pw) => {
+    if (pw.length < 8) return 'Le mot de passe doit contenir au moins 8 caractères';
+    if (!/[A-Z]/.test(pw)) return 'Le mot de passe doit contenir au moins une majuscule';
+    if (!/[a-z]/.test(pw)) return 'Le mot de passe doit contenir au moins une minuscule';
+    if (!/[0-9]/.test(pw)) return 'Le mot de passe doit contenir au moins un chiffre';
+    return null;
+  };
+
+  // Mode réinitialisation de mot de passe (via token dans l'URL)
+  if (resetToken) {
+    return h('div', { className: "min-h-screen flex items-center justify-center", style: { background: "#030308" } },
+      h('div', { className: "fixed inset-0 pointer-events-none overflow-hidden" },
+        h('div', { className: "absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full blur-3xl", style: { background: `${P1}07` } })
+      ),
+      h('div', { className: "relative bg-card border border-border rounded-2xl flex flex-col items-center justify-center p-8 w-full max-w-sm mx-auto" },
+        h('h2', { className: "text-lg font-black mb-1", style: { fontFamily: "'Rajdhani', sans-serif", color: "#fff" } }, "Nouveau mot de passe"),
+        h('p', { className: "text-xs text-muted-foreground mb-6 text-center" }, "Choisis un mot de passe s\u00e9curis\u00e9"),
+        h('form', { onSubmit: async (e) => { e.preventDefault(); setError(""); const pwError = validatePassword(newPassword); if (pwError) { setError(pwError); return; } if (newPassword !== newPassword2) { setError("Les mots de passe ne correspondent pas"); return; } setLoading(true); try { await API.resetPassword(resetToken, newPassword); showToast("Mot de passe r\u00e9initialis\u00e9 !"); setTimeout(() => { if (onResetComplete) onResetComplete(); }, 1500); } catch (err) { setError(err.message); } setLoading(false); }, className: "w-full space-y-3" },
+          h('div', null,
+            h('p', { className: "text-[10px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider" }, "Nouveau mot de passe"),
+            h('input', { type: "password", value: newPassword, onChange: e => setNewPassword(e.target.value), placeholder: "Min. 8 car., 1 maj., 1 chiffre", className: "w-full bg-secondary/60 border border-border rounded-xl px-3.5 py-3 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-purple-500 transition-colors" }),
+            h('p', { className: "text-[9px] text-muted-foreground/60 mt-1" }, "8 caract\u00e8res min., 1 majuscule, 1 minuscule, 1 chiffre")
+          ),
+          h('div', null,
+            h('p', { className: "text-[10px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider" }, "Confirmer le mot de passe"),
+            h('input', { type: "password", value: newPassword2, onChange: e => setNewPassword2(e.target.value), placeholder: "R\u00e9p\u00e8te le mot de passe", className: "w-full bg-secondary/60 border border-border rounded-xl px-3.5 py-3 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-purple-500 transition-colors" })
+          ),
+          error && h('p', { className: "text-[11px] text-red-400 font-medium text-center" }, error),
+          h('button', { type: "submit", disabled: loading, className: "w-full py-3 text-white text-sm font-bold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50", style: { background: GRAD } },
+            loading ? h(Loader, { size: 14, className: "animate-spin" }) : "R\u00e9initialiser"
+          )
+        ),
+        toast && h('div', { className: "toast", style: { background: GRAD } }, toast)
+      )
+    );
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -1416,21 +1542,25 @@ function AuthPage({ onLoginSuccess }) {
     try {
       if (forgotMode === 'password') {
         const data = await API.forgotPassword(email);
-        showToast(data.resetLink ? 'Lien de réinitialisation généré ! Vérifie la console serveur.' : data.message);
+        showToast(data.message);
+        setEmail("");
         setForgotMode(null);
         setLoading(false);
         return;
       }
       if (forgotMode === 'username') {
         const data = await API.forgotUsername(email);
-        if (data.username) showToast('Ton identifiant est : ' + data.username);
-        else showToast(data.message);
+        showToast(data.message);
+        setEmail("");
         setForgotMode(null);
         setLoading(false);
         return;
       }
       if (isRegister) {
         if (!displayName.trim()) { setError("Le nom d'affichage est requis"); setLoading(false); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError("Format d'email invalide"); setLoading(false); return; }
+        const pwError = validatePassword(password);
+        if (pwError) { setError(pwError); setLoading(false); return; }
         await API.register(username, displayName, password, email);
         showToast("Compte cr\u00e9\u00e9 avec succ\u00e8s !");
       }
@@ -1499,7 +1629,8 @@ function AuthPage({ onLoginSuccess }) {
         ),
         h('div', null,
           h('p', { className: "text-[10px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider" }, "Mot de passe"),
-          h('input', { type: "password", value: password, onChange: e => setPassword(e.target.value), placeholder: isRegister ? "Min. 4 caract\u00e8res" : "Entrez votre mot de passe", className: "w-full bg-secondary/60 border border-border rounded-xl px-3.5 py-3 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-purple-500 transition-colors" })
+          h('input', { type: "password", value: password, onChange: e => setPassword(e.target.value), placeholder: isRegister ? "Min. 8 car., 1 maj., 1 chiffre" : "Entrez votre mot de passe", className: "w-full bg-secondary/60 border border-border rounded-xl px-3.5 py-3 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-purple-500 transition-colors" }),
+          isRegister && h('p', { className: "text-[9px] text-muted-foreground/60 mt-1" }, "8 caract\u00e8res min., 1 majuscule, 1 minuscule, 1 chiffre")
         ),
         error && h('p', { className: "text-[11px] text-red-400 font-medium text-center" }, error),
         h('button', { type: "submit", disabled: loading, className: "w-full py-3 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50", style: { background: GRAD, boxShadow: "0 8px 24px rgba(139,92,246,0.35)" } },
@@ -1535,11 +1666,20 @@ function App() {
   const [selectedFriend, setSelectedFriend] = useState(null);
   const [notifications, setNotifications] = useState(NOTIFICATIONS);
   const [toast, setToast] = useState(null);
+  const [resetToken, setResetToken] = useState(null);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
   useEffect(() => {
     console.log('[App] Checking session...');
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (token) {
+      setResetToken(token);
+      window.history.replaceState({}, '', window.location.pathname);
+      setLoading(false);
+      return;
+    }
     API.me().then(data => {
       console.log('[App] Session found:', data.user);
       setUser(data.user);
@@ -1627,11 +1767,24 @@ function App() {
   const handleToggleTopThree = async (game) => {
     const id = game.game_id || game.id;
     const already = topThreeIds?.has(id);
-    if (already) {
-      setTopThreeIds(prev => { const n = new Set(prev); n.delete(id); return n; });
-      setTopThree(prev => prev.filter(g => (g.game_id || g.id) !== id));
-    } else if ((topThreeIds?.size || 0) < 3) {
-      setTopThreeIds(prev => { const n = new Set(prev); n.add(id); return n; });
+    try {
+      if (already) {
+        await API.setTopThree(id, null);
+        setTopThreeIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+        setTopThree(prev => prev.filter(g => (g.game_id || g.id) !== id));
+        showToast(`Retir\u00e9 du Top 3`);
+      } else if ((topThreeIds?.size || 0) < 3) {
+        const pos = (topThreeIds?.size || 0) + 1;
+        await API.setTopThree(id, pos);
+        setTopThreeIds(prev => { const n = new Set(prev); n.add(id); return n; });
+        showToast(`Ajout\u00e9 au Top 3 (position ${pos})`);
+      } else {
+        showToast(`Top 3 d\u00e9j\u00e0 complet !`);
+      }
+    } catch (err) {
+      console.error('[TopThree] Error:', err.message);
+      showToast('Erreur Top 3: ' + err.message);
+      await loadData();
     }
   };
 
@@ -1715,7 +1868,7 @@ function App() {
     );
   }
 
-  if (!user) return h(AuthPage, { onLoginSuccess: handleLoginSuccess });
+  if (!user) return h(AuthPage, { onLoginSuccess: handleLoginSuccess, resetToken, onResetComplete: () => setResetToken(null) });
 
   return h('div', { className: "min-h-screen", style: { background: "#030308" } },
     h('div', { className: "fixed inset-0 pointer-events-none overflow-hidden" },
@@ -1725,9 +1878,9 @@ function App() {
     h('div', { className: "app-content relative flex flex-col h-screen bg-background mx-auto" },
       h('div', { className: "flex-1 overflow-hidden" },
         h('div', { className: "h-full overflow-y-auto" },
-          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); } }),
+          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); }, wishlistIds, onToggleWishlist: handleToggleWishlist, topThreeIds, onToggleTopThree: handleToggleTopThree }),
           view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
-          view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings }),
+          view === "catalogue" && h(CatalogueView, { onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
           view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadGames(); loadCatalog(); }, showToast })
         )

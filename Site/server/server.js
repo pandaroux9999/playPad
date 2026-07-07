@@ -725,7 +725,7 @@ const CATALOG_PLATFORMS = [
   { id: 186, prefix: 'xbox' },
   { id: 1,  prefix: 'xbox' },
 ];
-const CATALOG_PAGES = 20; // 20 pages × 40 jeux = 800 jeux par plateforme (max RAWG)
+const CATALOG_PAGES = 50; // 50 pages × 40 jeux = 2000 jeux par plateforme
 let lastCatalogPopulate = 0;
 const CATALOG_COOLDOWN = 60000; // 1 min entre chaque peuplement
 
@@ -798,7 +798,7 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
   for (const plat of targets) {
     let page = 1;
     while (page <= CATALOG_PAGES) {
-      const url = `https://api.rawg.io/api/games?key=${apiKey}&platforms=${plat.id}&page=${page}&page_size=40&ordering=-rating`;
+      const url = `https://api.rawg.io/api/games?key=${apiKey}&platforms=${plat.id}&page=${page}&page_size=40&ordering=-added`;
       try {
         const data = await rawgApiGet(url);
         if (!data || !data.results) break;

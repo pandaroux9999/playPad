@@ -123,6 +123,7 @@ const API = {
   boostGame: (gameId) => API.request('POST', '/api/boost', { gameId }),
   getTopBoosted: () => API.request('GET', '/api/boost/top'),
   getBoostCount: (gameId) => API.request('GET', `/api/boost/count/${gameId}`),
+  getGamePrices: (gameId) => API.request('GET', `/api/game-prices/${gameId}`),
   getBoosterPoints: () => API.request('GET', '/api/booster/points'),
   getBoostStatus: (gameId) => API.request('GET', `/api/booster/status/${gameId}`),
 };
@@ -169,6 +170,8 @@ const MessageCircle = Icon(["M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4
 const ArrowLeft = Icon(["M19 12H5", "M12 19l-7-7 7-7"]);
 const Info = Icon(["M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z", "M12 16v-4", "M12 8h.01"]);
 const ExternalLink = Icon(["M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6", "M15 3h6v6", "M10 14 21 3"]);
+const ShoppingCart = Icon(["M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z", "M3 6h18", "M16 10a4 4 0 0 1-8 0"]);
+const Tag = Icon(["M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z", "M7 7h.01"]);
 
 
 
@@ -178,10 +181,12 @@ const GRAD = `linear-gradient(135deg, ${P1}, ${P2})`;
 
 const PLATFORM_CONFIG = {
   ps5:      { label: "PS5",      color: "#003087", text: "#ffffff", name: "PlayStation 5"  },
+  ps4:      { label: "PS4",      color: "#003087", text: "#ffffff", name: "PlayStation 4"  },
   steam:    { label: "Steam",    color: "#1b2838", text: "#c2dbf0", name: "Steam"           },
   epic:     { label: "Epic",     color: "#2d2d2d", text: "#ffffff", name: "Epic Games"      },
   nintendo: { label: "Nintendo", color: "#e60012", text: "#ffffff", name: "Nintendo Switch" },
   xbox:     { label: "Xbox",     color: "#107c10", text: "#ffffff", name: "Xbox"            },
+  pc:       { label: "PC",       color: "#222222", text: "#ffffff", name: "PC"              },
 };
 
 function isOnline(lastSeen) {
@@ -227,6 +232,16 @@ function PlatformLogo({ platform, size = 24 }) {
       h('circle', { cx: 12, cy: 12, r: 9 }),
       h('path', { d: "M8 8c2 2 2 6 4 6s2-4 4-6", stroke: "#107c10" })
     ),
+    ps4: h('svg', { ...props, stroke: "#003791" },
+      h('rect', { x: 3, y: 5, width: 18, height: 14, rx: 2 }),
+      h('circle', { cx: 9, cy: 12, r: 1.5, fill: "#003791", stroke: "none" }),
+      h('path', { d: "M12 10v4", strokeWidth: 2 })
+    ),
+    pc: h('svg', { ...props, stroke: "#555" },
+      h('rect', { x: 2, y: 3, width: 20, height: 14, rx: 2 }),
+      h('line', { x1: 8, y1: 21, x2: 16, y2: 21 }),
+      h('line', { x1: 12, y1: 17, x2: 12, y2: 21 })
+    ),
   };
   return icons[platform] || null;
 }
@@ -256,7 +271,7 @@ function StarRating({ rating, size = 14, interactive = false, onChange }) {
   ));
 }
 
-function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown, small, boostCount, onBoost, boosted, boosterBtn, boosterActive }) {
+function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown, small, boostCount, onBoost, boosted, boosterBtn, boosterActive, onBuy }) {
   const status = game.status ? STATUS_CONFIG[game.status] : null;
   const inWishlist = wishlistIds?.has(game.game_id || game.id);
   const inTopThree = topThreeIds?.has(game.game_id || game.id);
@@ -271,6 +286,9 @@ function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown
     onBoost && h('button', { onClick: (e) => onBoost(e), className: "absolute top-[88px] left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-all hover:scale-125 hover:shadow-[0_0_8px_rgba(250,204,21,0.5)]", style: { background: boosted ? "rgba(250,204,21,0.9)" : "rgba(0,0,0,0.6)", border: `1px solid ${boosted ? "rgba(250,204,21,0.5)" : "rgba(255,255,255,0.15)"}` } },
       h(Zap, { size: 10, fill: boosted ? "#1a1a2e" : "none", stroke: boosted ? "#1a1a2e" : "#fbbf24", strokeWidth: 2 })
     ),
+    onBuy && h('button', { onClick: (e) => { e.stopPropagation(); onBuy(game); }, className: "absolute top-[116px] left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-all hover:scale-125 hover:shadow-[0_0_8px_rgba(34,197,94,0.5)]", style: { background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.15)" } },
+      h(ShoppingCart, { size: 10, stroke: "#22c55e", strokeWidth: 2 })
+    ),
     boostCount > 0 && h('div', { className: "absolute bottom-1 left-1 px-1 py-0.5 rounded-md text-[7px] font-bold flex items-center gap-0.5", style: { background: "rgba(250,204,21,0.7)", color: "#1a1a2e" } }, "\u2728", boostCount),
     h('div', { className: "absolute bottom-0 left-0 right-0 p-2.5" },
       h(PlatformBadge, { platform: game.platform, small }),
@@ -280,6 +298,76 @@ function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown
         h(StarRating, { rating: game.userRating, size: 9 }),
         boosterBtn && h('button', { onClick: (e) => { e.stopPropagation(); boosterBtn(); }, className: "px-1.5 py-0.5 rounded text-[8px] font-bold text-white flex items-center gap-0.5 transition-opacity hover:opacity-80", style: { background: GRAD } }, h(Zap, { size: 7 }), "Booster"),
         boosterActive && h('span', { className: "px-1.5 py-0.5 rounded text-[8px] font-bold flex items-center gap-0.5", style: { background: "rgba(245,158,11,0.2)", color: "#f59e0b" } }, h(Zap, { size: 7, fill: "#f59e0b" }), "Boost\u00e9")
+      )
+    )
+  );
+}
+
+function PurchasePanel({ game, offers, onClose }) {
+  const [sort, setSort] = useState('price-asc');
+  const [loading, setLoading] = useState(false);
+
+  const sorted = useMemo(() => {
+    const list = [...(offers || [])];
+    switch (sort) {
+      case 'price-asc': return list.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
+      case 'price-desc': return list.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
+      case 'name': return list.sort((a, b) => a.store.name.localeCompare(b.store.name));
+      case 'commission': return list.sort((a, b) => (a.store.commission === b.store.commission ? 0 : a.store.commission ? -1 : 1));
+      default: return list;
+    }
+  }, [offers, sort]);
+
+  return h('div', { className: "fixed inset-0 z-50 flex items-center justify-center p-4" },
+    h('div', { className: "absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
+    h('div', { className: "relative bg-card border border-border rounded-2xl w-full max-w-sm max-h-[80vh] overflow-y-auto", style: { zIndex: 1 } },
+      // En-tête
+      h('div', { className: "flex items-center justify-between p-3 border-b border-border sticky top-0 bg-card z-10" },
+        h('div', { className: "flex items-center gap-2 min-w-0" },
+          h(ShoppingCart, { size: 14, style: { color: "#22c55e" } }),
+          h('span', { className: "text-xs font-bold truncate" }, game.title || '')
+        ),
+        h('button', { onClick: onClose, className: "p-1 rounded-lg hover:opacity-80 flex-shrink-0", style: { color: "#8888aa" } }, h(X, { size: 14 }))
+      ),
+      // Tri
+      h('div', { className: "flex items-center gap-1.5 px-3 py-2 border-b border-border" },
+        h('span', { className: "text-[9px] text-muted-foreground font-medium" }, "Trier :"),
+        ['price-asc', 'price-desc', 'name', 'commission'].map(key => {
+          const labels = { 'price-asc': 'Prix ↑', 'price-desc': 'Prix ↓', 'name': 'Magasin', 'commission': 'Commission' };
+          return h('button', { key, onClick: () => setSort(key), className: "px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors", style: { background: sort === key ? `${P1}30` : "transparent", color: sort === key ? P1 : "#8888aa" } }, labels[key]);
+        })
+      ),
+      // Offres
+      h('div', { className: "p-3 space-y-1.5" },
+        sorted.length === 0 && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucune boutique trouvée"),
+        sorted.map((offer, i) => h('a', {
+          key: i, href: offer.url, target: "_blank", rel: "noopener noreferrer",
+          onClick: (e) => e.stopPropagation(),
+          className: "flex items-center gap-2.5 p-2 rounded-xl transition-colors hover:bg-secondary/50",
+          style: { border: `1px solid ${offer.isOnSale ? "rgba(34,197,94,0.3)" : "rgba(255,255,255,0.06)"}` }
+        },
+          h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0", style: { background: (offer.store.platform ? PLATFORM_CONFIG[offer.store.platform]?.color || "#888" : "#888") + "20" } },
+            h(PlatformLogo, { platform: offer.store.platform || 'pc', size: 13 })
+          ),
+          h('div', { className: "flex-1 min-w-0" },
+            h('div', { className: "flex items-center gap-1" },
+              h('span', { className: "text-[11px] font-bold text-foreground" }, offer.store.name),
+              !offer.store.commission && h('span', { className: "text-[7px] px-1 py-px rounded font-medium", style: { background: "rgba(100,100,140,0.15)", color: "#666" } }, "direct"),
+            ),
+            offer.price !== null
+              ? h('div', { className: "flex items-center gap-1 mt-0.5" },
+                  h('span', { className: "text-[11px] font-black font-mono", style: { color: "#22c55e" } }, `${offer.price.toFixed(2)}€`),
+                  offer.isOnSale && offer.normalPrice && h('span', { className: "text-[9px] text-muted-foreground line-through" }, `${offer.normalPrice.toFixed(2)}€`),
+                  offer.isOnSale && h('span', { className: "text-[8px] px-1 py-px rounded font-bold", style: { background: "rgba(34,197,94,0.15)", color: "#22c55e" } }, "-" + Math.round((1 - offer.price/offer.normalPrice)*100) + "%")
+                )
+              : h('p', { className: "text-[9px] text-muted-foreground mt-0.5" }, "Voir sur le site")
+          ),
+          h(ExternalLink, { size: 10, style: { color: "#8888aa" } })
+        ))
+      ),
+      // Footer commission discrète
+      h('div', { className: "px-3 py-1.5 border-t border-border text-center" },
+        h('p', { className: "text-[8px] text-muted-foreground/50" }, "Certains liens peuvent rapporter une commission · les prix sont indicatifs")
       )
     )
   );
@@ -409,6 +497,17 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const [connected, setConnected] = useState({ ps5: true, steam: !!(user?.steam_id), epic: true, nintendo: false, xbox: !!(user?.xbox_gamertag) });
   const connectedCount = Object.values(connected).filter(Boolean).length;
   const unread = notifications.filter(n => !n.read).length;
+  const [buyGame, setBuyGame] = useState(null);
+  const [buyOffers, setBuyOffers] = useState([]);
+  const handleBuy = async (game) => {
+    try {
+      const r = await API.getGamePrices(game.game_id || game.id);
+      setBuyOffers(r.offers || []);
+      setBuyGame(game);
+    } catch (err) {
+      showToast('Erreur: ' + err.message);
+    }
+  };
   const [bridgeUrl, setBridgeUrl] = useState(() => localStorage.getItem('playnite_bridge_url') || 'http://localhost:3456');
   const [bridgeApiKey, setBridgeApiKey] = useState(() => localStorage.getItem('playnite_bridge_api_key') || '');
   const [showBridgeConfig, setShowBridgeConfig] = useState(false);
@@ -811,6 +910,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                   boosted: boostedGamesLocal.has(game.game_id),
                   boosterBtn: boosterPoints > 0 && !hasBoosted ? () => onBoostGame?.(game.game_id) : null,
                   boosterActive: hasBoosted,
+                  onBuy: handleBuy,
                 });
               })
             )
@@ -1473,9 +1573,10 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
       );
     }))
   )
-        )
-      )
-    )
+            )
+          )
+    ),
+    buyGame && h(PurchasePanel, { game: buyGame, offers: buyOffers, onClose: () => { setBuyGame(null); setBuyOffers([]); } })
   );
 }
 

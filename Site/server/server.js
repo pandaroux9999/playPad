@@ -1198,6 +1198,136 @@ app.get('/api/game-details/:gameId', requireAuth, async (req, res) => {
   }
 });
 
+// ============ GAME PRICES (RAWG Stores + CheapShark) ============
+
+const STORE_INFO = {
+  1:  { name: 'Steam', domain: 'store.steampowered.com', platform: 'steam', commission: false },
+  2:  { name: 'GOG', domain: 'gog.com', platform: 'pc', commission: false },
+  3:  { name: 'PlayStation Store', domain: 'store.playstation.com', platform: 'ps5', commission: false },
+  5:  { name: 'Nintendo eShop', domain: 'nintendo.com', platform: 'nintendo', commission: false },
+  7:  { name: 'Xbox Store', domain: 'xbox.com', platform: 'xbox', commission: false },
+  11: { name: 'Epic Games', domain: 'store.epicgames.com', platform: 'pc', commission: true },
+  10: { name: 'Itch.io', domain: 'itch.io', platform: 'pc', commission: false },
+};
+
+const CHEAPSHARK_STORES = {
+  11: { name: 'Humble Store', domain: 'humblebundle.com', platform: 'pc', commission: true },
+  13: { name: 'WinGameStore', domain: 'wingamestore.com', platform: 'pc', commission: true },
+  28: { name: 'Plug In Digital', domain: 'plugindigital.com', platform: 'pc', commission: true },
+  33: { name: 'GreenManGaming', domain: 'greenmangaming.com', platform: 'pc', commission: true },
+  34: { name: 'GameBillet', domain: 'gamebillet.com', platform: 'pc', commission: true },
+  35: { name: 'Voidu', domain: 'voidu.com', platform: 'pc', commission: true },
+  36: { name: 'Fanatical', domain: 'fanatical.com', platform: 'pc', commission: true },
+};
+
+app.get('/api/game-prices/:gameId', async (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const rawgKey = process.env.RAWG_API_KEY;
+    let offers = [];
+
+    // 1. RAWG Stores (si le gameId contient un ID RAWG numérique)
+    const rawgId = gameId.match(/(\d+)$/)?.[1];
+    if (rawgId && rawgKey) {
+      try {
+        const data = await rawgApiGet(`https://api.rawg.io/api/games/${rawgId}/stores?key=${rawgKey}`);
+        if (data?.results) {
+          for (const s of data.results) {
+            const info = STORE_INFO[s.store_id];
+            if (!info) continue;
+            offers.push({
+              store: info,
+              url: s.url,
+              price: null,
+              normalPrice: null,
+              currency: null,
+              isOnSale: false,
+            });
+          }
+        }
+      } catch (e) { /* RAWG stores indisponible */ }
+    }
+
+    // 2. CheapShark (pour les jeux Steam)
+    const steamMatch = gameId.match(/^steam-(\d+)$/);
+    if (steamMatch) {
+      try {
+        const data = await cheapsharkGet(`https://www.cheapshark.com/api/1.0/games?steamAppID=${steamMatch[1]}`);
+        if (data?.length > 0) {
+          const game = data[0];
+          if (game.cheapest && game.cheapestDealID) {
+            // Deal détaillé
+            const deal = await cheapsharkGet(`https://www.cheapshark.com/api/1.0/deals?id=${game.cheapestDealID}`);
+            if (deal?.gameInfo) {
+              const info = CHEAPSHARK_STORES[parseInt(deal.gameInfo.storeID)] || { name: 'Boutique en ligne', domain: '', platform: 'pc', commission: false };
+              offers.push({
+                store: info,
+                url: `https://www.cheapshark.com/redirect?dealID=${game.cheapestDealID}`,
+                price: parseFloat(deal.gameInfo.salePrice),
+                normalPrice: parseFloat(deal.gameInfo.retailPrice),
+                currency: 'EUR',
+                isOnSale: deal.gameInfo.salePrice < deal.gameInfo.retailPrice,
+              });
+            }
+          }
+          // Toutes les offres disponibles
+          if (game.deals) {
+            for (const d of game.deals) {
+              const info = CHEAPSHARK_STORES[parseInt(d.storeID)] || { name: `Store #${d.storeID}`, domain: '', platform: 'pc', commission: false };
+              if (offers.some(o => o.store.name === info.name)) continue;
+              offers.push({
+                store: info,
+                url: `https://www.cheapshark.com/redirect?dealID=${d.dealID}`,
+                price: parseFloat(d.price),
+                normalPrice: parseFloat(d.retailPrice),
+                currency: 'EUR',
+                isOnSale: parseFloat(d.price) < parseFloat(d.retailPrice),
+              });
+            }
+          }
+        }
+      } catch (e) { /* CheapShark indisponible */ }
+    }
+
+    // 3. Fallback : store officiel selon la plateforme
+    if (offers.length === 0) {
+      const platform = gameId.split('-')[0];
+      const fallbacks = {
+        steam: { name: 'Steam', domain: 'store.steampowered.com', platform: 'steam', commission: false },
+        nintendo: { name: 'Nintendo eShop', domain: 'nintendo.com', platform: 'nintendo', commission: false },
+        xbox: { name: 'Xbox Store', domain: 'xbox.com', platform: 'xbox', commission: false },
+        ps5: { name: 'PlayStation Store', domain: 'store.playstation.com', platform: 'ps5', commission: false },
+        ps4: { name: 'PlayStation Store', domain: 'store.playstation.com', platform: 'ps4', commission: false },
+      };
+      if (fallbacks[platform]) {
+        offers.push({
+          store: fallbacks[platform],
+          url: fallbacks[platform].domain ? `https://${fallbacks[platform].domain}` : null,
+          price: null, normalPrice: null, currency: null, isOnSale: false,
+        });
+      }
+    }
+
+    res.json({ gameId, offers });
+  } catch (err) {
+    console.error('[GamePrices] Error:', err.message);
+    res.json({ gameId: req.params.gameId, offers: [] });
+  }
+});
+
+function cheapsharkGet(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
+      let d = '';
+      resp.on('data', c => d += c);
+      resp.on('end', () => {
+        try { resolve(JSON.parse(d)); }
+        catch (e) { reject(e); }
+      });
+    }).on('error', reject);
+  });
+}
+
 // ============ BOOSTER SYSTEM ============
 
 app.get('/api/booster/points', requireAuth, async (req, res) => {

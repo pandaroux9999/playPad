@@ -770,11 +770,11 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     API.getBoostPoints().then(d => setBoostPoints(d.points)).catch(() => {});
   }, [refreshKey]);
 
-  const genres = useMemo(() => ["all", ...new Set(catalog.map(g => g.genre).filter(Boolean))], [catalog]);
+  const genres = useMemo(() => ["all", ...new Set(catalog.flatMap(g => (g.genre || '').split(',').map(s => s.trim()).filter(Boolean)))], [catalog]);
   const platforms = ["all", "ps5", "steam", "epic", "nintendo", "xbox"];
   const filtered = useMemo(() => catalog.filter(g =>
     (activePlatform === "all" || g.platform === activePlatform) &&
-    (activeGenre === "all" || g.genre === activeGenre) &&
+    (activeGenre === "all" || (g.genre || '').split(',').map(s => s.trim()).includes(activeGenre)) &&
     (filterRatingMin === 0 || (ratings?.[g.game_id] || 0) >= filterRatingMin) &&
     (filterRatingMax === 5 || (ratings?.[g.game_id] || 0) <= filterRatingMax) &&
     (!filterYearMin || (g.year || 0) >= Number(filterYearMin)) &&

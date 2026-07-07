@@ -717,12 +717,12 @@ app.get('/api/platform/xbox/diagnostic', requireAuth, async (req, res) => {
 // Catalogue — importe les jeux populaires depuis RAWG API dans le catalogue global
 // (utilise RAWG platform IDs: 4=PC, 7=Nintendo Switch, 187=PS5, 186=Xbox Series, 1=Xbox One, 18=PS4)
 const CATALOG_PLATFORMS = [
-  { id: 4,  prefix: 'pc' },
+  { id: 4,  prefix: 'steam' },
   { id: 7,  prefix: 'nintendo' },
   { id: 187, prefix: 'ps5' },
   { id: 18, prefix: 'ps4' },
-  { id: 186, prefix: 'xboxseries' },
-  { id: 1,  prefix: 'xboxone' },
+  { id: 186, prefix: 'xbox' },
+  { id: 1,  prefix: 'xbox' },
 ];
 const CATALOG_PAGES = 3; // 3 pages × 40 jeux = 120 jeux par plateforme
 

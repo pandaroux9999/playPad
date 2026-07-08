@@ -984,6 +984,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                 game.cover && h('img', { src: game.cover, alt: game.title, className: "w-full h-full object-cover" }),
                 h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" }),
                 rank <= 3 && h('span', { className: "absolute top-1 left-1 text-[16px]" }, medal),
+                (game.age_rating || 0) > 0 && h('span', { className: "absolute top-1 right-1 text-[7px] font-black px-1 rounded flex items-center justify-center", style: { background: game.age_rating >= 16 ? "#ef4444" : game.age_rating >= 12 ? "#f59e0b" : game.age_rating >= 7 ? "#eab308" : "#22c55e", color: "#fff", minWidth: 14, height: 14 } }, game.age_rating),
                 h('span', { className: "absolute bottom-1 right-1 text-[9px] font-bold px-1 py-0.5 rounded-md", style: { background: `${P1}cc`, color: "#fff" } }, "#", rank)
               ),
               h('p', { className: "text-[9px] font-bold text-foreground leading-tight line-clamp-2" }, game.title),
@@ -1066,6 +1067,7 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
   const [searchResults, setSearchResults] = useState([]);
   const [friendStatuses, setFriendStatuses] = useState({});
   const [searchFocused, setSearchFocused] = useState(false);
+  const [selectedNews, setSelectedNews] = useState(null);
   const [loading, setLoading] = useState(true);
   const load = () => Promise.all([
     API.getFriends().then(d => setFriends(d.friends || [])).catch(() => {}),
@@ -1263,67 +1265,124 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
 
     // --- ONGLET NOUVEAUTES ---
     subTab === "news" && h('div', { className: "px-4 pb-4 space-y-4" },
-      // Sorties a venir
       h('div', null,
         h('div', { className: "flex items-center gap-2 mb-3" },
           h(Calendar, { size: 14, style: { color: P1 } }),
           h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Sorties a venir"),
         ),
         [
-          { date: "24 Juillet 2026", title: "Fable", desc: "Nouvel opus de la saga mythique par Playground Games", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/3030620/library_600x900.jpg" },
-          { date: "Septembre 2026", title: "Avowed", desc: "Le RPG fantasy d'Obsidian dans l'univers d'Eora", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2457220/library_600x900.jpg" },
-          { date: "Octobre 2026", title: "Borderlands 4", desc: "Retour du looter-shooter culte par Gearbox", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/3285030/library_600x900.jpg" },
-          { date: "2026", title: "Metroid Prime 4", desc: "L'attendu retour de Samus Aran sur Switch 2", cover: "img/MK_8_deluxe.jpg" },
-          { date: "2026", title: "GTA VI", desc: "Le jeu le plus attendu de la decennie enfin revel\u00e9", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/271590/library_600x900.jpg" },
-        ].map((item, i) => h('div', { key: i, className: "flex gap-3 p-3 rounded-2xl border", style: { background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.12)" } },
+          { type: "release", date: "24 Juillet 2026", title: "Fable", desc: "Nouvel opus de la saga mythique par Playground Games", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/3030620/library_600x900.jpg", officialUrl: "https://www.xbox.com/fr-FR/games/fable", sourceUrl: "https://www.jeuxvideo.com", sourceName: "JeuxVideo.com", details: "Fable revient dans un tout nouveau chapitre d\u00e9velopp\u00e9 par Playground Games (Forza Horizon). Le jeu promet un monde ouvert riche, un humour britannique l\u00e9gendaire et des choix moraux qui fa\u00e7onnent votre aventure." },
+          { type: "release", date: "Septembre 2026", title: "Avowed", desc: "Le RPG fantasy d'Obsidian dans l'univers d'Eora", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2457220/library_600x900.jpg", officialUrl: "https://avowed.obsidian.net", sourceUrl: "https://www.gamekult.com", sourceName: "Gamekult", details: "Avowed est un RPG fantasy en vue \u00e0 la premi\u00e8re personne par Obsidian Entertainment, les cr\u00e9ateurs de Fallout: New Vegas et The Outer Worlds. L'aventure se d\u00e9roule dans l'univers d'Eora, le monde de Pillars of Eternity." },
+          { type: "release", date: "Octobre 2026", title: "Borderlands 4", desc: "Retour du looter-shooter culte par Gearbox", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/3285030/library_600x900.jpg", officialUrl: "https://borderlands.2k.com", sourceUrl: "https://www.ign.com", sourceName: "IGN", details: "Gearbox Software revient avec un nouvel opus de la saga Borderlands. Attendez-vous \u00e0 des milliards d'armes, un humour d\u00e9capant et un tout nouveau monde \u00e0 explorer en solo ou en coop\u00e9ratif." },
+          { type: "release", date: "2026", title: "Metroid Prime 4", desc: "L'attendu retour de Samus Aran sur Switch 2", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/3030620/library_600x900.jpg", officialUrl: "https://www.nintendo.com", sourceUrl: "https://www.nintendo.fr", sourceName: "Nintendo France", details: "Le retour tant attendu de Samus Aran dans un tout nouvel \u00e9pisode de la saga Metroid Prime. D\u00e9velopp\u00e9 par Retro Studios, le jeu promet d'exploiter pleinement la puissance de la Switch 2." },
+          { type: "release", date: "2026", title: "GTA VI", desc: "Le jeu le plus attendu de la decennie enfin r\u00e9v\u00e9l\u00e9", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/271590/library_600x900.jpg", officialUrl: "https://www.rockstargames.com", sourceUrl: "https://www.rockstargames.com", sourceName: "Rockstar Games", details: "Grand Theft Auto VI emm\u00e8ne les joueurs \u00e0 Vice City dans une histoire \u00e9crite par Rockstar Games. Premier opus f\u00e9minin de la s\u00e9rie, le jeu promet une carte immense et des innovations techniques majeures." },
+        ].map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "flex gap-3 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.12)" } },
           h('div', { className: "w-10 h-14 rounded-lg overflow-hidden flex-shrink-0" }, h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover" })),
           h('div', { className: "flex-1 min-w-0" },
             h('p', { className: "text-[10px] font-bold", style: { color: P1 } }, item.date),
             h('p', { className: "text-xs font-bold text-foreground mt-0.5", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
-            h('p', { className: "text-[10px] text-muted-foreground mt-0.5 leading-relaxed" }, item.desc)
-          )
+            h('p', { className: "text-[10px] text-muted-foreground mt-0.5 leading-relaxed line-clamp-2" }, item.desc)
+          ),
+          h(ChevronRight, { size: 14, className: "self-center text-muted-foreground flex-shrink-0" })
         ))
       ),
-      // Esport
       h('div', null,
         h('div', { className: "flex items-center gap-2 mb-3 mt-2" },
           h(Trophy, { size: 14, style: { color: "#fbbf24" } }),
           h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "E-Sport"),
         ),
         [
-          { event: "Valorant Champions 2026", game: "Valorant", date: "Ao\u00fbt 2026", desc: "Le tournoi majeur de la scene Valorant" },
-          { event: "The International 2026", game: "Dota 2", date: "Septembre 2026", desc: "Le plus grand tournoi de MOBA au monde" },
-          { event: "League of Legends Worlds 2026", game: "LoL", date: "Octobre 2026", desc: "Les championnats du monde de League of Legends" },
-          { event: "CS2 Major 2026", game: "Counter-Strike 2", date: "Novembre 2026", desc: "Le Major de fin d'annee sur CS2" },
-        ].map((item, i) => h('div', { key: i, className: "flex items-center gap-3 p-3 rounded-2xl", style: { background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.1)" } },
+          { type: "esport", event: "Valorant Champions 2026", game: "Valorant", date: "Ao\u00fbt 2026", desc: "Le tournoi majeur de la scene Valorant", officialUrl: "https://www.vlr.gg", sourceUrl: "https://www.vlr.gg", sourceName: "VLR.gg", details: "Le Valorant Champions est le tournoi le plus prestigieux de la sc\u00e8ne Valorant. Les meilleures \u00e9quipes du monde s'affrontent pour le titre de champion du monde et un prize pool de plusieurs millions de dollars." },
+          { type: "esport", event: "The International 2026", game: "Dota 2", date: "Septembre 2026", desc: "Le plus grand tournoi de MOBA au monde", officialUrl: "https://www.dota2.com/esports", sourceUrl: "https://www.liquipedia.net", sourceName: "Liquipedia", details: "The International est le championnat du monde de Dota 2, organis\u00e9 par Valve. R\u00e9put\u00e9 pour ses prize pools records gr\u00e2ce au financement participatif via le Battle Pass." },
+          { type: "esport", event: "League of Legends Worlds 2026", game: "LoL", date: "Octobre 2026", desc: "Les championnats du monde de League of Legends", officialUrl: "https://lolesports.com", sourceUrl: "https://www.lolesports.com", sourceName: "LoL Esports", details: "Les Worlds de League of Legends rassemblent les meilleures \u00e9quipes des quatre coins du monde. Un mois de comp\u00e9tition intense pour soulever la Summoner's Cup." },
+          { type: "esport", event: "CS2 Major 2026", game: "Counter-Strike 2", date: "Novembre 2026", desc: "Le Major de fin d'annee sur CS2", officialUrl: "https://www.counter-strike.net", sourceUrl: "https://www.hltv.org", sourceName: "HLTV", details: "Le Major Counter-Strike 2 est le tournoi le plus important de la sc\u00e8ne CS. Les 24 meilleures \u00e9quipes du monde s'affrontent dans un tournoi \u00e0 \u00e9limination directe pour le titre de champion Major." },
+        ].map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.1)" } },
           h(Trophy, { size: 16, style: { color: "#fbbf24", flexShrink: 0 } }),
           h('div', { className: "flex-1 min-w-0" },
             h('p', { className: "text-xs font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event),
             h('p', { className: "text-[9px] text-muted-foreground mt-0.5" }, item.desc, " \u2022 ", item.date)
           ),
-          h('span', { className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: `${P1}20`, color: P1 } }, item.game)
+          h('div', { className: "flex items-center gap-1.5 flex-shrink-0" },
+            h('span', { className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: `${P1}20`, color: P1 } }, item.game),
+            h(ChevronRight, { size: 12, className: "text-muted-foreground" })
+          )
         ))
       ),
-      // Drama
       h('div', null,
         h('div', { className: "flex items-center gap-2 mb-3 mt-2" },
           h(MessageCircle, { size: 14, style: { color: "#ef4444" } }),
           h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Drama & Actu"),
         ),
         [
-          { title: "Xbox confirme le portage de plusieurs exclusivites", desc: "Phil Spencer annonce l'arrivee de titres Xbox first-party sur PS5 et Switch 2", tag: "Actu" },
-          { title: "Unity licencie 25% de ses effectifs", desc: "Le moteur de jeu continue sa restructuration massive", tag: "Drama" },
-          { title: "Square Enix revoit sa strategie", desc: "Apres des ventes de\u00e7evantes, Square Enix mise sur le multiplateforme", tag: "Actu" },
-          { title: "Gr\u00e8ve des doubleurs jeux video a Hollywood", desc: "Les acteurs reclament une protection contre l'IA generative", tag: "Drama" },
-        ].map((item, i) => h('div', { key: i, className: "p-3 rounded-2xl", style: { background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.1)" } },
+          { type: "drama", title: "Xbox confirme le portage de plusieurs exclusivites", desc: "Phil Spencer annonce l'arrivee de titres Xbox first-party sur PS5 et Switch 2", tag: "Actu", officialUrl: "https://news.xbox.com", sourceUrl: "https://www.jeuxvideo.com", sourceName: "JeuxVideo.com", details: "Microsoft continue sa strat\u00e9gie multiplateforme en confirmant l'arriv\u00e9e de plusieurs titres first-party sur les consoles concurrentes. Cette d\u00e9cision marque un tournant dans l'industrie du jeu vid\u00e9o." },
+          { type: "drama", title: "Unity licencie 25% de ses effectifs", desc: "Le moteur de jeu continue sa restructuration massive", tag: "Drama", officialUrl: "https://unity.com", sourceUrl: "https://www.gamekult.com", sourceName: "Gamekult", details: "Unity Technologies poursuit sa restructuration avec une nouvelle vague de licenciements massifs. Le cr\u00e9ateur du moteur de jeu \u00e9ponyme cherche \u00e0 retrouver la rentabilit\u00e9 apr\u00e8s une ann\u00e9e difficile." },
+          { type: "drama", title: "Square Enix revoit sa strategie", desc: "Apres des ventes d\u00e9cevantes, Square Enix mise sur le multiplateforme", tag: "Actu", officialUrl: "https://www.square-enix.com", sourceUrl: "https://www.ign.com", sourceName: "IGN", details: "Square Enix annonce un changement majeur de strat\u00e9gie : l'\u00e9diteur japonais abandonne l'exclusivit\u00e9 temporaire et sortira d\u00e9sormais ses jeux simultan\u00e9ment sur toutes les plateformes." },
+          { type: "drama", title: "Gr\u00e8ve des doubleurs jeux video a Hollywood", desc: "Les acteurs r\u00e9clament une protection contre l'IA g\u00e9n\u00e9rative", tag: "Drama", officialUrl: "https://www.sagaftra.org", sourceUrl: "https://www.jeuxvideo.com", sourceName: "JeuxVideo.com", details: "Les doubleurs de jeux vid\u00e9o membres de la SAG-AFTRA sont en gr\u00e8ve pour obtenir des garanties contractuelles face \u00e0 l'utilisation croissante de l'intelligence artificielle g\u00e9n\u00e9rative dans le doublage." },
+        ].map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.1)" } },
           h('div', { className: "flex items-start gap-2" },
             h('span', { className: "px-1.5 py-0.5 rounded text-[8px] font-bold flex-shrink-0 mt-0.5", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.2)" : "rgba(59,130,246,0.2)", color: item.tag === "Drama" ? "#ef4444" : "#3b82f6" } }, item.tag),
             h('div', { className: "flex-1 min-w-0" },
               h('p', { className: "text-[11px] font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
-              h('p', { className: "text-[10px] text-muted-foreground mt-0.5 leading-relaxed" }, item.desc)
-            )
+              h('p', { className: "text-[10px] text-muted-foreground mt-0.5 leading-relaxed line-clamp-2" }, item.desc)
+            ),
+            h(ChevronRight, { size: 14, className: "self-center text-muted-foreground flex-shrink-0" })
           )
         ))
+      )
+    ),
+
+    selectedNews && h(NewsDetailSheet, { item: selectedNews, onClose: () => setSelectedNews(null) })
+  );
+}
+
+function NewsDetailSheet({ item, onClose }) {
+  const isRelease = item.type === "release";
+  const isEsport = item.type === "esport";
+  const isDrama = item.type === "drama";
+  const title = isRelease ? item.title : isEsport ? item.event : item.title;
+  const tagColor = isRelease ? P1 : isEsport ? "#fbbf24" : item.tag === "Drama" ? "#ef4444" : "#3b82f6";
+  const links = [];
+  if (item.officialUrl) links.push({ label: isRelease ? "Site officiel" : isEsport ? "Site du tournoi" : "Site officiel", url: item.officialUrl, icon: Globe });
+  if (item.sourceUrl) links.push({ label: "Source : " + (item.sourceName || "Article"), url: item.sourceUrl, icon: ExternalLink });
+  return h('div', { className: "fixed inset-0 z-50" },
+    h('div', { className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
+    h('div', { className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-y-auto", style: { maxHeight: "85%", scrollbarWidth: "none" } },
+      // Cover header
+      isRelease && item.cover && h('div', { className: "relative h-44 flex-shrink-0" },
+        h('img', { src: item.cover, alt: title, className: "w-full h-full object-cover" }),
+        h('div', { className: "absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" }),
+        h('button', { onClick: onClose, className: "absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-black/60 text-white backdrop-blur" }, h(X, { size: 18 }))
+      ),
+      // Content
+      h('div', { className: "p-5 pb-10" },
+        // Close button (for non-release items without cover)
+        !isRelease && h('div', { className: "flex justify-end mb-2" },
+          h('button', { onClick: onClose, className: "grid h-9 w-9 place-items-center rounded-full bg-black/60 text-white backdrop-blur" }, h(X, { size: 18 }))
+        ),
+        // Tag + Date
+        h('div', { className: "flex items-center gap-2 mb-2" },
+          h('span', { className: "px-2 py-0.5 rounded text-[9px] font-bold", style: { background: tagColor + "20", color: tagColor } },
+            isRelease ? "Sortie" : isEsport ? "E-Sport" : item.tag
+          ),
+          item.date && h('span', { className: "text-[10px] text-muted-foreground" }, item.date)
+        ),
+        // Title
+        h('h2', { className: "text-lg font-black text-foreground leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, title),
+        // Game badge for esport
+        isEsport && h('span', { className: "inline-block mt-2 px-2 py-0.5 rounded text-[9px] font-bold", style: { background: `${P1}20`, color: P1 } }, item.game),
+        // Description
+        h('p', { className: "text-xs text-foreground/80 mt-3 leading-relaxed" }, item.details || item.desc),
+        // Links
+        links.length > 0 && h('div', { className: "mt-5 space-y-2" },
+          h('p', { className: "text-[10px] font-bold uppercase tracking-wider text-muted-foreground" }, "Liens"),
+          links.map((l, i) =>
+            h('a', { key: i, href: l.url, target: "_blank", rel: "noopener noreferrer", className: "flex items-center gap-2.5 p-3 rounded-xl text-xs font-bold transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" } },
+              h(l.icon, { size: 14, style: { color: P1 } }),
+              l.label,
+              h(ExternalLink, { size: 12, className: "ml-auto text-muted-foreground" })
+            )
+          )
+        )
       )
     )
   );
@@ -1799,7 +1858,9 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
         h('button', { onClick: () => handleTopThree(game), className: "absolute top-4 left-14 w-8 h-8 rounded-full flex items-center justify-center", style: { background: inTopThree ? "rgba(245,158,11,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Crown, { size: 14, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
 
         h('div', { className: "absolute bottom-0 left-0 right-0 px-4 pb-3" },
-          h('div', { className: "flex items-center gap-2 mb-1" }, h(PlatformBadge, { platforms: game.platforms || (game.platform ? [game.platform] : []) }), h('span', { className: "text-xs px-2 py-0.5 rounded-md font-bold", style: { background: (statusCfg || STATUS_CONFIG.not_started).color + "28", color: (statusCfg || STATUS_CONFIG.not_started).color } }, (statusCfg || STATUS_CONFIG.not_started).label)),
+          h('div', { className: "flex items-center gap-2 mb-1" }, h(PlatformBadge, { platforms: game.platforms || (game.platform ? [game.platform] : []) }), h('span', { className: "text-xs px-2 py-0.5 rounded-md font-bold", style: { background: (statusCfg || STATUS_CONFIG.not_started).color + "28", color: (statusCfg || STATUS_CONFIG.not_started).color } }, (statusCfg || STATUS_CONFIG.not_started).label),
+            (game.age_rating || 0) > 0 && h('span', { className: "text-[10px] px-1.5 py-0.5 rounded font-bold text-white", style: { background: game.age_rating >= 16 ? "#ef4444" : game.age_rating >= 12 ? "#f59e0b" : game.age_rating >= 7 ? "#eab308" : "#22c55e" } }, "PEGI ", game.age_rating)
+          ),
           h('h2', { className: "text-lg font-black text-white leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
           h('p', { className: "text-xs mt-0.5", style: { color: "rgba(255,255,255,0.5)" } }, `${game.genre} \u00b7 ${game.year}`)
         )
@@ -1833,7 +1894,8 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
               (gameDetails?.platforms?.length > 0) && h('div', null, h('span', { className: "text-muted-foreground" }, "Plateformes"), h('p', { className: "font-bold text-foreground" }, gameDetails.platforms.map(p => p === 'windows' ? 'PC' : p === 'mac' ? 'Mac' : 'Linux').join(', '))),
               gameDetails?.price && h('div', null, h('span', { className: "text-muted-foreground" }, "Prix"), h('p', { className: "font-bold text-green-400" }, gameDetails.price)),
               gameDetails?.metacritic?.score && h('div', null, h('span', { className: "text-muted-foreground" }, "Metacritic"), h('p', { className: "font-bold", style: { color: gameDetails.metacritic.score >= 75 ? "#22c55e" : gameDetails.metacritic.score >= 50 ? "#f59e0b" : "#ef4444" } }, gameDetails.metacritic.score, "/100")),
-              (gameDetails?.recommendations > 0) && h('div', null, h('span', { className: "text-muted-foreground" }, "Recommandations"), h('p', { className: "font-bold text-foreground" }, gameDetails.recommendations.toLocaleString('fr-FR')))
+              (gameDetails?.recommendations > 0) && h('div', null, h('span', { className: "text-muted-foreground" }, "Recommandations"), h('p', { className: "font-bold text-foreground" }, gameDetails.recommendations.toLocaleString('fr-FR'))),
+              (game.age_rating || 0) > 0 && h('div', null, h('span', { className: "text-muted-foreground" }, "PEGI"), h('p', { className: "font-bold", style: { color: game.age_rating >= 16 ? "#ef4444" : game.age_rating >= 12 ? "#f59e0b" : "#22c55e" } }, game.age_rating))
             ),
             gameDetails?.website && h('a', { href: gameDetails.website, target: "_blank", className: "inline-flex items-center gap-1 mt-2 text-[10px] font-bold hover:opacity-80", style: { color: P1 } }, h(ExternalLink, { size: 10 }), "Site officiel")
           ),

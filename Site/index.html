@@ -202,7 +202,7 @@ const STATUS_CONFIG = {
   not_started:{ label: "Pas commenc\u00e9", color: "#444466" },
 };
 
-const STATUS_OPTIONS = ["playing", "completed", "backlog", "dropped"];
+const STATUS_OPTIONS = Object.keys(STATUS_CONFIG).filter(s => s !== "not_started");
 
 function PlatformLogo({ platform, size = 24 }) {
   const props = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", strokeWidth: 1.5, style: { display: 'inline-block', verticalAlign: 'middle' } };
@@ -487,7 +487,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const hasActiveFilters = filterGenre !== "all" || filterStatus !== "all" || filterRatingMin > 0 || filterRatingMax < 5 || filterYearMin || filterYearMax || filterDeveloper;
   const clearFilters = () => { setFilterGenre("all"); setFilterStatus("all"); setFilterRatingMin(0); setFilterRatingMax(5); setFilterYearMin(""); setFilterYearMax(""); setFilterDeveloper(""); };
   const totalHours = games.reduce((s, g) => s + g.playtime, 0);
-  const platforms = ["all", "ps5", "steam", "epic", "nintendo", "xbox"];
+  const platforms = ["all", ...Object.keys(PLATFORM_CONFIG)];
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSync, setShowSync] = useState(false);
   const [syncing, setSyncing] = useState(null);
@@ -771,7 +771,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   }, [refreshKey]);
 
   const genres = useMemo(() => ["all", ...new Set(catalog.flatMap(g => (g.genre || '').split(',').map(s => s.trim()).filter(Boolean)))], [catalog]);
-  const platforms = ["all", "ps5", "steam", "epic", "nintendo", "xbox"];
+  const platforms = ["all", ...Object.keys(PLATFORM_CONFIG)];
   const filtered = useMemo(() => catalog.filter(g =>
     (activePlatform === "all" || g.platform === activePlatform) &&
     (activeGenre === "all" || (g.genre || '').split(',').map(s => s.trim()).includes(activeGenre)) &&

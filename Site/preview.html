@@ -347,7 +347,7 @@ function LibraryView({ games, onSelect, notifications, onMarkAsRead }) {
   const [connected, setConnected] = useState({ ps5: true, steam: true, epic: true, nintendo: false, xbox: false });
   const filtered = useMemo(() => games.filter(g => (activePlatform === "all" || g.platform === activePlatform) && g.title.toLowerCase().includes(search.toLowerCase())), [games, activePlatform, search]);
   const totalHours = games.reduce((s, g) => s + g.playtime, 0);
-  const platforms = ["all", "ps5", "steam", "epic", "nintendo", "xbox"];
+  const platforms = ["all", ...Object.keys(PLATFORM_CONFIG)];
   const unreadCount = notifications.filter(n => !n.read).length;
   const connectedCount = Object.values(connected).filter(Boolean).length;
 
@@ -561,7 +561,7 @@ function CatalogueView({ onSelect, wishlist, onWishlist }) {
   const [activePlatform, setActivePlatform] = useState("all");
   const [activeGenre, setActiveGenre] = useState("all");
   const genres = useMemo(() => ["all", ...new Set(CATALOGUE_GAMES.map(g => g.genre))], []);
-  const platforms = ["all", "ps5", "steam", "epic", "nintendo", "xbox"];
+  const platforms = ["all", ...Object.keys(PLATFORM_CONFIG)];
   const filtered = useMemo(() => CATALOGUE_GAMES.filter(g =>
     (activePlatform === "all" || g.platform === activePlatform) &&
     (activeGenre === "all" || g.genre === activeGenre) &&

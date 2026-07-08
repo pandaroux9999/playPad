@@ -851,48 +851,38 @@ async function populateSteamFromAppList() {
   let total = 0;
   try {
     console.log('[SteamAppList] Importation de tous les jeux Steam...');
-    let data = null;
-    const srcUrls = [
-      'https://steamspy.com/api.php?request=all',
-      'https://api.steampowered.com/ISteamApps/GetAppList/v2/?key=' + encodeURIComponent(steamKey) + '&format=json',
-      'https://api.steampowered.com/ISteamApps/GetAppList/v1/?key=' + encodeURIComponent(steamKey) + '&format=json',
-    ];
-    for (const url of srcUrls) {
+    let apps = [];
+    // Essayer SteamSpy paginé (1000 par page)
+    for (let page = 0; page < 100; page++) {
       try {
-        data = await new Promise((resolve, reject) => {
-          const req = https.get(url, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
-            let d = '';
-            resp.on('data', c => d += c);
+        const d = await new Promise((resolve, reject) => {
+          const req = https.get('https://steamspy.com/api.php?request=page&page=' + page, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
+            let b = '';
+            resp.on('data', c => b += c);
             resp.on('end', () => {
               if (resp.statusCode !== 200) return reject(new Error('HTTP ' + resp.statusCode));
-              try { resolve(JSON.parse(d)); }
+              try { resolve(JSON.parse(b)); }
               catch (e) { reject(e); }
             });
           });
           req.on('error', reject);
-          req.setTimeout(60000, () => { req.destroy(); reject(new Error('Timeout')); });
+          req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout')); });
         });
-        if (data) break;
-      } catch (e) { console.log('[SteamAppList] Échec source:', e.message); }
-    }
-    // Convertir les différents formats en applist.apps
-    let apps = [];
-    if (data?.applist?.apps) apps = data.applist.apps;
-    else if (typeof data === 'object' && !data.applist) {
-      // Format SteamSpy: { "appid": { appid, name, developer, publisher, tags, ... }, ... }
-      apps = Object.entries(data).filter(([, v]) => v && v.name).map(([k, v]) => ({
-        appid: parseInt(k),
-        name: v.name,
-        developer: v.developer || '',
-        publisher: v.publisher || '',
-        genre: v.tags ? Object.keys(v.tags).slice(0, 5).join(', ') : '',
-      }));
-      console.log('[SteamAppList]', apps.length, 'jeux récupérés via SteamSpy');
+        const entries = Object.entries(d || {}).filter(([, v]) => v && v.name).map(([k, v]) => ({
+          appid: parseInt(k), name: v.name,
+          developer: v.developer || '', publisher: v.publisher || '',
+          genre: v.tags ? Object.keys(v.tags).slice(0, 5).join(', ') : '',
+        }));
+        if (entries.length === 0) break;
+        apps = apps.concat(entries);
+        console.log('[SteamAppList] Page', page, ':', entries.length, 'jeux (total', apps.length + ')');
+        if (page > 0) await new Promise(r => setTimeout(r, 2000)); // pause entre les pages
+      } catch (e) { console.log('[SteamAppList] Page', page, 'échouée:', e.message); break; }
     }
     if (apps.length === 0) {
       const existing = await db.getCatalog();
       console.log('[SteamAppList] Aucune source distante disponible, utilisation du cache local');
-      apps = existing.filter(g => g.game_id.startsWith('steam-') && !g.description).map(g => ({ appid: Number(g.game_id.replace('steam-', '')), name: g.title }));
+      apps = existing.filter(g => g.game_id.startsWith('steam-') && !g.description).map(g => ({ appid: Number(g.game_id.replace('steam-', '')), name: g.title, developer: '', publisher: '', genre: '' }));
     }
     const existing = await db.getCatalog();
     const existingIds = new Set(existing.filter(g => g.game_id.startsWith('steam-')).map(g => g.game_id));
@@ -914,7 +904,7 @@ async function populateSteamFromAppList() {
       if (batch.length >= 500) {
         await db.batchUpsertCatalog(batch);
         total += batch.length;
-        console.log(`[SteamAppList] ${total} / ~${Math.round(totalApps * 0.15)} jeux ajoutés...`);
+        console.log(`[SteamAppList] ${total} / ${totalApps} jeux ajoutés...`);
         batch.length = 0;
       }
     }

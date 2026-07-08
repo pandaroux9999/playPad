@@ -810,18 +810,20 @@ app.post('/api/catalog/populate', requireAuth, async (req, res) => {
     }
     lastCatalogPopulate = now;
     const rawgKey = process.env.RAWG_API_KEY;
+    const igdbId = process.env.TWITCH_CLIENT_ID;
+    const igdbSecret = process.env.TWITCH_CLIENT_SECRET;
     const existingCount = await db.getCatalogCount();
-    let total = 0;
-    let steamTotal = 0;
-    // Skip RAWG if catalog already has enough entries (Steam app list covers it)
+    let total = 0, steamTotal = 0, igdbTotal = 0;
     if (existingCount < 500 && rawgKey) {
       total = await populateCatalogFromRAWG(rawgKey);
     }
     steamTotal = await populateSteamFromAppList();
+    if (igdbId && igdbSecret) {
+      igdbTotal = await populateCatalogFromIGDB(igdbId, igdbSecret);
+    }
     db.mergeCatalogDuplicatesByTitle().then(n => { if (n > 0) console.log(`[Catalog] ${n} doublons fusionnés`); }).catch(e => console.error('[Catalog] Merge error:', e.message));
-    // Refresh descriptions in background
     refreshCatalogDescriptions().catch(() => {});
-    res.json({ ok: true, count: total, steamCount: steamTotal });
+    res.json({ ok: true, count: total, steamCount: steamTotal, igdbCount: igdbTotal });
   } catch (err) {
     console.error('[CatalogPopulate] Error:', err.message);
     res.status(500).json({ error: 'Erreur interne' });
@@ -1015,12 +1017,25 @@ async function populateSteamFromAppList() {
   } catch (e) {
     console.error('[Catalog] Erreur peuplement initial:', e.message);
   }
-  // Steam App List : toujours importé (ne dépend pas de RAWG, utilise STEAM_API_KEY ou SteamSpy gratuit)
+  // Steam App List : toujours importé (ne dépend pas de RAWG, utilise SteamSpy gratuit)
   try {
     const steamCount = await populateSteamFromAppList();
     if (steamCount > 0) console.log(`[Catalog] ${steamCount} jeux Steam ajoutés`);
   } catch (e) {
     console.error('[Catalog] Erreur Steam App List:', e.message);
+  }
+  // IGDB (Twitch) : jeux toutes plateformes (Xbox, PS, Nintendo)
+  const igdbId = process.env.TWITCH_CLIENT_ID;
+  const igdbSecret = process.env.TWITCH_CLIENT_SECRET;
+  if (igdbId && igdbSecret) {
+    try {
+      const igdbCount = await populateCatalogFromIGDB(igdbId, igdbSecret);
+      if (igdbCount > 0) console.log(`[Catalog] ${igdbCount} jeux IGDB ajoutés`);
+    } catch (e) {
+      console.error('[Catalog] Erreur IGDB:', e.message);
+    }
+  } else {
+    console.log('[Catalog] TWITCH_CLIENT_ID/SECRET non configurés, skip IGDB');
   }
   // Données de démonstration après le catalogue
   try {
@@ -1042,6 +1057,110 @@ function rawgApiGet(url) {
       });
     }).on('error', reject);
   });
+}
+
+// ─── IGDB (Twitch) API ─────────────────────────────────────────
+// Plateformes IGDB : https://api.igdb.com/v4/platforms
+// Obtenir client_id + client_secret : https://dev.twitch.tv/console
+async function igdbGetToken(clientId, clientSecret) {
+  return new Promise((resolve, reject) => {
+    const body = `client_id=${clientId}&client_secret=${clientSecret}&grant_type=client_credentials`;
+    const req = https.request('https://id.twitch.tv/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    }, (resp) => {
+      let d = '';
+      resp.on('data', c => d += c);
+      resp.on('end', () => {
+        try { const j = JSON.parse(d); resolve(j.access_token); }
+        catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+function igdbApiGet(url, clientId, token, body) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, {
+      method: 'POST',
+      headers: {
+        'Client-ID': clientId,
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'text/plain',
+        'User-Agent': 'PlayPad/1.0',
+      },
+    }, (resp) => {
+      let d = '';
+      resp.on('data', c => d += c);
+      resp.on('end', () => {
+        try { resolve(JSON.parse(d)); }
+        catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(30000, () => { req.destroy(); reject(new Error('IGDB timeout')); });
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+const IGDB_PLATFORMS = [
+  { id: 6,   prefix: 'pc',       name: 'PC' },
+  { id: 49,  prefix: 'xbox',     name: 'Xbox One' },
+  { id: 169, prefix: 'xbox',     name: 'Xbox Series' },
+  { id: 12,  prefix: 'xbox',     name: 'Xbox 360' },
+  { id: 48,  prefix: 'ps4',      name: 'PS4' },
+  { id: 167, prefix: 'ps5',      name: 'PS5' },
+  { id: 9,   prefix: 'ps4',      name: 'PS3' },
+  { id: 130, prefix: 'nintendo', name: 'Switch' },
+];
+
+async function populateCatalogFromIGDB(clientId, clientSecret) {
+  console.log('[IGDB] Obtention du token...');
+  let token;
+  try { token = await igdbGetToken(clientId, clientSecret); }
+  catch (e) { console.error('[IGDB] Échec obtention token:', e.message); return 0; }
+  console.log('[IGDB] Token obtenu, peuplement du catalogue...');
+  let total = 0;
+  for (const plat of IGDB_PLATFORMS) {
+    let offset = 0;
+    const limit = 200;
+    let page = 0;
+    const maxPages = 3;
+    while (page < maxPages) {
+      try {
+        const body = `fields name,first_release_date,genres.name,cover.url; where platforms = (${plat.id}); limit ${limit}; offset ${offset};`;
+        const data = await igdbApiGet('https://api.igdb.com/v4/games', clientId, token, body);
+        if (!data || !Array.isArray(data) || data.length === 0) break;
+        for (const g of data) {
+          if (!g.name) continue;
+          const year = g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : 0;
+          const cover = g.cover?.url ? 'https:' + g.cover.url.replace('t_thumb', 't_cover_big') : '';
+          const genre = (g.genres || []).map(gen => gen.name).join(', ');
+          await db.ensureCatalogGame({
+            game_id: `igdb-${g.id}`,
+            title: g.name,
+            platform: plat.prefix,
+            cover,
+            genre,
+            year,
+          }).catch(() => {});
+          total++;
+        }
+        offset += limit;
+        page++;
+      } catch (e) {
+        console.error(`[IGDB] Erreur ${plat.name} page ${page}:`, e.message);
+        break;
+      }
+    }
+    console.log(`[IGDB] ${plat.name}: ${page * limit} jeux`);
+  }
+  console.log(`[IGDB] ✅ ${total} jeux ajoutés`);
+  return total;
 }
 
 // Récupère les jeux Xbox via xbl.io (clé gratuite sur https://xbl.io)
@@ -1734,6 +1853,7 @@ app.listen(PORT, () => {
   console.log('[Server] STEAM_API_KEY:', process.env.STEAM_API_KEY ? 'defined' : 'NON DÉFINI — Steam import ne marchera pas');
   console.log('[Server] XBL_API_KEY:', process.env.XBL_API_KEY ? 'defined' : 'NON DÉFINI — Xbox import ne marchera pas');
   console.log('[Server] RAWG_API_KEY:', process.env.RAWG_API_KEY ? 'defined' : 'NON DÉFINI — catalogue RAWG indisponible');
+  console.log('[Server] TWITCH_CLIENT_ID:', process.env.TWITCH_CLIENT_ID ? 'defined' : 'NON DÉFINI — catalogue IGDB indisponible');
   console.log('[Server] Epic Games : connexion par nom d\'utilisateur (sans API)');
   if (!process.env.PUBLIC_URL) {
     console.warn('⚠️  PUBLIC_URL manquant. Steam OpenID redirigera vers localhost au lieu de l\'URL publique.');

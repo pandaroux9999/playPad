@@ -851,7 +851,7 @@ async function populateSteamFromAppList() {
   let total = 0;
   try {
     console.log('[SteamAppList] Importation de tous les jeux Steam via GetAppList...');
-    const data = await rawgApiGet('https://api.steampowered.com/ISteamApps/GetAppList/v2/?key=' + steamKey + '&format=json');
+    const data = await steamApiGet(steamKey, 'ISteamApps', 'GetAppList', {});
     if (!data?.applist?.apps) { console.log('[SteamAppList] Réponse invalide'); return 0; }
     const existing = await db.getCatalog();
     const existingIds = new Set(existing.filter(g => g.game_id.startsWith('steam-')).map(g => g.game_id));

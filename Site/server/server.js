@@ -734,13 +734,54 @@ app.get('/api/platform/xbox/diagnostic', requireAuth, async (req, res) => {
   res.json({ diagnostic: diag.join(' | ') });
 });
 
-// Epic Games — connexion manuelle via nom d'utilisateur
+let lastEpicImport = 0;
+const EPIC_IMPORT_COOLDOWN = 60000; // 1 min entre chaque import
+
+// Epic Games — connexion + import des jeux du store Epic via RAWG
 app.post('/api/platform/epic/connect', requireAuth, async (req, res) => {
   let { epicUsername } = req.body;
   if (!epicUsername) return res.status(400).json({ error: 'Nom d\'utilisateur Epic requis' });
   try {
     await db.setEpicUsername(req.session.userId, epicUsername);
-    res.json({ ok: true, count: 0, username: epicUsername });
+    const rawgKey = process.env.RAWG_API_KEY;
+    let count = 0, warning = '';
+    const now = Date.now();
+    if (rawgKey && now - lastEpicImport > EPIC_IMPORT_COOLDOWN) {
+      lastEpicImport = now;
+      // Importe les jeux populaires du store Epic Games via RAWG
+      for (let page = 1; page <= 3; page++) {
+        try {
+          const url = `https://api.rawg.io/api/games?key=${rawgKey}&stores=11&page=${page}&page_size=40&ordering=-added`;
+          const data = await rawgApiGet(url);
+          if (!data || !data.results) break;
+          for (const item of data.results) {
+            if (!item.name) continue;
+            await db.ensureCatalogGame({
+              game_id: `epic-${item.id}`,
+              title: item.name,
+              platform: 'epic',
+              cover: item.background_image || '',
+              genre: (item.genres || []).map(g => g.name).join(', '),
+              year: item.released ? (parseInt(item.released.split('-')[0]) || 0) : 0,
+              developer: '',
+              publisher: '',
+            });
+            count++;
+          }
+          if (!data.next) break;
+        } catch (e) {
+          console.error('[EpicConnect] RAWG error page', page, ':', e.message);
+          break;
+        }
+      }
+      if (count === 0) warning = 'Aucun jeu Epic trouvé via RAWG';
+    } else if (!rawgKey) {
+      warning = 'RAWG_API_KEY non configurée — seul le pseudo a été sauvegardé';
+    } else {
+      warning = 'Import déjà effectué récemment — attends 1 min';
+    }
+    console.log('[EpicConnect] OK, count:', count, 'warning:', warning);
+    res.json({ ok: true, count, username: epicUsername, warning });
   } catch (err) {
     console.error('[EpicConnect] Error:', err.message);
     res.status(500).json({ error: 'Erreur interne' });

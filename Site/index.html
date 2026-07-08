@@ -403,6 +403,24 @@ const CATALOGUE = [
   { game_id: "c133", title: "Vampire Survivors",          platform: "steam",    genre: "Rogue-lite",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1794680/library_600x900.jpg", year: 2022 },
   { game_id: "c134", title: "Assassin's Creed Odyssey",   platform: "epic",     genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/812140/library_600x900.jpg",   year: 2018 },
   { game_id: "c135", title: "Monster Hunter: World",      platform: "steam",    genre: "Action RPG",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/582010/library_600x900.jpg",   year: 2018 },
+  { game_id: "c136", title: "Stardew Valley",             platform: "steam",    genre: "Simulation",      cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/413150/library_600x900.jpg",   year: 2016 },
+  { game_id: "c137", title: "Hades",                      platform: "steam",    genre: "Rogue-lite",       cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1145360/library_600x900.jpg",  year: 2020 },
+  { game_id: "c138", title: "Rust",                       platform: "steam",    genre: "Survie",           cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/252490/library_600x900.jpg",   year: 2018 },
+  { game_id: "c139", title: "Arma 3",                     platform: "steam",    genre: "Simulation",       cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/230410/library_600x900.jpg",   year: 2013 },
+  { game_id: "c140", title: "The Binding of Isaac: Rebirth", platform: "steam", genre: "Rogue-lite",       cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/250900/library_600x900.jpg",   year: 2014 },
+  { game_id: "c141", title: "Celeste",                    platform: "steam",    genre: "Platformer",       cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/504230/library_600x900.jpg",   year: 2018 },
+  { game_id: "c142", title: "Crypt of the NecroDancer",   platform: "steam",    genre: "Rythme",           cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/388410/library_600x900.jpg",   year: 2015 },
+  { game_id: "c143", title: "Factorio",                   platform: "steam",    genre: "Automation",       cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/427520/library_600x900.jpg",   year: 2020 },
+  { game_id: "c144", title: "Slay the Spire",             platform: "steam",    genre: "Deck-building",    cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/646570/library_600x900.jpg",   year: 2019 },
+  { game_id: "c145", title: "Deep Rock Galactic",         platform: "steam",    genre: "FPS",              cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/548430/library_600x900.jpg",   year: 2020 },
+  { game_id: "c146", title: "Brotato",                    platform: "steam",    genre: "Rogue-lite",       cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1385380/library_600x900.jpg",  year: 2022 },
+  { game_id: "c147", title: "Need for Speed Heat",        platform: "steam",    genre: "Course",           cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1222680/library_600x900.jpg",  year: 2019 },
+  { game_id: "c148", title: "Borderlands 3",              platform: "steam",    genre: "FPS",              cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/397540/library_600x900.jpg",   year: 2019 },
+  { game_id: "c149", title: "Grand Theft Auto IV",        platform: "steam",    genre: "Open World",       cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/12210/library_600x900.jpg",    year: 2008 },
+  { game_id: "c150", title: "Euro Truck Simulator 2",     platform: "steam",    genre: "Simulation",       cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/236850/library_600x900.jpg",   year: 2012 },
+  { game_id: "c151", title: "Untitled Goose Game",        platform: "steam",    genre: "Puzzle",           cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/304930/library_600x900.jpg",   year: 2019 },
+  { game_id: "c152", title: "Sonic Generations",          platform: "steam",    genre: "Platformer",       cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/212480/library_600x900.jpg",   year: 2011 },
+  { game_id: "c153", title: "Cuphead",                    platform: "steam",    genre: "Run & Gun",        cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/317820/library_600x900.jpg",   year: 2017 },
 ];
 
 const AFFILIATE_CONFIG = {
@@ -656,7 +674,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
               if (g) {
                 try {
                   if (isXbox) { const r = await API.connectXbox(g); if (r.warning) showToast(r.warning); if (r.count === 0 && !r.warning?.includes('XBL_API_KEY')) { showToast('Aucun jeu trouvé pour ce Gamertag'); return; } }
-                  if (isEpic) { await API.connectEpic(g); }
+                  if (isEpic) { const r = await API.connectEpic(g); if (r.warning) showToast(r.warning); }
                   setConnected(c => ({ ...c, [platform]: true })); onSyncComplete?.();
                   showToast(`${cfg.name} ${isConnected ? 're-synchronisé' : 'connecté'}${(isXbox || isEpic) && g === current ? ' · re-sync' : ''}`);
                 } catch (err) { showToast('Erreur ' + cfg.name + ' : ' + (err.message || 'inconnue')); }
@@ -679,7 +697,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
                   isXbox && user?.xbox_gamertag
                     ? h('button', { onClick: async (e) => { e.stopPropagation(); setSyncing('xbox'); try { const r = await API.connectXbox(user.xbox_gamertag); if (r.diagnostic) showToast('Diagnostic: ' + r.diagnostic); if (r.warning) showToast(r.warning); showToast(`${r.count} jeux Xbox synchronisés`); onSyncComplete?.(); } catch (err) { showToast('Erreur Xbox: ' + (err.message || 'inconnue')); } finally { setSyncing(null); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, syncing === 'xbox' ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
                     : (isEpic && user?.epic_username
-                      ? h('button', { onClick: async (e) => { e.stopPropagation(); try { await API.connectEpic(user.epic_username); setConnected(c => ({ ...c, [platform]: true })); showToast('Compte Epic re-synchronisé'); } catch (err) { showToast('Erreur Epic: ' + (err.message || 'inconnue')); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
+                      ? h('button', { onClick: async (e) => { e.stopPropagation(); try { const r = await API.connectEpic(user.epic_username); if (r.warning) showToast(r.warning); setConnected(c => ({ ...c, [platform]: true })); showToast(`${r.count} jeux Epic ajoutés au catalogue`); } catch (err) { showToast('Erreur Epic: ' + (err.message || 'inconnue')); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
                       : null
                     ),
                   isXbox && user?.xbox_gamertag && h('button', { onClick: async (e) => { e.stopPropagation(); try { const r = await API.xboxDiagnostic(user.xbox_gamertag); showToast('Xbox: ' + r.diagnostic); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center hover:opacity-80", style: { background: "rgba(139,92,246,0.1)", color: "#8B5CF6", width: 24, height: 24 } }, h(Search, { size: 10 })),
@@ -768,6 +786,13 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const [showBoostSection, setShowBoostSection] = useState(false);
   const [showBoosterGames, setShowBoosterGames] = useState(true);
   const [revealedLetters, setRevealedLetters] = useState([]);
+  const [sponsored, setSponsored] = useState([]);
+  useEffect(() => {
+    if (catalog.length > 0 && sponsored.length === 0) {
+      const shuffled = [...catalog].sort(() => Math.random() - 0.5);
+      setSponsored(shuffled.slice(0, 2));
+    }
+  }, [catalog]);
   useEffect(() => {
     API.getCatalog().then(d => setCatalog(d.catalog || [])).catch(() => {});
     API.getTopBoosted().then(d => {
@@ -892,6 +917,23 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       ),
     ),
     h('div', { className: "flex-1 overflow-y-auto px-4 pb-20", style: { scrollbarWidth: "none" } },
+      sponsored.length > 0 && h('div', { className: "mb-4" },
+        h('div', { className: "flex items-center justify-between mb-2" },
+          h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5" }, "\uD83D\uDCB0 Sponsoris\u00e9s"),
+        ),
+        h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
+          sponsored.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },
+            h(GameCard, {
+              game: { ...game, userRating: ratings?.[game.game_id] || 0 },
+              onClick: () => onSelect(game),
+              wishlistIds, onWishlist: onToggleWishlist,
+              topThreeIds, onCrown: onToggleTopThree,
+              boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
+              small: true,
+            })
+          ))
+        )
+      ),
       showBoostSection && topBoosted.length > 0 && h('div', { className: "mb-4" },
         h('div', { className: "flex items-center justify-between mb-2" },
           h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5" }, "\u2728 Boost\u00e9s de la semaine"),
@@ -917,10 +959,10 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
           })
         )
       ),
-      newReleases.length > 0 && h('div', { className: "mb-4" },
-        h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, h('span', { style: { color: P2 } }, "\uD83C\uDF89"), " Nouveaut\u00e9s"),
+      topRated.length > 0 && h('div', { className: "mb-4" },
+        h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, h(Star, { size: 10, fill: "#f59e0b", stroke: "#f59e0b" }), " Les mieux not\u00e9s"),
         h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
-          newReleases.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },
+          topRated.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },
             h(GameCard, {
               game: { ...game, userRating: ratings?.[game.game_id] || 0 },
               onClick: () => onSelect(game),
@@ -932,10 +974,10 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
           ))
         )
       ),
-      topRated.length > 0 && h('div', { className: "mb-4" },
-        h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, h(Star, { size: 10, fill: "#f59e0b", stroke: "#f59e0b" }), " Les mieux not\u00e9s"),
+      newReleases.length > 0 && h('div', { className: "mb-4" },
+        h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, h('span', { style: { color: P2 } }, "\uD83C\uDF89"), " Nouveaut\u00e9s"),
         h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
-          topRated.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },
+          newReleases.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },
             h(GameCard, {
               game: { ...game, userRating: ratings?.[game.game_id] || 0 },
               onClick: () => onSelect(game),
@@ -1453,7 +1495,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
                   let r;
                   if (p.id === 'steam') r = await API.resyncSteam();
                   else if (p.id === 'xbox' && user?.xbox_gamertag) r = await API.connectXbox(user.xbox_gamertag);
-                  else if (p.id === 'epic' && user?.epic_username) { await API.connectEpic(user.epic_username); r = { count: 0 }; }
+                  else if (p.id === 'epic' && user?.epic_username) { r = await API.connectEpic(user.epic_username); if (r.warning) showToast(r.warning); }
                   if (r?.count !== undefined) showToast(`${r.count} jeux ${p.name} synchronisés`);
                   onSyncComplete?.();
                 } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); }
@@ -1470,7 +1512,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
                     if (!g) return;
                     try {
                       if (p.id === 'xbox') { const r = await API.connectXbox(g); if (r.warning) showToast(r.warning); }
-                      else { await API.connectEpic(g); }
+                      else { const r = await API.connectEpic(g); if (r.warning) showToast(r.warning); }
                       showToast(`${p.name} connecté`);
                       onSyncComplete?.();
                     } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); }

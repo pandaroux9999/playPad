@@ -35,6 +35,24 @@ const GAMES_CATALOG = [
   { game_id: 'steam-2322010', title: 'God of War Ragnarök', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/2322010/library_600x900.jpg', genre: 'Action-Aventure', year: 2024, developer: 'Santa Monica Studio', publisher: 'Sony' },
   { game_id: 'steam-440', title: 'Team Fortress 2', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/440/library_600x900.jpg', genre: 'FPS', year: 2007, developer: 'Valve', publisher: 'Valve' },
   { game_id: 'steam-105600', title: 'Terraria', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/105600/library_600x900.jpg', genre: 'Sandbox', year: 2011, developer: 'Re-Logic', publisher: 'Re-Logic' },
+  { game_id: 'steam-413150', title: 'Stardew Valley', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/413150/library_600x900.jpg', genre: 'Simulation', year: 2016, developer: 'ConcernedApe', publisher: 'ConcernedApe' },
+  { game_id: 'steam-1145360', title: 'Hades', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1145360/library_600x900.jpg', genre: 'Rogue-lite', year: 2020, developer: 'Supergiant Games', publisher: 'Supergiant Games' },
+  { game_id: 'steam-252490', title: 'Rust', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/252490/library_600x900.jpg', genre: 'Survie', year: 2018, developer: 'Facepunch Studios', publisher: 'Facepunch Studios' },
+  { game_id: 'steam-230410', title: 'Arma 3', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/230410/library_600x900.jpg', genre: 'Simulation', year: 2013, developer: 'Bohemia Interactive', publisher: 'Bohemia Interactive' },
+  { game_id: 'steam-250900', title: 'The Binding of Isaac: Rebirth', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/250900/library_600x900.jpg', genre: 'Rogue-lite', year: 2014, developer: 'Edmund McMillen', publisher: 'Nicalis' },
+  { game_id: 'steam-504230', title: 'Celeste', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/504230/library_600x900.jpg', genre: 'Platformer', year: 2018, developer: 'Maddy Makes Games', publisher: 'Maddy Makes Games' },
+  { game_id: 'steam-388410', title: 'Crypt of the NecroDancer', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/388410/library_600x900.jpg', genre: 'Rythme', year: 2015, developer: 'Brace Yourself Games', publisher: 'Brace Yourself Games' },
+  { game_id: 'steam-427520', title: 'Factorio', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/427520/library_600x900.jpg', genre: 'Automation', year: 2020, developer: 'Wube Software', publisher: 'Wube Software' },
+  { game_id: 'steam-646570', title: 'Slay the Spire', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/646570/library_600x900.jpg', genre: 'Deck-building', year: 2019, developer: 'Mega Crit Games', publisher: 'Mega Crit Games' },
+  { game_id: 'steam-548430', title: 'Deep Rock Galactic', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/548430/library_600x900.jpg', genre: 'FPS', year: 2020, developer: 'Ghost Ship Games', publisher: 'Coffee Stain' },
+  { game_id: 'steam-1385380', title: 'Brotato', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1385380/library_600x900.jpg', genre: 'Rogue-lite', year: 2022, developer: 'Blobfish', publisher: 'Blobfish' },
+  { game_id: 'steam-1222680', title: 'Need for Speed Heat', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1222680/library_600x900.jpg', genre: 'Course', year: 2019, developer: 'Ghost Games', publisher: 'Electronic Arts' },
+  { game_id: 'steam-397540', title: 'Borderlands 3', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/397540/library_600x900.jpg', genre: 'FPS', year: 2019, developer: 'Gearbox Software', publisher: '2K Games' },
+  { game_id: 'steam-12210', title: 'Grand Theft Auto IV', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/12210/library_600x900.jpg', genre: 'Open World', year: 2008, developer: 'Rockstar North', publisher: 'Rockstar Games' },
+  { game_id: 'steam-236850', title: 'Euro Truck Simulator 2', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/236850/library_600x900.jpg', genre: 'Simulation', year: 2012, developer: 'SCS Software', publisher: 'SCS Software' },
+  { game_id: 'steam-304930', title: 'Untitled Goose Game', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/304930/library_600x900.jpg', genre: 'Puzzle', year: 2019, developer: 'House House', publisher: 'Panic' },
+  { game_id: 'steam-212480', title: 'Sonic Generations', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/212480/library_600x900.jpg', genre: 'Platformer', year: 2011, developer: 'Sonic Team', publisher: 'SEGA' },
+  { game_id: 'steam-317820', title: 'Cuphead', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/317820/library_600x900.jpg', genre: 'Run & Gun', year: 2017, developer: 'Studio MDHR', publisher: 'Studio MDHR' },
 ];
 
 const STATUSES = ['not_started', 'playing', 'completed', 'dropped', 'paused'];
@@ -141,16 +159,26 @@ async function seedDemoData() {
     });
   }
 
-  console.log('[Seed] Ajout des boosts communautaires...');
-  const boostedGames = shuffle(GAMES_CATALOG).slice(0, 8);
-  for (let idx = 0; idx < boostedGames.length; idx++) {
-    const g = boostedGames[idx];
-    const boostCount = 5 + Math.floor(Math.random() * 10);
-    for (let b = 0; b < boostCount; b++) {
+  console.log('[Seed] Ajout des boosts communautaires (jeux aléatoires du catalogue)...');
+  let catalogGames = [];
+  try {
+    const { data } = await db.supabaseAdmin.from('catalog').select('game_id').limit(5000);
+    catalogGames = data || [];
+  } catch (e) { catalogGames = GAMES_CATALOG.map(g => ({ game_id: g.game_id })); }
+  const shuffledCatalog = shuffle(catalogGames);
+  const boostedGames = shuffledCatalog.slice(0, 12);
+  for (const g of boostedGames) {
+    const boostCount = 3 + Math.floor(Math.random() * 15);
+    const users = shuffle(userIds);
+    for (let b = 0; b < Math.min(boostCount, users.length * 3); b++) {
       const u = pick(userIds);
-      await db.supabaseAdmin.from('game_boosts').insert({ user_id: u, game_id: g.game_id }).catch(() => {});
+      const daysAgo = Math.floor(Math.random() * 6);
+      await db.supabaseAdmin.from('boosts').insert({
+        user_id: u,
+        game_id: g.game_id,
+        created_at: new Date(Date.now() - daysAgo * 86400000).toISOString(),
+      }).catch(() => {});
     }
-    await db.supabaseAdmin.from('catalog').update({ description: 'Jeu en vedette' }).eq('game_id', g.game_id).catch(() => {});
   }
 
   console.log('[Seed] ✅ Données de démonstration prêtes !');

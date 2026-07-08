@@ -95,6 +95,7 @@ const API = {
   getGameReviews: (gameId) => API.request('GET', `/api/games/reviews?gameId=${gameId}`),
   getGameRatings: () => API.request('GET', '/api/games/ratings'),
   getReviewsFeed: () => API.request('GET', '/api/reviews/feed'),
+  voteReview: (reviewId, vote) => API.request('POST', `/api/reviews/${reviewId}/vote`, { vote }),
   deleteAccount: () => API.request('DELETE', '/api/account'),
   searchUsers: (q) => API.request('GET', `/api/users/search?q=${encodeURIComponent(q)}`),
   sendFriendRequest: (friendId) => API.request('POST', '/api/friends/request', { friendId }),
@@ -1181,10 +1182,14 @@ function CommunityView({ onSelectFriend, onSelectGame, onAddNotification }) {
               )
             ),
             r.review_text && h('p', { className: "text-[11px] text-foreground/80 leading-relaxed mb-1.5" }, r.review_text),
-            h('div', { className: "flex items-center gap-1.5" },
+            h('div', { className: "flex items-center gap-1.5 mb-1.5" },
               h(Star, { size: 10, style: { color: "#fbbf24", fill: "#fbbf24" } }),
               h('span', { className: "text-[10px] font-bold text-foreground" }, r.rating, "/5"),
               h('span', { className: `text-[8px] font-bold ml-auto ${pos ? "text-green-400" : "text-red-400"}` }, pos ? "Recommand\u00e9" : "D\u00e9conseill\u00e9")
+            ),
+            h('div', { className: "flex items-center gap-3 mt-1" },
+              h('button', { onClick: async () => { try { const newVote = r.my_vote === 1 ? 0 : 1; await API.voteReview(r.id, newVote); setPublicReviews(prev => prev.map(x => x.id === r.id ? { ...x, my_vote: newVote, thumbs_up: x.thumbs_up + (newVote === 1 ? 1 : r.my_vote === 1 ? -1 : 0), thumbs_down: x.thumbs_down + (newVote === -1 ? 1 : r.my_vote === -1 ? -1 : 0) } : x)); } catch(e) {} }, className: `flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-colors ${r.my_vote === 1 ? "text-green-400" : "text-muted-foreground hover:text-green-400"}` }, "\uD83D\uDC4D", r.thumbs_up || 0),
+              h('button', { onClick: async () => { try { const newVote = r.my_vote === -1 ? 0 : -1; await API.voteReview(r.id, newVote); setPublicReviews(prev => prev.map(x => x.id === r.id ? { ...x, my_vote: newVote, thumbs_up: x.thumbs_up + (newVote === 1 ? 1 : r.my_vote === 1 ? -1 : 0), thumbs_down: x.thumbs_down + (newVote === -1 ? 1 : r.my_vote === -1 ? -1 : 0) } : x)); } catch(e) {} }, className: `flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-colors ${r.my_vote === -1 ? "text-red-400" : "text-muted-foreground hover:text-red-400"}` }, "\uD83D\uDC4E", r.thumbs_down || 0)
             )
           );
         })

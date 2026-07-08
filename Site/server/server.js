@@ -311,9 +311,37 @@ app.post('/api/games/review', requireAuth, async (req, res) => {
 app.get('/api/reviews/feed', requireAuth, async (req, res) => {
   try {
     const reviews = await db.getAllPublicReviews();
-    res.json({ reviews });
+    const ids = reviews.map(r => r.id);
+    const [votes, userVotes] = await Promise.all([
+      ids.length ? db.getReviewVotes(ids) : {},
+      db.getUserReviewVotes(req.session.userId),
+    ]);
+    const enriched = reviews.map(r => ({
+      ...r,
+      thumbs_up: votes[r.id]?.up || 0,
+      thumbs_down: votes[r.id]?.down || 0,
+      my_vote: userVotes[r.id] || 0,
+    }));
+    res.json({ reviews: enriched });
   } catch (err) {
     console.error('[ReviewsFeed] Error:', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
+app.post('/api/reviews/:id/vote', requireAuth, async (req, res) => {
+  try {
+    const reviewId = parseInt(req.params.id);
+    const { vote } = req.body;
+    if (![1, -1, 0].includes(vote)) return res.status(400).json({ error: 'Vote invalide' });
+    if (vote === 0) {
+      await db.supabaseAdmin.from('review_votes').delete().eq('user_id', req.session.userId).eq('review_id', reviewId);
+    } else {
+      await db.voteReview(req.session.userId, reviewId, vote);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[ReviewVote] Error:', err.message);
     res.status(500).json({ error: 'Erreur interne' });
   }
 });
@@ -1133,7 +1161,7 @@ async function populateCatalogFromIGDB(clientId, clientSecret) {
     let batch = [];
     while (page < maxPages) {
       try {
-        const body = `fields name,first_release_date,genres.name,cover.url; where platforms = (${plat.id}); limit ${limit}; offset ${offset};`;
+        const body = `fields name,first_release_date,genres.name,cover.url,total_rating_count; where platforms = (${plat.id}) & total_rating_count > 0; sort total_rating_count desc; limit ${limit}; offset ${offset};`;
         const data = await igdbApiGet('https://api.igdb.com/v4/games', clientId, token, body);
         if (!data || !Array.isArray(data) || data.length === 0) break;
         for (const g of data) {

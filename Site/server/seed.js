@@ -157,7 +157,7 @@ async function seedDemoData() {
     for (const userId of shuffle(userIds).slice(0, 2 + Math.floor(Math.random() * 3))) {
       const rating = 3 + Math.floor(Math.random() * 3);
       await db.supabaseAdmin.from('community_reviews').insert({
-        user_id: userId, game_id: g.game_id, rating,
+        user_id: userId, game_id: g.game_id, game_title: g.title, game_cover: g.cover, rating,
         review_text: rating >= 4 ? pick(REVIEW_TEXTS) : 'Pas mal.',
       }).catch(() => {});
     }

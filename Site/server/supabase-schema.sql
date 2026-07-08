@@ -88,6 +88,8 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS publisher TEXT DEFAULT '';
 ALTER TABLE catalog ADD COLUMN IF NOT EXISTS developer TEXT DEFAULT '';
 ALTER TABLE catalog ADD COLUMN IF NOT EXISTS publisher TEXT DEFAULT '';
 ALTER TABLE catalog ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
+ALTER TABLE catalog ADD COLUMN IF NOT EXISTS age_rating INTEGER DEFAULT 0;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS age_rating INTEGER DEFAULT 0;
 
 -- Table des boosts communautaires
 CREATE TABLE IF NOT EXISTS boosts (
@@ -153,4 +155,15 @@ CREATE TABLE IF NOT EXISTS game_boosts (
   week_start DATE NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, game_id, week_start)
+);
+
+-- Votes sur les critiques communautaires (pouce bleu/rouge)
+CREATE TABLE IF NOT EXISTS review_votes (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  review_id INTEGER NOT NULL REFERENCES community_reviews(id) ON DELETE CASCADE,
+  vote INTEGER NOT NULL CHECK(vote IN (1, -1)),
+  comment TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, review_id)
 );

@@ -920,6 +920,39 @@ async function getTopBoostedGames() {
   return result;
 }
 
+async function voteReview(userId, reviewId, vote) {
+  const { error } = await supabaseAdmin
+    .from('review_votes')
+    .upsert({ user_id: userId, review_id: reviewId, vote },
+      { onConflict: 'user_id, review_id' });
+  if (error) throw new Error(error.message);
+}
+
+async function getReviewVotes(reviewIds) {
+  const { data, error } = await supabaseAdmin
+    .from('review_votes')
+    .select('review_id, vote');
+  if (error) throw new Error(error.message);
+  const result = {};
+  for (const row of data || []) {
+    if (!result[row.review_id]) result[row.review_id] = { up: 0, down: 0 };
+    if (row.vote === 1) result[row.review_id].up++;
+    else result[row.review_id].down++;
+  }
+  return result;
+}
+
+async function getUserReviewVotes(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('review_votes')
+    .select('review_id, vote')
+    .eq('user_id', userId);
+  if (error) throw new Error(error.message);
+  const result = {};
+  for (const row of data || []) result[row.review_id] = row.vote;
+  return result;
+}
+
 async function getUserBoostStatus(userId, gameId) {
   const weekStart = getWeekStart();
   const { data, error } = await supabaseAdmin
@@ -998,4 +1031,7 @@ module.exports = {
   claimFirstLoginPoints,
   getTopBoostedGames,
   getUserBoostStatus,
+  voteReview,
+  getReviewVotes,
+  getUserReviewVotes,
 };

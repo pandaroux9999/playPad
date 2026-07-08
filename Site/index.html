@@ -129,6 +129,8 @@ const API = {
   getBoostStatus: (gameId) => API.request('GET', `/api/booster/status/${gameId}`),
   connectEpic: (epicUsername) => API.request('POST', '/api/platform/epic/connect', { epicUsername }),
   getNews: () => API.request('GET', '/api/news'),
+  replyToReview: (reviewId, text) => API.request('POST', `/api/reviews/${reviewId}/reply`, { text }),
+  getReviewReplies: (reviewId) => API.request('GET', `/api/reviews/${reviewId}/replies`),
 };
 
 function Icon(paths, viewBox = "0 0 24 24") {
@@ -182,6 +184,11 @@ const Flame = Icon(["M8.5 2c0 3.5-2 5.5-2 8.5a5.5 5.5 0 0 0 11 0c0-3-2-5.5-2-8.5
 const P1 = "#8B5CF6";
 const P2 = "#3B82F6";
 const GRAD = `linear-gradient(135deg, ${P1}, ${P2})`;
+
+const RATING_COLORS = { 5:'#22c55e', 4:'#84cc16', 3:'#eab308', 2:'#f97316', 1:'#ef4444', 0:'#6b7280' };
+function ratingColor(r) { return RATING_COLORS[r] || RATING_COLORS[r >= 5 ? 5 : r <= 0 ? 0 : Math.floor(r)] || '#6b7280'; }
+function ratingBg(r) { const c=ratingColor(r); return `rgba(${parseInt(c.slice(1,3),16)},${parseInt(c.slice(3,5),16)},${parseInt(c.slice(5,7),16)},0.08)`; }
+function ratingBorder(r) { const c=ratingColor(r); return `1px solid rgba(${parseInt(c.slice(1,3),16)},${parseInt(c.slice(3,5),16)},${parseInt(c.slice(5,7),16)},0.15)`; }
 
 const PLATFORM_CONFIG = {
   ps5:      { label: "PS5",      color: "#003087", text: "#ffffff", name: "PlayStation 5"  },
@@ -1072,6 +1079,11 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
   const [releases, setReleases] = useState([]);
   const [esportEvents, setEsportEvents] = useState([]);
   const [dramaItems, setDramaItems] = useState([]);
+  const [showArchivedReleases, setShowArchivedReleases] = useState(false);
+  const [showArchivedEsport, setShowArchivedEsport] = useState(false);
+  const [showArchivedDrama, setShowArchivedDrama] = useState(false);
+  const [replyState, setReplyState] = useState({ reviewId: null, text: '' });
+  const [replies, setReplies] = useState({});
   const [loadingNews, setLoadingNews] = useState(true);
   const [loading, setLoading] = useState(true);
   const load = () => Promise.all([
@@ -1218,7 +1230,7 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
         ),
         topReviews.map(r => {
           const time = r.created_at ? new Date(r.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short' }) : '';
-          return h('div', { key: r.id, className: "rounded-2xl p-3.5 border review-card", style: { background: "rgba(249,115,22,0.05)", border: "1px solid rgba(249,115,22,0.15)" } },
+          return h('div', { key: r.id, className: "rounded-2xl p-3.5 border review-card", style: { background: ratingBg(r.rating), border: ratingBorder(r.rating) } },
             h('div', { className: "flex items-center gap-2 mb-1.5" },
               r.game_cover && h('div', { className: "w-6 h-9 rounded overflow-hidden flex-shrink-0" }, h('img', { src: r.game_cover, alt: "", className: "w-full h-full object-cover" })),
               h('div', { className: "flex-1 min-w-0" },
@@ -1229,8 +1241,8 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
                 )
               ),
               h('div', { className: "flex items-center gap-0.5" },
-                h(Star, { size: 9, fill: "#fbbf24", stroke: "#fbbf24" }),
-                h('span', { className: "text-[10px] font-bold text-foreground" }, r.rating)
+                h(Star, { size: 9, fill: ratingColor(r.rating), stroke: ratingColor(r.rating) }),
+                h('span', { className: "text-[10px] font-bold", style: { color: ratingColor(r.rating) } }, r.rating)
               )
             ),
             r.review_text && h('p', { className: "text-[10px] text-foreground/70 leading-relaxed line-clamp-2" }, r.review_text),
@@ -1248,15 +1260,14 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
           h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Nouvelles critiques"),
         ),
         recentReviews.map(r => {
-          const pos = (r.rating || 0) >= 4;
           const time = r.created_at ? new Date(r.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-          return h('div', { key: r.id, className: "rounded-2xl p-3.5 border", style: { background: pos ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)", border: `1px solid ${pos ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)"}` } },
+          return h('div', { key: r.id, className: "rounded-2xl p-3.5 border", style: { background: ratingBg(r.rating), border: ratingBorder(r.rating) } },
             h('div', { className: "flex items-center gap-2 mb-2" },
               r.game_cover && h('div', { className: "w-7 h-10 rounded overflow-hidden flex-shrink-0" }, h('img', { src: r.game_cover, alt: "", className: "w-full h-full object-cover", style: { aspectRatio: "3/4" } })),
               h('div', { className: "flex-1 min-w-0" },
                 h('p', { className: "text-xs font-bold text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, r.game_title || "Jeu"),
                 h('div', { className: "flex items-center gap-1.5 mt-0.5" },
-                  h('div', { className: "w-4 h-4 rounded flex items-center justify-center text-[6px] font-black text-white flex-shrink-0", style: { background: pos ? "#22c55e" : "#ef4444" } }, (r.users?.display_name || "?")[0]),
+                  h('div', { className: "w-4 h-4 rounded flex items-center justify-center text-[6px] font-black text-white flex-shrink-0", style: { background: ratingColor(r.rating) } }, (r.users?.display_name || "?")[0]),
                   h('span', { className: "text-[9px] text-muted-foreground" }, r.users?.display_name || "Inconnu"),
                   time && h('span', { className: "text-[8px] text-muted-foreground/50 ml-auto" }, time)
                 )
@@ -1264,13 +1275,35 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
             ),
             r.review_text && h('p', { className: "text-[11px] text-foreground/80 leading-relaxed mb-1.5" }, r.review_text),
             h('div', { className: "flex items-center gap-1.5 mb-1.5" },
-              h(Star, { size: 10, style: { color: "#fbbf24", fill: "#fbbf24" } }),
-              h('span', { className: "text-[10px] font-bold text-foreground" }, r.rating, "/5"),
-              h('span', { className: `text-[8px] font-bold ml-auto ${pos ? "text-green-400" : "text-red-400"}` }, pos ? "Recommand\u00e9" : "D\u00e9conseill\u00e9")
+              h(Star, { size: 10, style: { color: ratingColor(r.rating), fill: ratingColor(r.rating) } }),
+              h('span', { className: "text-[10px] font-bold", style: { color: ratingColor(r.rating) } }, r.rating, "/5"),
+              h('span', { className: "text-[8px] font-bold ml-auto", style: { color: ratingColor(r.rating) } }, r.rating >= 4 ? "Recommand\u00e9" : r.rating >= 3 ? "Mitig\u00e9" : "D\u00e9conseill\u00e9")
             ),
             h('div', { className: "flex items-center gap-3 mt-1" },
               h('button', { onClick: async () => { try { const newVote = r.my_vote === 1 ? 0 : 1; await API.voteReview(r.id, newVote); load(); } catch(e) {} }, className: `flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-colors ${r.my_vote === 1 ? "text-green-400" : "text-muted-foreground hover:text-green-400"}` }, "\uD83D\uDC4D", r.thumbs_up || 0),
-              h('button', { onClick: async () => { try { const newVote = r.my_vote === -1 ? 0 : -1; await API.voteReview(r.id, newVote); load(); } catch(e) {} }, className: `flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-colors ${r.my_vote === -1 ? "text-red-400" : "text-muted-foreground hover:text-red-400"}` }, "\uD83D\uDC4E", r.thumbs_down || 0)
+              h('button', { onClick: async () => { try { const newVote = r.my_vote === -1 ? 0 : -1; await API.voteReview(r.id, newVote); load(); } catch(e) {} }, className: `flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-colors ${r.my_vote === -1 ? "text-red-400" : "text-muted-foreground hover:text-red-400"}` }, "\uD83D\uDC4E", r.thumbs_down || 0),
+              h('button', { onClick: async () => {
+                if (replyState.reviewId === r.id) { setReplyState({ reviewId: null, text: '' }); return; }
+                setReplyState({ reviewId: r.id, text: '' });
+                if (!replies[r.id]) {
+                  try { const d = await API.getReviewReplies(r.id); setReplies(prev => ({ ...prev, [r.id]: d.replies || [] })); } catch(e) {}
+                }
+              }, className: `flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-colors ${replyState.reviewId === r.id ? "text-purple-400" : "text-muted-foreground hover:text-purple-400"}` }, h(MessageSquare, { size: 9 }), r.reply_count || 0)
+            ),
+            replyState.reviewId === r.id && h('div', { className: "mt-2 space-y-2" },
+              (replies[r.id] || []).map(reply =>
+                h('div', { key: reply.id, className: "flex items-start gap-1.5 text-[9px] text-muted-foreground pl-2 border-l-2 border-border" },
+                  h('span', { className: "font-bold text-foreground whitespace-nowrap" }, reply.users?.display_name || "?"),
+                  h('span', null, reply.text)
+                )
+              ),
+              h('div', { className: "flex gap-1.5" },
+                h('input', { value: replyState.text, onChange: e => setReplyState(s => ({ ...s, text: e.target.value })), placeholder: "\u00c9cris une r\u00e9ponse...", className: "flex-1 bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-[9px] text-foreground placeholder-muted-foreground outline-none" }),
+                h('button', { onClick: async () => {
+                  if (!replyState.text.trim()) return;
+                  try { await API.replyToReview(r.id, replyState.text.trim()); setReplyState({ reviewId: null, text: '' }); load(); } catch(e) {}
+                }, className: "px-2 py-1.5 rounded-lg text-[9px] font-bold text-white", style: { background: GRAD } }, "Envoyer")
+              )
             )
           );
         })
@@ -1288,9 +1321,13 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
           h(Calendar, { size: 14, style: { color: P1 } }),
           h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Sorties a venir"),
         ),
-        releases.length === 0 && loadingNews && h('div', { className: "flex items-center justify-center py-6" }, h(Loader, { size: 16, className: "animate-spin", style: { color: P1 } })),
-        releases.length === 0 && !loadingNews && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucune actualit\u00e9 pour le moment"),
-        releases.map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "flex gap-3 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.12)" } },
+        (() => {
+          const current = releases.filter(r => !r._archived);
+          const archived = releases.filter(r => r._archived);
+          return h('div', null,
+            current.length === 0 && loadingNews && h('div', { className: "flex items-center justify-center py-6" }, h(Loader, { size: 16, className: "animate-spin", style: { color: P1 } })),
+            current.length === 0 && !loadingNews && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucune actualit\u00e9 pour le moment"),
+            current.map((item, i) => h('div', { key: 'c'+i, onClick: () => setSelectedNews(item), className: "flex gap-3 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.12)" } },
           h('div', { className: "w-10 h-14 rounded-lg overflow-hidden flex-shrink-0" }, h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover" })),
           h('div', { className: "flex-1 min-w-0" },
             h('p', { className: "text-[10px] font-bold", style: { color: P1 } }, item.date),
@@ -1298,44 +1335,100 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
             h('p', { className: "text-[10px] text-muted-foreground mt-0.5 leading-relaxed line-clamp-2" }, item.desc)
           ),
           h(ChevronRight, { size: 14, className: "self-center text-muted-foreground flex-shrink-0" })
-        ))
+        )),
+            archived.length > 0 && h('div', { className: "mt-2" },
+              h('button', { onClick: () => setShowArchivedReleases(!showArchivedReleases), className: "flex items-center gap-2 w-full p-2.5 rounded-xl text-[10px] font-bold transition-colors", style: { background: "rgba(255,255,255,0.03)", color: "#8888aa" } },
+                h(ChevronRight, { size: 12, className: `transition-transform ${showArchivedReleases ? 'rotate-90' : ''}` }),
+                "Anciennes sorties (", archived.length, ")"
+              ),
+              showArchivedReleases && archived.map((item, i) => h('div', { key: 'a'+i, onClick: () => setSelectedNews(item), className: "flex gap-3 p-2.5 rounded-xl border cursor-pointer transition-all hover:opacity-80 mt-1", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" } },
+                h('div', { className: "w-8 h-11 rounded overflow-hidden flex-shrink-0" }, h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover" })),
+                h('div', { className: "flex-1 min-w-0" },
+                  h('p', { className: "text-[9px] font-bold", style: { color: P1 } }, item.date || ''),
+                  h('p', { className: "text-[10px] font-bold text-foreground mt-0.5", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
+                  h('p', { className: "text-[8px] text-muted-foreground mt-0.5 line-clamp-1" }, item.desc)
+                )
+              ))
+            )
+          );
+        })()
       ),
       h('div', null,
         h('div', { className: "flex items-center gap-2 mb-3 mt-2" },
           h(Trophy, { size: 14, style: { color: "#fbbf24" } }),
           h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "E-Sport"),
         ),
-        esportEvents.length === 0 && loadingNews && h('div', { className: "flex items-center justify-center py-6" }, h(Loader, { size: 16, className: "animate-spin", style: { color: P1 } })),
-        esportEvents.length === 0 && !loadingNews && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucun \u00e9v\u00e9nement e-sport pour le moment"),
-        esportEvents.map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.1)" } },
-          h(Trophy, { size: 16, style: { color: "#fbbf24", flexShrink: 0 } }),
-          h('div', { className: "flex-1 min-w-0" },
-            h('p', { className: "text-xs font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event),
-            h('p', { className: "text-[9px] text-muted-foreground mt-0.5" }, item.desc, " \u2022 ", item.date)
-          ),
-          h('div', { className: "flex items-center gap-1.5 flex-shrink-0" },
-            h('span', { className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: `${P1}20`, color: P1 } }, item.game),
-            h(ChevronRight, { size: 12, className: "text-muted-foreground" })
-          )
-        ))
+        (() => {
+          const current = esportEvents.filter(r => !r._archived);
+          const archived = esportEvents.filter(r => r._archived);
+          return h('div', null,
+            current.length === 0 && loadingNews && h('div', { className: "flex items-center justify-center py-6" }, h(Loader, { size: 16, className: "animate-spin", style: { color: P1 } })),
+            current.length === 0 && !loadingNews && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucun \u00e9v\u00e9nement e-sport pour le moment"),
+            current.map((item, i) => h('div', { key: 'c'+i, onClick: () => setSelectedNews(item), className: "flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.1)" } },
+              h(Trophy, { size: 16, style: { color: "#fbbf24", flexShrink: 0 } }),
+              h('div', { className: "flex-1 min-w-0" },
+                h('p', { className: "text-xs font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event),
+                h('p', { className: "text-[9px] text-muted-foreground mt-0.5" }, item.desc, " \u2022 ", item.date)
+              ),
+              h('div', { className: "flex items-center gap-1.5 flex-shrink-0" },
+                h('span', { className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: `${P1}20`, color: P1 } }, item.game),
+                h(ChevronRight, { size: 12, className: "text-muted-foreground" })
+              )
+            )),
+            archived.length > 0 && h('div', { className: "mt-2" },
+              h('button', { onClick: () => setShowArchivedEsport(!showArchivedEsport), className: "flex items-center gap-2 w-full p-2.5 rounded-xl text-[10px] font-bold transition-colors", style: { background: "rgba(255,255,255,0.03)", color: "#8888aa" } },
+                h(ChevronRight, { size: 12, className: `transition-transform ${showArchivedEsport ? 'rotate-90' : ''}` }),
+                "Anciens \u00e9v\u00e9nements (", archived.length, ")"
+              ),
+              showArchivedEsport && archived.map((item, i) => h('div', { key: 'a'+i, onClick: () => setSelectedNews(item), className: "flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all hover:opacity-80 mt-1", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" } },
+                h(Trophy, { size: 12, style: { color: "#fbbf24", flexShrink: 0 } }),
+                h('div', { className: "flex-1 min-w-0" },
+                  h('p', { className: "text-[10px] font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event),
+                  h('p', { className: "text-[8px] text-muted-foreground mt-0.5" }, item.desc, " \u2022 ", item.date)
+                )
+              ))
+            )
+          );
+        })()
       ),
       h('div', null,
         h('div', { className: "flex items-center gap-2 mb-3 mt-2" },
           h(MessageCircle, { size: 14, style: { color: "#ef4444" } }),
           h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Drama & Actu"),
         ),
-        dramaItems.length === 0 && loadingNews && h('div', { className: "flex items-center justify-center py-6" }, h(Loader, { size: 16, className: "animate-spin", style: { color: P1 } })),
-        dramaItems.length === 0 && !loadingNews && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucune actualit\u00e9 pour le moment"),
-        dramaItems.map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.1)" } },
-          h('div', { className: "flex items-start gap-2" },
-            h('span', { className: "px-1.5 py-0.5 rounded text-[8px] font-bold flex-shrink-0 mt-0.5", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.2)" : "rgba(59,130,246,0.2)", color: item.tag === "Drama" ? "#ef4444" : "#3b82f6" } }, item.tag),
-            h('div', { className: "flex-1 min-w-0" },
-              h('p', { className: "text-[11px] font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
-              h('p', { className: "text-[10px] text-muted-foreground mt-0.5 leading-relaxed line-clamp-2" }, item.desc)
-            ),
-            h(ChevronRight, { size: 14, className: "self-center text-muted-foreground flex-shrink-0" })
-          )
-        ))
+        (() => {
+          const current = dramaItems.filter(r => !r._archived);
+          const archived = dramaItems.filter(r => r._archived);
+          return h('div', null,
+            current.length === 0 && loadingNews && h('div', { className: "flex items-center justify-center py-6" }, h(Loader, { size: 16, className: "animate-spin", style: { color: P1 } })),
+            current.length === 0 && !loadingNews && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucune actualit\u00e9 pour le moment"),
+            current.map((item, i) => h('div', { key: 'c'+i, onClick: () => setSelectedNews(item), className: "p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.1)" } },
+              h('div', { className: "flex items-start gap-2" },
+                h('span', { className: "px-1.5 py-0.5 rounded text-[8px] font-bold flex-shrink-0 mt-0.5", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.2)" : "rgba(59,130,246,0.2)", color: item.tag === "Drama" ? "#ef4444" : "#3b82f6" } }, item.tag),
+                h('div', { className: "flex-1 min-w-0" },
+                  h('p', { className: "text-[11px] font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
+                  h('p', { className: "text-[10px] text-muted-foreground mt-0.5 leading-relaxed line-clamp-2" }, item.desc)
+                ),
+                h(ChevronRight, { size: 14, className: "self-center text-muted-foreground flex-shrink-0" })
+              )
+            )),
+            archived.length > 0 && h('div', { className: "mt-2" },
+              h('button', { onClick: () => setShowArchivedDrama(!showArchivedDrama), className: "flex items-center gap-2 w-full p-2.5 rounded-xl text-[10px] font-bold transition-colors", style: { background: "rgba(255,255,255,0.03)", color: "#8888aa" } },
+                h(ChevronRight, { size: 12, className: `transition-transform ${showArchivedDrama ? 'rotate-90' : ''}` }),
+                "Anciennes actualit\u00e9s (", archived.length, ")"
+              ),
+              showArchivedDrama && archived.map((item, i) => h('div', { key: 'a'+i, onClick: () => setSelectedNews(item), className: "p-2.5 rounded-xl border cursor-pointer transition-all hover:opacity-80 mt-1", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" } },
+                h('div', { className: "flex items-start gap-2" },
+                  h('span', { className: "px-1 py-0.5 rounded text-[7px] font-bold flex-shrink-0", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.15)" : "rgba(59,130,246,0.15)", color: item.tag === "Drama" ? "#ef4444" : "#3b82f6" } }, item.tag || ''),
+                  h('div', { className: "flex-1 min-w-0" },
+                    h('p', { className: "text-[10px] font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
+                    h('p', { className: "text-[8px] text-muted-foreground mt-0.5 line-clamp-1" }, item.desc)
+                  )
+                )
+              ))
+            )
+          );
+        })()
       )
     ),
 
@@ -1927,14 +2020,15 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
   communityReviews.length > 0 && h('div', { className: "border-t border-border pt-4 mt-4" },
     h('h3', { className: "text-sm font-black text-foreground mb-4", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Avis de la communaut\u00e9"),
     h('div', { className: "space-y-2.5" }, communityReviews.map((review, i) => {
-      const positive = review.rating >= 4;
-      return h('div', { key: i, className: "rounded-xl p-3", style: { background: positive ? "rgba(34,197,94,0.06)" : "rgba(239,68,68,0.06)", border: `1px solid ${positive ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)"}` } },
+      return h('div', { key: i, className: "rounded-xl p-3", style: { background: ratingBg(review.rating), border: ratingBorder(review.rating) } },
         h('div', { className: "flex items-center justify-between mb-1.5" },
-          h('div', { className: "flex items-center gap-1.5" }, h('div', { className: "w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-black text-white", style: { background: positive ? "#22c55e" : "#ef4444" } }, (review.users?.display_name || review.users?.username || "A")[0]), h('span', { className: "text-[10px] font-bold text-foreground" }, review.users?.display_name || review.users?.username || "Anonyme")),
+          h('div', { className: "flex items-center gap-1.5" }, h('div', { className: "w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-black text-white", style: { background: ratingColor(review.rating) } }, (review.users?.display_name || review.users?.username || "A")[0]), h('span', { className: "text-[10px] font-bold text-foreground" }, review.users?.display_name || review.users?.username || "Anonyme")),
           h(StarRating, { rating: review.rating || 0, size: 8 })
         ),
         review.review_text ? h('p', { className: "text-[10px] text-muted-foreground leading-relaxed" }, review.review_text) : h('p', { className: "text-[10px] text-muted-foreground/50 italic" }, "Aucun texte"),
-        h('div', { className: "flex items-center gap-1 mt-1.5" }, h('span', { className: `text-[8px] font-bold ${positive ? "text-green-400" : "text-red-400"}` }, positive ? "Recommand\u00e9" : "D\u00e9conseill\u00e9"))
+        h('div', { className: "flex items-center gap-2 mt-1.5" },
+          h('span', { className: "text-[8px] font-bold", style: { color: ratingColor(review.rating) } }, review.rating >= 4 ? "Recommand\u00e9" : review.rating >= 3 ? "Mitig\u00e9" : "D\u00e9conseill\u00e9")
+        )
       );
     }))
   )

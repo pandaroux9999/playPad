@@ -353,6 +353,30 @@ app.post('/api/reviews/:id/vote', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/reviews/:id/reply', requireAuth, async (req, res) => {
+  try {
+    const parentId = parseInt(req.params.id);
+    const { text } = req.body;
+    if (!text || !text.trim()) return res.status(400).json({ error: 'Texte requis' });
+    const reply = await db.saveReviewReply(req.session.userId, parentId, text.trim());
+    res.json({ reply });
+  } catch (err) {
+    console.error('[ReviewReply] Error:', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
+app.get('/api/reviews/:id/replies', requireAuth, async (req, res) => {
+  try {
+    const parentId = parseInt(req.params.id);
+    const replies = await db.getReviewReplies(parentId);
+    res.json({ replies });
+  } catch (err) {
+    console.error('[ReviewReplies] Error:', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
 app.get('/api/games/reviews', requireAuth, async (req, res) => {
   try {
     const { gameId } = req.query;
@@ -2072,7 +2096,7 @@ async function refreshAllNews() {
   if (igdbId && igdbSecret) {
     const releases = await fetchIGDBReleases(igdbId, igdbSecret);
     if (releases.length > 0) {
-      await db.replaceNewsCache('releases', releases);
+      await db.addNewsItems('releases', releases);
       results.releases = releases.length;
     }
   } else {
@@ -2081,16 +2105,18 @@ async function refreshAllNews() {
 
   const drama = await fetchDramaFromRSS();
   if (drama.length > 0) {
-    await db.replaceNewsCache('drama', drama);
+    await db.addNewsItems('drama', drama);
     results.drama = drama.length;
   }
 
   const esport = await fetchEsportFromRSS();
   if (esport.length > 0) {
-    await db.replaceNewsCache('esport', esport);
+    await db.addNewsItems('esport', esport);
     results.esport = esport.length;
   }
 
+  // Nettoie les vieux posts (garde max 50 par catégorie)
+  await db.pruneNewsCache(50).catch(e => console.error('[News] Prune error:', e.message));
   console.log(`[News] ✅ Rafraîchi : ${results.releases} releases, ${results.drama} drama, ${results.esport} esport`);
   return results;
 }

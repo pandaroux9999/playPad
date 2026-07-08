@@ -331,6 +331,26 @@ async function getAllPublicReviews() {
     .order('created_at', { ascending: false })
     .limit(50);
   if (error) throw new Error(error.message);
+  return (data || []).map(r => ({ ...r, reply_count: 0 }));
+}
+
+async function saveReviewReply(userId, reviewId, text) {
+  const { data, error } = await supabaseAdmin
+    .from('review_replies')
+    .insert({ user_id: userId, review_id: reviewId, text })
+    .select('*, users(display_name, username, avatar_url)')
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function getReviewReplies(reviewId) {
+  const { data, error } = await supabaseAdmin
+    .from('review_replies')
+    .select('*, users(display_name, username, avatar_url)')
+    .eq('review_id', reviewId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
   return data || [];
 }
 
@@ -986,16 +1006,32 @@ async function getUserBoostStatus(userId, gameId) {
 }
 
 // ─── NEWS ─────────────────────────────────────────────────
-async function replaceNewsCache(category, items) {
-  const { error: delErr } = await supabaseAdmin
+async function addNewsItems(category, items) {
+  if (!items || items.length === 0) return;
+  // Récupère les titres existants (non archivés) pour éviter les doublons
+  const { data: existing } = await supabaseAdmin
     .from('news_cache')
-    .delete()
-    .eq('category', category);
-  if (delErr) throw new Error(delErr.message);
-  if (items.length === 0) return;
-  const rows = items.map((item, i) => ({
+    .select('item_data')
+    .eq('category', category)
+    .eq('archived', false);
+  const existingTitles = new Set((existing || []).map(r => r.item_data?.title || r.item_data?.event || ''));
+  const newItems = items.filter(item => {
+    const key = item.title || item.event || '';
+    return key && !existingTitles.has(key);
+  });
+  if (newItems.length === 0) return;
+  // Archive les anciens (non archivés) → archived = true
+  const { error: arcErr } = await supabaseAdmin
+    .from('news_cache')
+    .update({ archived: true })
+    .eq('category', category)
+    .eq('archived', false);
+  if (arcErr) throw new Error(arcErr.message);
+  // Insère les nouveaux items
+  const rows = newItems.map((item, i) => ({
     category,
     item_data: item,
+    archived: false,
     sort_key: i,
   }));
   const { error: insErr } = await supabaseAdmin
@@ -1007,15 +1043,31 @@ async function replaceNewsCache(category, items) {
 async function getNewsFromCache() {
   const { data, error } = await supabaseAdmin
     .from('news_cache')
-    .select('category, item_data, sort_key')
+    .select('category, item_data, archived, created_at, sort_key')
     .order('category')
-    .order('sort_key');
+    .order('sort_key', { ascending: false });
   if (error) throw new Error(error.message);
   const result = { releases: [], esport: [], drama: [] };
   for (const row of data || []) {
-    if (result[row.category]) result[row.category].push(row.item_data);
+    if (result[row.category]) {
+      result[row.category].push({ ...row.item_data, _archived: row.archived, _created_at: row.created_at });
+    }
   }
   return result;
+}
+
+async function pruneNewsCache(maxPerCategory) {
+  for (const cat of ['releases', 'esport', 'drama']) {
+    const { data } = await supabaseAdmin
+      .from('news_cache')
+      .select('id')
+      .eq('category', cat)
+      .order('sort_key', { ascending: false });
+    if (data && data.length > maxPerCategory) {
+      const toDelete = data.slice(maxPerCategory).map(r => r.id);
+      await supabaseAdmin.from('news_cache').delete().in('id', toDelete);
+    }
+  }
 }
 
 async function getNewsCacheAge() {
@@ -1104,8 +1156,11 @@ module.exports = {
   voteReview,
   getReviewVotes,
   getUserReviewVotes,
-  replaceNewsCache,
+  saveReviewReply,
+  getReviewReplies,
+  addNewsItems,
   getNewsFromCache,
   getNewsCacheAge,
   clearNewsCache,
+  pruneNewsCache,
 };

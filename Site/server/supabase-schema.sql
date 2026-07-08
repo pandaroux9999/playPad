@@ -162,10 +162,20 @@ CREATE TABLE IF NOT EXISTS news_cache (
   id SERIAL PRIMARY KEY,
   category TEXT NOT NULL CHECK(category IN ('releases', 'esport', 'drama')),
   item_data JSONB NOT NULL,
+  archived BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   sort_key INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_news_cache_category ON news_cache(category);
+
+-- Réponses aux critiques communautaires
+CREATE TABLE IF NOT EXISTS review_replies (
+  id SERIAL PRIMARY KEY,
+  review_id INTEGER NOT NULL REFERENCES community_reviews(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
 -- Votes sur les critiques communautaires (pouce bleu/rouge)
 CREATE TABLE IF NOT EXISTS review_votes (

@@ -1055,7 +1055,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   );
 }
 
-function CommunityView({ onSelectFriend, onSelectGame, onAddNotification }) {
+function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotification }) {
   const [publicReviews, setPublicReviews] = useState([]);
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -1071,7 +1071,7 @@ function CommunityView({ onSelectFriend, onSelectGame, onAddNotification }) {
     API.getReviewsFeed().then(d => setPublicReviews(d.reviews || [])).catch(() => {}),
     API.getSuggestions().then(d => setSuggestions(d.suggestions || [])).catch(() => {}),
   ]).finally(() => setLoading(false));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [refreshKey]);
   const doSearch = useCallback((q) => {
     API.searchUsers(q).then(d => {
       setSearchResults(d.users || []);
@@ -1957,6 +1957,7 @@ function App() {
   const [boostedGames, setBoostedGames] = useState([]);
   const [userBoostedSet, setUserBoostedSet] = useState(new Set());
   const [catalogRefreshKey, setCatalogRefreshKey] = useState(0);
+  const [communityRefreshKey, setCommunityRefreshKey] = useState(0);
   const refreshBooster = useCallback(async () => {
     try {
       const [bpData, topData] = await Promise.all([API.getBoosterPoints(), API.getTopBoosted()]);
@@ -2129,6 +2130,7 @@ function App() {
       await API.syncGames([{ game_id: gameId, title: gameTitle, cover: gameCover || '', user_rating: 0, review_text: "", review_public: 1, has_review: 0, status: "not_started", playtime: 0 }]);
     }
     await API.saveReview(gameId, rating, reviewText, reviewPublic, gameTitle, gameCover);
+    setCommunityRefreshKey(k => k + 1);
     const [g2] = await Promise.all([API.getGames()]);
     next = g2.games.map(n);
     setGames(next);
@@ -2204,7 +2206,7 @@ function App() {
       h('div', { className: "flex-1 overflow-hidden" },
         h('div', { className: "h-full overflow-y-auto" },
           view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); }, wishlistIds, onToggleWishlist: handleToggleWishlist, topThreeIds, onToggleTopThree: handleToggleTopThree }),
-          view === "community" && h(CommunityView, { onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
+          view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
           view === "catalogue" && h(CatalogueView, { key: 'cat', refreshKey: catalogRefreshKey, onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
           view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast })

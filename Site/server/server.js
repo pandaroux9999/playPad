@@ -922,6 +922,7 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
 
 async function populateSteamFromAppList() {
   // SteamSpy est gratuit, pas de clé API nécessaire
+  let totalAdded = 0;
   try {
     console.log('[SteamAppList] Importation de tous les jeux Steam...');
     const nonGameKeywords = ['soundtrack', 'dlc pack', 'wallpaper', 'sdk', 'artbook', 'season pass', 'expansion pack', 'playtest'];
@@ -962,7 +963,6 @@ async function populateSteamFromAppList() {
       return result;
     };
     // 1) request=all (~1000 jeux) — upsert immédiat
-    let totalAdded = 0;
     const seenIds = new Set();
     try {
       const d = await fetchSteamSpy('https://steamspy.com/api.php?request=all');
@@ -1130,6 +1130,7 @@ async function populateCatalogFromIGDB(clientId, clientSecret) {
     const limit = 200;
     let page = 0;
     const maxPages = 3;
+    let batch = [];
     while (page < maxPages) {
       try {
         const body = `fields name,first_release_date,genres.name,cover.url; where platforms = (${plat.id}); limit ${limit}; offset ${offset};`;
@@ -1137,18 +1138,14 @@ async function populateCatalogFromIGDB(clientId, clientSecret) {
         if (!data || !Array.isArray(data) || data.length === 0) break;
         for (const g of data) {
           if (!g.name) continue;
-          const year = g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : 0;
-          const cover = g.cover?.url ? 'https:' + g.cover.url.replace('t_thumb', 't_cover_big') : '';
-          const genre = (g.genres || []).map(gen => gen.name).join(', ');
-          await db.ensureCatalogGame({
+          batch.push({
             game_id: `igdb-${g.id}`,
             title: g.name,
             platform: plat.prefix,
-            cover,
-            genre,
-            year,
-          }).catch(() => {});
-          total++;
+            cover: g.cover?.url ? 'https:' + g.cover.url.replace('t_thumb', 't_cover_big') : '',
+            genre: (g.genres || []).map(gen => gen.name).join(', '),
+            year: g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : 0,
+          });
         }
         offset += limit;
         page++;
@@ -1157,7 +1154,11 @@ async function populateCatalogFromIGDB(clientId, clientSecret) {
         break;
       }
     }
-    console.log(`[IGDB] ${plat.name}: ${page * limit} jeux`);
+    if (batch.length > 0) {
+      await db.batchUpsertCatalog(batch);
+      total += batch.length;
+    }
+    console.log(`[IGDB] ${plat.name}: ${batch.length} jeux`);
   }
   console.log(`[IGDB] ✅ ${total} jeux ajoutés`);
   return total;

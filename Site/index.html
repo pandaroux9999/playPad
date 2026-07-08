@@ -1420,7 +1420,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
       h('button', { onClick: () => { setEmail(user?.email || ''); setEmailModal(true); }, className: "text-[10px] font-medium flex items-center gap-1.5 hover:opacity-80 transition-opacity", style: { color: `${P1}aa` } }, h(Mail, { size: 11 }), user?.email ? "Changer l'email" : "Ajouter un email"),
       h('button', { onClick: onDeleteAccount, className: "text-[10px] font-medium flex items-center gap-1.5 hover:opacity-80 transition-opacity", style: { color: "#ef444488" } }, "Supprimer mon compte")
     ),
-    h('div', { className: "px-4 mb-6" },
+    h('div', { className: "px-4 mb-6 pb-20" },
       h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5" }, h(Heart, { size: 11, fill: "#ef4444", stroke: "#ef4444", strokeWidth: 2 }), "Liste de souhaits (", wishlistIds.size, ")"),
       wishlistIds.size === 0
         ? h('div', { className: "bg-card border border-border rounded-2xl p-5 text-center" }, h(Heart, { size: 24, className: "mx-auto mb-2 opacity-20 text-muted-foreground" }), h('p', { className: "text-xs text-muted-foreground" }, "Aucun jeu dans ta liste"))

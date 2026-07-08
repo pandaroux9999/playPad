@@ -6,7 +6,6 @@ const path = require('path');
 const https = require('https');
 const querystring = require('querystring');
 const helmet = require('helmet');
-const decodeHtml = s => s.replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#x27;/g,"'").replace(/&#x2F;/g,'/');
 const rateLimit = require('express-rate-limit');
 const db = require('./db');
 const SupabaseSessionStore = require('./session-store');
@@ -849,17 +848,9 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
 async function populateSteamFromAppList() {
   const steamKey = process.env.STEAM_API_KEY;
   if (!steamKey) { console.log('[SteamAppList] STEAM_API_KEY non configurée, skip'); return 0; }
-  let total = 0;
   try {
     console.log('[SteamAppList] Importation de tous les jeux Steam...');
-    let apps = [];
-    const seen = new Set();
-    const addApps = (list) => {
-      for (const a of list) {
-        const key = 'steam-' + a.appid;
-        if (!seen.has(key)) { seen.add(key); apps.push(a); }
-      }
-    };
+    const nonGameKeywords = ['soundtrack', 'dlc pack', 'wallpaper', 'sdk', 'artbook', 'season pass', 'expansion pack', 'playtest'];
     const fetchSteamSpy = (url) => new Promise((resolve, reject) => {
       const req = https.get(url, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
         let b = '';
@@ -876,20 +867,45 @@ async function populateSteamFromAppList() {
       appid: parseInt(k), name: v.name, developer: v.developer || '', publisher: v.publisher || '',
       genre: v.tags ? Object.keys(v.tags).slice(0, 5).join(', ') : '',
     }));
-    // 1) request=all (~1000 jeux)
+    const upsertBatch = async (batch) => {
+      if (batch.length === 0) return 0;
+      await db.batchUpsertCatalog(batch);
+      return batch.length;
+    };
+    const buildEntries = (entries) => {
+      const result = [];
+      for (const app of entries) {
+        const gameId = `steam-${app.appid}`;
+        const name = (app.name || '').trim();
+        if (!name || name.length < 2) continue;
+        if (nonGameKeywords.some(kw => name.toLowerCase().includes(kw))) continue;
+        result.push({
+          game_id: gameId, title: name, platform: 'steam',
+          cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${app.appid}/library_600x900.jpg`,
+          genre: app.genre || '', year: 0, developer: app.developer || '', publisher: app.publisher || ''
+        });
+      }
+      return result;
+    };
+    // 1) request=all (~1000 jeux) — upsert immédiat
+    let totalAdded = 0;
+    const seenIds = new Set();
     try {
       const d = await fetchSteamSpy('https://steamspy.com/api.php?request=all');
-      addApps(spyToEntries(d));
-      console.log('[SteamAppList] request=all:', apps.length, 'jeux');
+      const entries = buildEntries(spyToEntries(d)).filter(e => { if (seenIds.has(e.game_id)) return false; seenIds.add(e.game_id); return true; });
+      const added = await upsertBatch(entries);
+      totalAdded += added;
+      console.log('[SteamAppList] request=all:', entries.length, 'jeux,', added, 'nouveaux');
     } catch (e) { console.log('[SteamAppList] request=all échoué:', e.message); }
-    // 2) Par genre pour plus de couverture
+    // 2) Par genre — upsert immédiat après chaque genre
     const genres = ['Action', 'Adventure', 'Casual', 'Indie', 'Massively%20Multiplayer', 'Racing', 'RPG', 'Simulation', 'Sports', 'Strategy', 'Free%20to%20Play', 'Early%20Access', 'Animation%20%26%20Modeling', 'Audio%20Production', 'Design%20%26%20Illustration', 'Education', 'Game%20Development', 'Photo%20Editing', 'Software%20Training', 'Utilities', 'Video%20Production', 'Web%20Publishing'];
     for (const genre of genres) {
       try {
         const d = await fetchSteamSpy('https://steamspy.com/api.php?request=genre&genre=' + genre);
-        const entries = spyToEntries(d);
-        addApps(entries);
-        console.log('[SteamAppList] Genre', decodeURIComponent(genre), ':', entries.length, 'jeux (total', apps.length + ')');
+        const entries = buildEntries(spyToEntries(d)).filter(e => { if (seenIds.has(e.game_id)) return false; seenIds.add(e.game_id); return true; });
+        const added = await upsertBatch(entries);
+        totalAdded += added;
+        console.log('[SteamAppList] Genre', decodeURIComponent(genre), ':', entries.length, 'jeux,', added, 'nouveaux (total', totalAdded, 'nouveaux)');
         if (genre !== genres[genres.length - 1]) await new Promise(r => setTimeout(r, 1000));
       } catch (e) { console.log('[SteamAppList] Genre', genre, 'échoué:', e.message); }
     }
@@ -897,47 +913,16 @@ async function populateSteamFromAppList() {
     for (const req of ['top100forever', 'top100in2weeks', 'top100owned']) {
       try {
         const d = await fetchSteamSpy('https://steamspy.com/api.php?request=' + req);
-        addApps(spyToEntries(d));
-        console.log('[SteamAppList]', req, ':', apps.length, 'jeux');
+        const entries = buildEntries(spyToEntries(d)).filter(e => { if (seenIds.has(e.game_id)) return false; seenIds.add(e.game_id); return true; });
+        const added = await upsertBatch(entries);
+        totalAdded += added;
+        console.log('[SteamAppList]', req, ':', entries.length, 'jeux,', added, 'nouveaux');
         await new Promise(r => setTimeout(r, 500));
       } catch (e) { console.log('[SteamAppList]', req, 'échoué:', e.message); }
     }
-    if (apps.length === 0) {
-      const existing = await db.getCatalog();
-      console.log('[SteamAppList] Aucune source distante disponible, utilisation du cache local');
-      apps = existing.filter(g => g.game_id.startsWith('steam-') && !g.description).map(g => ({ appid: Number(g.game_id.replace('steam-', '')), name: g.title, developer: '', publisher: '', genre: '' }));
-    }
-    const existing = await db.getCatalog();
-    const existingIds = new Set(existing.filter(g => g.game_id.startsWith('steam-')).map(g => g.game_id));
-    const nonGameKeywords = ['soundtrack', 'dlc pack', 'wallpaper', 'sdk', 'artbook', 'season pass', 'expansion pack', 'playtest'];
-    const batch = [];
-    const totalApps = apps.length;
-    for (const app of apps) {
-      const gameId = `steam-${app.appid}`;
-      if (existingIds.has(gameId)) continue;
-      const name = (app.name || '').trim();
-      if (!name || name.length < 2) continue;
-      if (nonGameKeywords.some(kw => name.toLowerCase().includes(kw))) continue;
-      batch.push({
-        game_id: gameId, title: name, platform: 'steam',
-        cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${app.appid}/library_600x900.jpg`,
-        genre: app.genre || '', year: 0, developer: app.developer || '', publisher: app.publisher || ''
-      });
-      existingIds.add(gameId);
-      if (batch.length >= 500) {
-        await db.batchUpsertCatalog(batch);
-        total += batch.length;
-        console.log(`[SteamAppList] ${total} / ${totalApps} jeux ajoutés...`);
-        batch.length = 0;
-      }
-    }
-    if (batch.length > 0) {
-      await db.batchUpsertCatalog(batch);
-      total += batch.length;
-    }
-    console.log(`[SteamAppList] ${total} jeux Steam ajoutés`);
+    console.log(`[SteamAppList] ${totalAdded} jeux Steam ajoutés`);
   } catch (e) { console.error('[SteamAppList] Error:', e.message); }
-  return total;
+  return totalAdded;
 }
 
 // Peuple le catalogue au démarrage si vide

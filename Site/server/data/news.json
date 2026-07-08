@@ -1,0 +1,147 @@
+{
+  "releases": [
+    {
+      "type": "release",
+      "date": "24 Juillet 2026",
+      "title": "Fable",
+      "desc": "Nouvel opus de la saga mythique par Playground Games",
+      "cover": "https://cdn.cloudflare.steamstatic.com/steam/apps/3030620/library_600x900.jpg",
+      "officialUrl": "https://www.xbox.com/fr-FR/games/fable",
+      "sourceUrl": "https://www.jeuxvideo.com",
+      "sourceName": "JeuxVideo.com",
+      "details": "Fable revient dans un tout nouveau chapitre développé par Playground Games (Forza Horizon). Le jeu promet un monde ouvert riche, un humour britannique légendaire et des choix moraux qui façonnent votre aventure."
+    },
+    {
+      "type": "release",
+      "date": "Septembre 2026",
+      "title": "Avowed",
+      "desc": "Le RPG fantasy d'Obsidian dans l'univers d'Eora",
+      "cover": "https://cdn.cloudflare.steamstatic.com/steam/apps/2457220/library_600x900.jpg",
+      "officialUrl": "https://avowed.obsidian.net",
+      "sourceUrl": "https://www.gamekult.com",
+      "sourceName": "Gamekult",
+      "details": "Avowed est un RPG fantasy en vue à la première personne par Obsidian Entertainment, les créateurs de Fallout: New Vegas et The Outer Worlds. L'aventure se déroule dans l'univers d'Eora, le monde de Pillars of Eternity."
+    },
+    {
+      "type": "release",
+      "date": "Octobre 2026",
+      "title": "Borderlands 4",
+      "desc": "Retour du looter-shooter culte par Gearbox",
+      "cover": "https://cdn.cloudflare.steamstatic.com/steam/apps/3285030/library_600x900.jpg",
+      "officialUrl": "https://borderlands.2k.com",
+      "sourceUrl": "https://www.ign.com",
+      "sourceName": "IGN",
+      "details": "Gearbox Software revient avec un nouvel opus de la saga Borderlands. Attendez-vous à des milliards d'armes, un humour décapant et un tout nouveau monde à explorer en solo ou en coopératif."
+    },
+    {
+      "type": "release",
+      "date": "2026",
+      "title": "Metroid Prime 4",
+      "desc": "L'attendu retour de Samus Aran sur Switch 2",
+      "cover": "https://cdn.cloudflare.steamstatic.com/steam/apps/3030620/library_600x900.jpg",
+      "officialUrl": "https://www.nintendo.com",
+      "sourceUrl": "https://www.nintendo.fr",
+      "sourceName": "Nintendo France",
+      "details": "Le retour tant attendu de Samus Aran dans un tout nouvel épisode de la saga Metroid Prime. Développé par Retro Studios, le jeu promet d'exploiter pleinement la puissance de la Switch 2."
+    },
+    {
+      "type": "release",
+      "date": "2026",
+      "title": "GTA VI",
+      "desc": "Le jeu le plus attendu de la décennie enfin révélé",
+      "cover": "https://cdn.cloudflare.steamstatic.com/steam/apps/271590/library_600x900.jpg",
+      "officialUrl": "https://www.rockstargames.com",
+      "sourceUrl": "https://www.rockstargames.com",
+      "sourceName": "Rockstar Games",
+      "details": "Grand Theft Auto VI emmène les joueurs à Vice City dans une histoire écrite par Rockstar Games. Premier opus féminin de la série, le jeu promet une carte immense et des innovations techniques majeures."
+    }
+  ],
+  "esport": [
+    {
+      "type": "esport",
+      "event": "Valorant Champions 2026",
+      "game": "Valorant",
+      "date": "Août 2026",
+      "desc": "Le tournoi majeur de la scène Valorant",
+      "officialUrl": "https://www.vlr.gg",
+      "sourceUrl": "https://www.vlr.gg",
+      "sourceName": "VLR.gg",
+      "details": "Le Valorant Champions est le tournoi le plus prestigieux de la scène Valorant. Les meilleures équipes du monde s'affrontent pour le titre de champion du monde et un prize pool de plusieurs millions de dollars."
+    },
+    {
+      "type": "esport",
+      "event": "The International 2026",
+      "game": "Dota 2",
+      "date": "Septembre 2026",
+      "desc": "Le plus grand tournoi de MOBA au monde",
+      "officialUrl": "https://www.dota2.com/esports",
+      "sourceUrl": "https://www.liquipedia.net",
+      "sourceName": "Liquipedia",
+      "details": "The International est le championnat du monde de Dota 2, organisé par Valve. Réputé pour ses prize pools records grâce au financement participatif via le Battle Pass."
+    },
+    {
+      "type": "esport",
+      "event": "League of Legends Worlds 2026",
+      "game": "LoL",
+      "date": "Octobre 2026",
+      "desc": "Les championnats du monde de League of Legends",
+      "officialUrl": "https://lolesports.com",
+      "sourceUrl": "https://www.lolesports.com",
+      "sourceName": "LoL Esports",
+      "details": "Les Worlds de League of Legends rassemblent les meilleures équipes des quatre coins du monde. Un mois de compétition intense pour soulever la Summoner's Cup."
+    },
+    {
+      "type": "esport",
+      "event": "CS2 Major 2026",
+      "game": "Counter-Strike 2",
+      "date": "Novembre 2026",
+      "desc": "Le Major de fin d'année sur CS2",
+      "officialUrl": "https://www.counter-strike.net",
+      "sourceUrl": "https://www.hltv.org",
+      "sourceName": "HLTV",
+      "details": "Le Major Counter-Strike 2 est le tournoi le plus important de la scène CS. Les 24 meilleures équipes du monde s'affrontent dans un tournoi à élimination directe pour le titre de champion Major."
+    }
+  ],
+  "drama": [
+    {
+      "type": "drama",
+      "title": "Xbox confirme le portage de plusieurs exclusivités",
+      "desc": "Phil Spencer annonce l'arrivée de titres Xbox first-party sur PS5 et Switch 2",
+      "tag": "Actu",
+      "officialUrl": "https://news.xbox.com",
+      "sourceUrl": "https://www.jeuxvideo.com",
+      "sourceName": "JeuxVideo.com",
+      "details": "Microsoft continue sa stratégie multiplateforme en confirmant l'arrivée de plusieurs titres first-party sur les consoles concurrentes. Cette décision marque un tournant dans l'industrie du jeu vidéo."
+    },
+    {
+      "type": "drama",
+      "title": "Unity licencie 25% de ses effectifs",
+      "desc": "Le moteur de jeu continue sa restructuration massive",
+      "tag": "Drama",
+      "officialUrl": "https://unity.com",
+      "sourceUrl": "https://www.gamekult.com",
+      "sourceName": "Gamekult",
+      "details": "Unity Technologies poursuit sa restructuration avec une nouvelle vague de licenciements massifs. Le créateur du moteur de jeu éponyme cherche à retrouver la rentabilité après une année difficile."
+    },
+    {
+      "type": "drama",
+      "title": "Square Enix revoit sa stratégie",
+      "desc": "Après des ventes décevantes, Square Enix mise sur le multiplateforme",
+      "tag": "Actu",
+      "officialUrl": "https://www.square-enix.com",
+      "sourceUrl": "https://www.ign.com",
+      "sourceName": "IGN",
+      "details": "Square Enix annonce un changement majeur de stratégie : l'éditeur japonais abandonne l'exclusivité temporaire et sortira désormais ses jeux simultanément sur toutes les plateformes."
+    },
+    {
+      "type": "drama",
+      "title": "Grève des doubleurs jeux vidéo à Hollywood",
+      "desc": "Les acteurs réclament une protection contre l'IA générative",
+      "tag": "Drama",
+      "officialUrl": "https://www.sagaftra.org",
+      "sourceUrl": "https://www.jeuxvideo.com",
+      "sourceName": "JeuxVideo.com",
+      "details": "Les doubleurs de jeux vidéo membres de la SAG-AFTRA sont en grève pour obtenir des garanties contractuelles face à l'utilisation croissante de l'intelligence artificielle générative dans le doublage."
+    }
+  ]
+}

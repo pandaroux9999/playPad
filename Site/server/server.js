@@ -879,20 +879,35 @@ async function populateSteamFromAppList() {
       } catch (e) { console.log('[SteamAppList] Échec:', e.message); }
     }
     if (!data?.applist?.apps) {
-      // Fallback: SteamDatabase GitHub (IDs uniquement, noms récupérés plus tard)
+      const existing = await db.getCatalog();
+      // Fallback: SteamDatabase GitHub
       console.log('[SteamAppList] Fallback GitHub...');
-      data = await new Promise((resolve, reject) => {
-        const req = https.get('https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/StoreAppIds.txt', { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
-          let d = '';
-          resp.on('data', c => d += c);
-          resp.on('end', () => {
-            if (resp.statusCode !== 200) return reject(new Error('HTTP ' + resp.statusCode));
-            resolve({ applist: { apps: d.split('\n').filter(Boolean).map(line => { const m = line.match(/^(\d+)/); return m ? { appid: parseInt(m[1]), name: `Steam App ${m[1]}` } : null; }).filter(Boolean) } });
+      const ghUrls = [
+        'https://raw.githubusercontent.com/SteamDatabase/SteamTracking/main/StoreAppIds.txt',
+        'https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/StoreAppIds.txt',
+      ];
+      for (const ghUrl of ghUrls) {
+        try {
+          data = await new Promise((resolve, reject) => {
+            const req = https.get(ghUrl, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
+              let d = '';
+              resp.on('data', c => d += c);
+              resp.on('end', () => {
+                if (resp.statusCode !== 200) return reject(new Error('HTTP ' + resp.statusCode));
+                resolve({ applist: { apps: d.split('\n').filter(Boolean).map(line => { const m = line.match(/^(\d+)/); return m ? { appid: parseInt(m[1]), name: `Steam App ${m[1]}` } : null; }).filter(Boolean) } });
+              });
+            });
+            req.on('error', reject);
+            req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout')); });
           });
-        });
-        req.on('error', reject);
-        req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout')); });
-      });
+          if (data?.applist?.apps) break;
+        } catch (e) { console.log('[SteamAppList] Fallback échec:', e.message); }
+      }
+      // Si toujours rien, utiliser le cache local
+      if (!data?.applist?.apps) {
+        data = { applist: { apps: existing.filter(g => g.game_id.startsWith('steam-') && !g.description).map(g => ({ appid: Number(g.game_id.replace('steam-', '')), name: g.title })) } };
+        console.log('[SteamAppList] Utilisation du cache existant (' + data.applist.apps.length + ' jeux)');
+      }
     }
     const existing = await db.getCatalog();
     const existingIds = new Set(existing.filter(g => g.game_id.startsWith('steam-')).map(g => g.game_id));

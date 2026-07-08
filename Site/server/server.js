@@ -895,12 +895,14 @@ async function populateSteamFromAppList() {
       if (existing < 100) {
         console.log('[Catalog] Peuplement initial du catalogue via RAWG...');
         const count = await populateCatalogFromRAWG(rawgKey);
-        const steamCount = await populateSteamFromAppList();
         await db.mergeCatalogDuplicatesByTitle().catch(() => {});
-        console.log(`[Catalog] ${count} jeux RAWG + ${steamCount} jeux Steam ajoutés au catalogue`);
+        console.log(`[Catalog] ${count} jeux RAWG ajoutés`);
       } else {
-        console.log(`[Catalog] Catalogue déjà peuplé (${existing} jeux), skip`);
+        console.log(`[Catalog] Catalogue déjà peuplé (${existing} jeux), skip RAWG`);
       }
+      // Steam App List toujours importé (ajoute les jeux Steam manquants)
+      const steamCount = await populateSteamFromAppList();
+      if (steamCount > 0) console.log(`[Catalog] ${steamCount} jeux Steam ajoutés`);
     }
   } catch (e) {
     console.error('[Catalog] Erreur peuplement initial:', e.message);

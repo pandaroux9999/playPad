@@ -618,12 +618,19 @@ async function getCatalog() {
     .limit(100000);
   if (error) throw new Error(error.message);
   if (!data) return [];
+  const letterRe = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/;
   data.sort((a, b) => {
-    const aLetter = /^[a-zA-ZÀ-ÿ]/.test(a.title);
-    const bLetter = /^[a-zA-ZÀ-ÿ]/.test(b.title);
+    const aTitle = a.title || '';
+    const bTitle = b.title || '';
+    const aLetter = letterRe.test(aTitle);
+    const bLetter = letterRe.test(bTitle);
     if (aLetter && !bLetter) return -1;
     if (!aLetter && bLetter) return 1;
-    return a.title.localeCompare(b.title, 'fr');
+    const al = aTitle.toLowerCase();
+    const bl = bTitle.toLowerCase();
+    if (al < bl) return -1;
+    if (al > bl) return 1;
+    return 0;
   });
   catalogCache = data;
   return data;
@@ -828,17 +835,10 @@ async function resetWeeklyBoostPoints(userId) {
 async function getTopBoosted(limit = 10) {
   const { data, error } = await supabaseAdmin
     .from('boosts')
-    .select('game_id, count:game_id', { count: 'plain' })
-    .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
-    .limit(0);
-  if (error) {
-    const { data: all, error: e2 } = await supabaseAdmin
-      .from('boosts')
-      .select('game_id');
-    if (e2) throw new Error(e2.message);
-    return aggregateBoostCounts(all, limit);
-  }
-  return aggregateBoostCounts(data, limit);
+    .select('game_id')
+    .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString());
+  if (error) throw new Error(error.message);
+  return aggregateBoostCounts(data || [], limit);
 }
 
 function aggregateBoostCounts(rows, limit) {

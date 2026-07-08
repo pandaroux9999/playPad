@@ -421,6 +421,26 @@ const CATALOGUE = [
   { game_id: "c151", title: "Untitled Goose Game",        platform: "steam",    genre: "Puzzle",           cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/304930/library_600x900.jpg",   year: 2019 },
   { game_id: "c152", title: "Sonic Generations",          platform: "steam",    genre: "Platformer",       cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/212480/library_600x900.jpg",   year: 2011 },
   { game_id: "c153", title: "Cuphead",                    platform: "steam",    genre: "Run & Gun",        cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/317820/library_600x900.jpg",   year: 2017 },
+  // ── Minecraft & Xbox ──
+  { game_id: "c154", title: "Minecraft",                  platform: "pc",       genre: "Sandbox",          cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/432/library_600x900.jpg",      year: 2011 },
+  { game_id: "c155", title: "Halo: The Master Chief Collection", platform: "xbox", genre: "FPS",             cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/976730/library_600x900.jpg",   year: 2019 },
+  { game_id: "c156", title: "Gears 5",                    platform: "xbox",     genre: "TPS",              cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1097840/library_600x900.jpg",  year: 2019 },
+  { game_id: "c157", title: "Forza Motorsport",           platform: "xbox",     genre: "Course",           cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1895880/library_600x900.jpg",  year: 2023 },
+  { game_id: "c158", title: "Sea of Thieves",             platform: "xbox",     genre: "Aventure",         cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/992062/library_600x900.jpg",   year: 2018 },
+  { game_id: "c159", title: "Psychonauts 2",              platform: "xbox",     genre: "Action-Aventure",  cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1325900/library_600x900.jpg",  year: 2021 },
+  // ── Classiques ──
+  { game_id: "c160", title: "Fallout 4",                  platform: "steam",    genre: "RPG",              cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/377160/library_600x900.jpg",   year: 2015 },
+  { game_id: "c161", title: "The Elder Scrolls V: Skyrim", platform: "steam",   genre: "RPG",              cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/72850/library_600x900.jpg",    year: 2011 },
+  { game_id: "c162", title: "Half-Life 2",                platform: "steam",    genre: "FPS",              cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/220/library_600x900.jpg",      year: 2004 },
+  { game_id: "c163", title: "Portal",                     platform: "steam",    genre: "Puzzle",           cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/400/library_600x900.jpg",      year: 2007 },
+  { game_id: "c164", title: "Portal 2",                   platform: "steam",    genre: "Puzzle",           cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/620/library_600x900.jpg",      year: 2011 },
+  { game_id: "c165", title: "Left 4 Dead 2",              platform: "steam",    genre: "FPS",              cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/550/library_600x900.jpg",      year: 2009 },
+  { game_id: "c166", title: "Subnautica",                 platform: "steam",    genre: "Survie",           cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/264710/library_600x900.jpg",   year: 2018 },
+  { game_id: "c167", title: "Don't Starve Together",      platform: "steam",    genre: "Survie",           cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/322330/library_600x900.jpg",   year: 2016 },
+  { game_id: "c168", title: "FTL: Faster Than Light",     platform: "steam",    genre: "Rogue-like",       cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/212680/library_600x900.jpg",   year: 2012 },
+  { game_id: "c169", title: "Risk of Rain 2",             platform: "steam",    genre: "Rogue-lite",       cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/632360/library_600x900.jpg",   year: 2020 },
+  { game_id: "c170", title: "Apex Legends",               platform: "steam",    genre: "Battle Royale",    cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/1172470/library_600x900.jpg",  year: 2019 },
+  { game_id: "c171", title: "Fortnite",                   platform: "epic",     genre: "Battle Royale",    cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2394010/library_600x900.jpg",  year: 2017 },
 ];
 
 const AFFILIATE_CONFIG = {
@@ -794,7 +814,10 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     }
   }, [catalog]);
   useEffect(() => {
-    API.getCatalog().then(d => setCatalog(d.catalog || [])).catch(() => {});
+    API.getCatalog().then(d => {
+      const cat = d.catalog || [];
+      setCatalog(cat.length > 0 ? cat : CATALOGUE);
+    }).catch(() => setCatalog(CATALOGUE));
     API.getTopBoosted().then(d => {
       setTopBoosted(d.top || []);
       if ((d.top || []).length > 0) setShowBoostSection(true);

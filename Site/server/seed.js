@@ -53,6 +53,26 @@ const GAMES_CATALOG = [
   { game_id: 'steam-304930', title: 'Untitled Goose Game', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/304930/library_600x900.jpg', genre: 'Puzzle', year: 2019, developer: 'House House', publisher: 'Panic' },
   { game_id: 'steam-212480', title: 'Sonic Generations', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/212480/library_600x900.jpg', genre: 'Platformer', year: 2011, developer: 'Sonic Team', publisher: 'SEGA' },
   { game_id: 'steam-317820', title: 'Cuphead', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/317820/library_600x900.jpg', genre: 'Run & Gun', year: 2017, developer: 'Studio MDHR', publisher: 'Studio MDHR' },
+  // ── Minecraft & Xbox ──
+  { game_id: 'mojang-minecraft', title: 'Minecraft', platform: 'pc', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/432/library_600x900.jpg', genre: 'Sandbox', year: 2011, developer: 'Mojang', publisher: 'Mojang' },
+  { game_id: 'steam-976730', title: 'Halo: The Master Chief Collection', platform: 'xbox', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/976730/library_600x900.jpg', genre: 'FPS', year: 2019, developer: '343 Industries', publisher: 'Xbox Game Studios' },
+  { game_id: 'steam-1097840', title: 'Gears 5', platform: 'xbox', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1097840/library_600x900.jpg', genre: 'TPS', year: 2019, developer: 'The Coalition', publisher: 'Xbox Game Studios' },
+  { game_id: 'steam-1895880', title: 'Forza Motorsport', platform: 'xbox', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1895880/library_600x900.jpg', genre: 'Course', year: 2023, developer: 'Turn 10', publisher: 'Xbox Game Studios' },
+  { game_id: 'steam-992062', title: 'Sea of Thieves', platform: 'xbox', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/992062/library_600x900.jpg', genre: 'Aventure', year: 2018, developer: 'Rare', publisher: 'Xbox Game Studios' },
+  { game_id: 'steam-1325900', title: 'Psychonauts 2', platform: 'xbox', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1325900/library_600x900.jpg', genre: 'Action-Aventure', year: 2021, developer: 'Double Fine', publisher: 'Xbox Game Studios' },
+  // ── Classiques manquants ──
+  { game_id: 'steam-397060', title: 'Fallout 4', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/377160/library_600x900.jpg', genre: 'RPG', year: 2015, developer: 'Bethesda', publisher: 'Bethesda' },
+  { game_id: 'steam-72850', title: 'The Elder Scrolls V: Skyrim', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/72850/library_600x900.jpg', genre: 'RPG', year: 2011, developer: 'Bethesda', publisher: 'Bethesda' },
+  { game_id: 'steam-220', title: 'Half-Life 2', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/220/library_600x900.jpg', genre: 'FPS', year: 2004, developer: 'Valve', publisher: 'Valve' },
+  { game_id: 'steam-400', title: 'Portal', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/400/library_600x900.jpg', genre: 'Puzzle', year: 2007, developer: 'Valve', publisher: 'Valve' },
+  { game_id: 'steam-620', title: 'Portal 2', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/620/library_600x900.jpg', genre: 'Puzzle', year: 2011, developer: 'Valve', publisher: 'Valve' },
+  { game_id: 'steam-550', title: 'Left 4 Dead 2', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/550/library_600x900.jpg', genre: 'FPS', year: 2009, developer: 'Valve', publisher: 'Valve' },
+  { game_id: 'steam-264710', title: 'Subnautica', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/264710/library_600x900.jpg', genre: 'Survie', year: 2018, developer: 'Unknown Worlds', publisher: 'Unknown Worlds' },
+  { game_id: 'steam-322330', title: 'Don\'t Starve Together', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/322330/library_600x900.jpg', genre: 'Survie', year: 2016, developer: 'Klei Entertainment', publisher: 'Klei Entertainment' },
+  { game_id: 'steam-212680', title: 'FTL: Faster Than Light', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/212680/library_600x900.jpg', genre: 'Rogue-like', year: 2012, developer: 'Subset Games', publisher: 'Subset Games' },
+  { game_id: 'steam-367520', title: 'Risk of Rain 2', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/632360/library_600x900.jpg', genre: 'Rogue-lite', year: 2020, developer: 'Hopoo Games', publisher: 'Gearbox' },
+  { game_id: 'steam-1172470', title: 'Apex Legends', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1172470/library_600x900.jpg', genre: 'Battle Royale', year: 2019, developer: 'Respawn', publisher: 'Electronic Arts' },
+  { game_id: 'epic-fortnite', title: 'Fortnite', platform: 'epic', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/2394010/library_600x900.jpg', genre: 'Battle Royale', year: 2017, developer: 'Epic Games', publisher: 'Epic Games' },
 ];
 
 const STATUSES = ['not_started', 'playing', 'completed', 'dropped', 'paused'];
@@ -96,7 +116,7 @@ async function seedDemoData() {
     const id = await db.createUser(u.username, u.display_name, hashed, u.email);
     if (u.avatar_url) await db.supabaseAdmin.from('users').update({ avatar_url: u.avatar_url }).eq('id', id);
     // Booster point initial
-    await db.supabaseAdmin.from('booster_points').upsert({ user_id: id, points: 3, claimed_first_login: true }, { onConflict: 'user_id' });
+    await db.supabaseAdmin.from('booster_points').upsert({ user_id: id, points: 3, claimed_first_login: true }, { onConflict: 'user_id' }).catch(() => {});
     userIds.push(id);
     console.log('[Seed] Utilisateur créé:', u.username, 'id:', id);
   }
@@ -115,38 +135,39 @@ async function seedDemoData() {
         user_id: userId, game_id: g.game_id, title: g.title, platform: g.platform,
         cover: g.cover, genre: g.genre, year: g.year, status, playtime,
         user_rating: rating, review_text: reviewText, review_public: hasReview, has_review: hasReview,
-      }, { onConflict: 'user_id, game_id' });
+      }, { onConflict: 'user_id, game_id' }).catch(() => {});
       // Ensure in catalog
-      await db.supabaseAdmin.from('catalog').upsert(g, { onConflict: 'game_id', ignoreDuplicates: true });
+      await db.supabaseAdmin.from('catalog').upsert(g, { onConflict: 'game_id', ignoreDuplicates: true }).catch(() => {});
     }
     // Wishlist
     const wishGames = shuffle(GAMES_CATALOG).slice(0, 3);
     for (const g of wishGames) {
-      await db.supabaseAdmin.from('wishlist').upsert({ user_id: userId, game_id: g.game_id }, { onConflict: 'user_id, game_id' });
+      await db.supabaseAdmin.from('wishlist').upsert({ user_id: userId, game_id: g.game_id }, { onConflict: 'user_id, game_id' }).catch(() => {});
     }
     // Top 3
     const topGames = userGames.filter(g => g.year >= 2020).slice(0, 3);
     for (let i = 0; i < topGames.length; i++) {
-      await db.supabaseAdmin.from('top_three').upsert({ user_id: userId, game_id: topGames[i].game_id, position: i + 1 }, { onConflict: 'user_id, position' });
+      await db.supabaseAdmin.from('top_three').upsert({ user_id: userId, game_id: topGames[i].game_id, position: i + 1 }, { onConflict: 'user_id, position' }).catch(() => {});
     }
     console.log('[Seed]', userGames.length, 'jeux + wishlist + top 3 pour userId', userId);
   }
 
   console.log('[Seed] Ajout des reviews communautaires...');
-  for (const g of shuffle(GAMES_CATALOG).slice(0, 12)) {
-    for (const userId of shuffle(userIds).slice(0, 1 + Math.floor(Math.random() * 3))) {
-      await db.supabaseAdmin.from('community_reviews').upsert({
-        user_id: userId, game_id: g.game_id, rating: 3 + Math.floor(Math.random() * 3),
-        review_text: pick(REVIEW_TEXTS),
-      }, { onConflict: 'user_id, game_id' });
+  for (const g of shuffle(GAMES_CATALOG).slice(0, 15)) {
+    for (const userId of shuffle(userIds).slice(0, 2 + Math.floor(Math.random() * 3))) {
+      const rating = 3 + Math.floor(Math.random() * 3);
+      await db.supabaseAdmin.from('community_reviews').insert({
+        user_id: userId, game_id: g.game_id, rating,
+        review_text: rating >= 4 ? pick(REVIEW_TEXTS) : 'Pas mal.',
+      }).catch(() => {});
     }
   }
 
   console.log('[Seed] Ajout des relations d\'amitié...');
   const friendPairs = [[0,1],[0,2],[1,3],[2,4],[3,4],[1,2]];
   for (const [i, j] of friendPairs) {
-    await db.supabaseAdmin.from('friends').upsert({ user_id: userIds[i], friend_id: userIds[j], status: 'accepted' }, { onConflict: 'user_id, friend_id' });
-    await db.supabaseAdmin.from('friends').upsert({ user_id: userIds[j], friend_id: userIds[i], status: 'accepted' }, { onConflict: 'user_id, friend_id' });
+    await db.supabaseAdmin.from('friends').upsert({ user_id: userIds[i], friend_id: userIds[j], status: 'accepted' }, { onConflict: 'user_id, friend_id' }).catch(() => {});
+    await db.supabaseAdmin.from('friends').upsert({ user_id: userIds[j], friend_id: userIds[i], status: 'accepted' }, { onConflict: 'user_id, friend_id' }).catch(() => {});
   }
 
   console.log('[Seed] Ajout des suggestions de jeux...');
@@ -167,17 +188,21 @@ async function seedDemoData() {
   } catch (e) { catalogGames = GAMES_CATALOG.map(g => ({ game_id: g.game_id })); }
   const shuffledCatalog = shuffle(catalogGames);
   const boostedGames = shuffledCatalog.slice(0, 12);
+  const boostPairs = new Set();
   for (const g of boostedGames) {
-    const boostCount = 3 + Math.floor(Math.random() * 15);
-    const users = shuffle(userIds);
-    for (let b = 0; b < Math.min(boostCount, users.length * 3); b++) {
-      const u = pick(userIds);
+    const targetCount = 3 + Math.floor(Math.random() * 8);
+    let count = 0;
+    for (const u of shuffle(userIds)) {
+      if (count >= targetCount) break;
+      const key = `${u}-${g.game_id}`;
+      if (boostPairs.has(key)) continue;
+      boostPairs.add(key);
       const daysAgo = Math.floor(Math.random() * 6);
       await db.supabaseAdmin.from('boosts').insert({
-        user_id: u,
-        game_id: g.game_id,
+        user_id: u, game_id: g.game_id,
         created_at: new Date(Date.now() - daysAgo * 86400000).toISOString(),
       }).catch(() => {});
+      count++;
     }
   }
 

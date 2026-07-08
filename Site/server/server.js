@@ -919,8 +919,7 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
 }
 
 async function populateSteamFromAppList() {
-  const steamKey = process.env.STEAM_API_KEY;
-  if (!steamKey) { console.log('[SteamAppList] STEAM_API_KEY non configurée, skip'); return 0; }
+  // SteamSpy est gratuit, pas de clé API nécessaire
   try {
     console.log('[SteamAppList] Importation de tous les jeux Steam...');
     const nonGameKeywords = ['soundtrack', 'dlc pack', 'wallpaper', 'sdk', 'artbook', 'season pass', 'expansion pack', 'playtest'];
@@ -1012,12 +1011,16 @@ async function populateSteamFromAppList() {
       } else {
         console.log(`[Catalog] Catalogue déjà peuplé (${existing} jeux), skip RAWG`);
       }
-      // Steam App List toujours importé (ajoute les jeux Steam manquants)
-      const steamCount = await populateSteamFromAppList();
-      if (steamCount > 0) console.log(`[Catalog] ${steamCount} jeux Steam ajoutés`);
     }
   } catch (e) {
     console.error('[Catalog] Erreur peuplement initial:', e.message);
+  }
+  // Steam App List : toujours importé (ne dépend pas de RAWG, utilise STEAM_API_KEY ou SteamSpy gratuit)
+  try {
+    const steamCount = await populateSteamFromAppList();
+    if (steamCount > 0) console.log(`[Catalog] ${steamCount} jeux Steam ajoutés`);
+  } catch (e) {
+    console.error('[Catalog] Erreur Steam App List:', e.message);
   }
   // Données de démonstration après le catalogue
   try {

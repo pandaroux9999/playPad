@@ -850,84 +850,56 @@ async function populateSteamFromAppList() {
   if (!steamKey) { console.log('[SteamAppList] STEAM_API_KEY non configurée, skip'); return 0; }
   let total = 0;
   try {
-    console.log('[SteamAppList] Importation de tous les jeux Steam via GetAppList...');
-    const urls = [
+    console.log('[SteamAppList] Importation de tous les jeux Steam...');
+    let data = null;
+    const srcUrls = [
+      'https://steamspy.com/api.php?request=all',
       'https://api.steampowered.com/ISteamApps/GetAppList/v2/?key=' + encodeURIComponent(steamKey) + '&format=json',
       'https://api.steampowered.com/ISteamApps/GetAppList/v1/?key=' + encodeURIComponent(steamKey) + '&format=json',
-      'https://steamcommunity.com/ISteamApps/GetAppList/v2/?key=' + encodeURIComponent(steamKey) + '&format=json',
-      'https://api.steamcmd.net/v1/GetAppList',
     ];
-    let data = null;
-    for (const url of urls) {
+    for (const url of srcUrls) {
       try {
         data = await new Promise((resolve, reject) => {
           const req = https.get(url, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
             let d = '';
             resp.on('data', c => d += c);
             resp.on('end', () => {
-              if (resp.statusCode !== 200) {
-                console.log('[SteamAppList] Code', resp.statusCode, 'Réponse:', d.slice(0, 300));
-                return reject(new Error('HTTP ' + resp.statusCode));
-              }
+              if (resp.statusCode !== 200) return reject(new Error('HTTP ' + resp.statusCode));
               try { resolve(JSON.parse(d)); }
               catch (e) { reject(e); }
             });
           });
           req.on('error', reject);
-          req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout')); });
+          req.setTimeout(60000, () => { req.destroy(); reject(new Error('Timeout')); });
         });
-        if (data?.applist?.apps) break;
-        // Adaptation pour api.steamcmd.net
-        if (data?.data?.list) {
-          const apps = Object.values(data.data.list).filter(v => v && v.appid).map(v => ({ appid: v.appid, name: v.name || '' }));
-          if (apps.length > 0) { data = { applist: { apps } }; break; }
-        }
-      } catch (e) { console.log('[SteamAppList] Échec:', e.message); }
+        if (data) break;
+      } catch (e) { console.log('[SteamAppList] Échec source:', e.message); }
     }
-    if (!data?.applist?.apps) {
+    // Convertir les différents formats en applist.apps
+    let apps = [];
+    if (data?.applist?.apps) apps = data.applist.apps;
+    else if (typeof data === 'object' && !data.applist) {
+      // Format SteamSpy: { "appid": { appid, name, developer, publisher, tags, ... }, ... }
+      apps = Object.entries(data).filter(([, v]) => v && v.name).map(([k, v]) => ({
+        appid: parseInt(k),
+        name: v.name,
+        developer: v.developer || '',
+        publisher: v.publisher || '',
+        genre: v.tags ? Object.keys(v.tags).slice(0, 5).join(', ') : '',
+      }));
+      console.log('[SteamAppList]', apps.length, 'jeux récupérés via SteamSpy');
+    }
+    if (apps.length === 0) {
       const existing = await db.getCatalog();
-      console.log('[SteamAppList] Fallback sources...');
-      const ghUrls = [
-        'https://raw.githubusercontent.com/SteamDatabase/SteamTracking/main/StoreAppIds.txt',
-        'https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/StoreAppIds.txt',
-        'https://raw.githubusercontent.com/SteamDatabase/SteamAppList/main/steam_apps.json',
-      ];
-      for (const ghUrl of ghUrls) {
-        try {
-          const raw = await new Promise((resolve, reject) => {
-            const req = https.get(ghUrl, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
-              let d = '';
-              resp.on('data', c => d += c);
-              resp.on('end', () => {
-                if (resp.statusCode !== 200) return reject(new Error('HTTP ' + resp.statusCode));
-                resolve(d);
-              });
-            });
-            req.on('error', reject);
-            req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout')); });
-          });
-          if (ghUrl.endsWith('.json')) {
-            const json = JSON.parse(raw);
-            const apps = Object.entries(json).map(([k, v]) => ({ appid: parseInt(k), name: v.name || '' }));
-            data = { applist: { apps } };
-          } else {
-            data = { applist: { apps: raw.split('\n').filter(Boolean).map(line => { const m = line.match(/^(\d+)/); return m ? { appid: parseInt(m[1]), name: `Steam App ${m[1]}` } : null; }).filter(Boolean) } };
-          }
-          if (data?.applist?.apps?.length > 0) break;
-        } catch (e) { console.log('[SteamAppList] Fallback échec:', e.message); }
-      }
-      // Dernier recours : utiliser les jeux déjà dans le catalogue
-      if (!data?.applist?.apps || data.applist.apps.length === 0) {
-        data = { applist: { apps: existing.filter(g => g.game_id.startsWith('steam-') && !g.description).map(g => ({ appid: Number(g.game_id.replace('steam-', '')), name: g.title })) } };
-        console.log('[SteamAppList] Utilisation du cache existant (' + data.applist.apps.length + ' jeux)');
-      }
+      console.log('[SteamAppList] Aucune source distante disponible, utilisation du cache local');
+      apps = existing.filter(g => g.game_id.startsWith('steam-') && !g.description).map(g => ({ appid: Number(g.game_id.replace('steam-', '')), name: g.title }));
     }
     const existing = await db.getCatalog();
     const existingIds = new Set(existing.filter(g => g.game_id.startsWith('steam-')).map(g => g.game_id));
     const nonGameKeywords = ['soundtrack', 'dlc pack', 'wallpaper', 'sdk', 'artbook', 'season pass', 'expansion pack', 'playtest'];
     const batch = [];
-    const totalApps = data.applist.apps.length;
-    for (const app of data.applist.apps) {
+    const totalApps = apps.length;
+    for (const app of apps) {
       const gameId = `steam-${app.appid}`;
       if (existingIds.has(gameId)) continue;
       const name = (app.name || '').trim();
@@ -936,7 +908,7 @@ async function populateSteamFromAppList() {
       batch.push({
         game_id: gameId, title: name, platform: 'steam',
         cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${app.appid}/library_600x900.jpg`,
-        genre: '', year: 0, developer: '', publisher: ''
+        genre: app.genre || '', year: 0, developer: app.developer || '', publisher: app.publisher || ''
       });
       existingIds.add(gameId);
       if (batch.length >= 500) {

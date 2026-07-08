@@ -396,9 +396,12 @@ app.get('/api/games/ratings', async (req, res) => {
 app.get('/api/catalog', catalogLimiter, async (req, res) => {
   try {
     const catalog = await db.getCatalog();
-    res.json({ catalog });
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 100000, 100000);
+    const offset = (page - 1) * limit;
+    const total = catalog.length;
+    res.json({ catalog: catalog.slice(offset, offset + limit), total, page, limit });
   } catch (err) {
-    console.error('[Catalog] Error:', err.message);
     res.status(500).json({ error: 'Erreur interne' });
   }
 });
@@ -879,7 +882,7 @@ async function populateSteamFromAppList() {
       req.on('error', reject);
       req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout')); });
     });
-    const spyToEntries = (d) => Object.entries(d || {}).filter(([, v]) => v && v.name).map(([k, v]) => ({
+    const spyToEntries = (d, limit) => Object.entries(d || {}).slice(0, limit || 99999).filter(([, v]) => v && v.name).map(([k, v]) => ({
       appid: parseInt(k), name: v.name, developer: v.developer || '', publisher: v.publisher || '',
       genre: v.tags ? Object.keys(v.tags).slice(0, 5).join(', ') : '',
     }));
@@ -917,8 +920,8 @@ async function populateSteamFromAppList() {
     const genres = ['Action', 'Adventure', 'Casual', 'Indie', 'Massively%20Multiplayer', 'Racing', 'RPG', 'Simulation', 'Sports', 'Strategy', 'Free%20to%20Play', 'Early%20Access', 'Animation%20%26%20Modeling', 'Audio%20Production', 'Design%20%26%20Illustration', 'Education', 'Game%20Development', 'Photo%20Editing', 'Software%20Training', 'Utilities', 'Video%20Production', 'Web%20Publishing'];
     for (const genre of genres) {
       try {
-        const d = await fetchSteamSpy('https://steamspy.com/api.php?request=genre&genre=' + genre);
-        const entries = buildEntries(spyToEntries(d)).filter(e => { if (seenIds.has(e.game_id)) return false; seenIds.add(e.game_id); return true; });
+      const d = await fetchSteamSpy('https://steamspy.com/api.php?request=genre&genre=' + genre);
+      const entries = buildEntries(spyToEntries(d, 500)).filter(e => { if (seenIds.has(e.game_id)) return false; seenIds.add(e.game_id); return true; });
         const added = await upsertBatch(entries);
         totalAdded += added;
         console.log('[SteamAppList] Genre', decodeURIComponent(genre), ':', entries.length, 'jeux,', added, 'nouveaux (total', totalAdded, 'nouveaux)');

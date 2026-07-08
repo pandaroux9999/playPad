@@ -34,7 +34,6 @@ const cspDirectives = {
 };
 if (process.env.NODE_ENV === 'production') cspDirectives.upgradeInsecureRequests = [];
 app.use(helmet({
-  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
   contentSecurityPolicy: { directives: cspDirectives },
 }));
 

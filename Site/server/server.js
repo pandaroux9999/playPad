@@ -22,21 +22,20 @@ if (!SESSION_SECRET || SESSION_SECRET.length < 16) {
 }
 
 // Sécurité : headers HTTP (CSP, HSTS, X-Frame-Options, etc.)
+const cspDirectives = {
+  defaultSrc: ["'self'"],
+  scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdn.tailwindcss.com"],
+  styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
+  fontSrc: ["'self'", "https://fonts.gstatic.com"],
+  imgSrc: ["'self'", "data:", "https://cdn.cloudflare.steamstatic.com", "https://steamcdn-a.akamaihd.net", "https://media.rawg.io"],
+  connectSrc: ["'self'", "http://localhost:3456"],
+  frameSrc: ["'none'"],
+  objectSrc: ["'none'"],
+};
+if (process.env.NODE_ENV === 'production') cspDirectives.upgradeInsecureRequests = [];
 app.use(helmet({
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdn.tailwindcss.com"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https://cdn.cloudflare.steamstatic.com", "https://steamcdn-a.akamaihd.net", "https://media.rawg.io"],
-      connectSrc: ["'self'", "http://localhost:3456"],
-      frameSrc: ["'none'"],
-      objectSrc: ["'none'"],
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? true : null,
-    },
-  },
+  contentSecurityPolicy: { directives: cspDirectives },
 }));
 
 // Sécurité : rate limiting global (200 req / 15 min par IP)

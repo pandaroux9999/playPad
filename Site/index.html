@@ -761,6 +761,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const [boostedGamesLocal, setBoostedGamesLocal] = useState(new Set());
   const [showBoostSection, setShowBoostSection] = useState(false);
   const [showBoosterGames, setShowBoosterGames] = useState(true);
+  const [revealedLetters, setRevealedLetters] = useState([]);
   useEffect(() => {
     API.getCatalog().then(d => setCatalog(d.catalog || [])).catch(() => {});
     API.getTopBoosted().then(d => {
@@ -784,6 +785,33 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   ), [catalog, activePlatform, activeGenre, search, filterRatingMin, filterRatingMax, filterYearMin, filterYearMax, filterDeveloper]);
   const hasActiveFilters = activePlatform !== "all" || activeGenre !== "all" || filterRatingMin > 0 || filterRatingMax < 5 || filterYearMin || filterYearMax || filterDeveloper;
   const clearFilters = () => { setActivePlatform("all"); setActiveGenre("all"); setFilterRatingMin(0); setFilterRatingMax(5); setFilterYearMin(""); setFilterYearMax(""); setFilterDeveloper(""); };
+  const currentYear = new Date().getFullYear();
+  const newReleases = useMemo(() => {
+    if (search) return [];
+    return catalog.filter(g => g.year && g.year >= currentYear - 1);
+  }, [catalog, search, currentYear]);
+  const topRated = useMemo(() => {
+    if (search) return [];
+    return [...catalog].filter(g => (ratings?.[g.game_id] || 0) >= 4).sort((a, b) => (ratings?.[b.game_id] || 0) - (ratings?.[a.game_id] || 0)).slice(0, 20);
+  }, [catalog, ratings, search]);
+  const boostedGameIds = useMemo(() => new Set(topBoosted.map(b => b.game_id)), [topBoosted]);
+  const letters = useMemo(() => [...new Set(catalog.map(g => (g.title || '?')[0].toUpperCase()))].sort(), [catalog]);
+  useEffect(() => {
+    if (letters.length === 0) { setRevealedLetters([]); return; }
+    setRevealedLetters([letters[0]]);
+    let idx = 0;
+    const timer = setInterval(() => {
+      idx++;
+      if (idx >= letters.length) { clearInterval(timer); return; }
+      setRevealedLetters(prev => [...prev, letters[idx]]);
+    }, 250);
+    return () => clearInterval(timer);
+  }, [letters.length]);
+  const allGamesVisible = useMemo(() => {
+    if (search || hasActiveFilters) return filtered;
+    if (revealedLetters.length === 0) return [];
+    return filtered.filter(g => revealedLetters.includes((g.title || '?')[0].toUpperCase()));
+  }, [filtered, revealedLetters, search, hasActiveFilters]);
   const handleBoost = async (gameId, e) => {
     if (e) e.stopPropagation();
     if (boostedGamesLocal.has(gameId)) { showToast?.('Tu as déjà boosté ce jeu'); return; }
@@ -792,6 +820,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       await API.boostGame(gameId);
       setBoostPoints(prev => Math.max(0, (prev || 0) - 1));
       setBoostedGamesLocal(prev => new Set(prev).add(gameId));
+      setShowBoostSection(true);
       showToast?.('Jeu boosté ! +1 point communautaire');
       API.getTopBoosted().then(d => setTopBoosted(d.top || [])).catch(() => {});
     } catch (err) { showToast?.(err.message); }
@@ -882,15 +911,47 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
           })
         )
       ),
+      newReleases.length > 0 && h('div', { className: "mb-4" },
+        h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, h('span', { style: { color: P2 } }, "\uD83C\uDF89"), " Nouveaut\u00e9s"),
+        h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
+          newReleases.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },
+            h(GameCard, {
+              game: { ...game, userRating: ratings?.[game.game_id] || 0 },
+              onClick: () => onSelect(game),
+              wishlistIds, onWishlist: onToggleWishlist,
+              topThreeIds, onCrown: onToggleTopThree,
+              boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
+              small: true,
+            })
+          ))
+        )
+      ),
+      topRated.length > 0 && h('div', { className: "mb-4" },
+        h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, h(Star, { size: 10, fill: "#f59e0b", stroke: "#f59e0b" }), " Les mieux not\u00e9s"),
+        h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
+          topRated.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },
+            h(GameCard, {
+              game: { ...game, userRating: ratings?.[game.game_id] || 0 },
+              onClick: () => onSelect(game),
+              wishlistIds, onWishlist: onToggleWishlist,
+              topThreeIds, onCrown: onToggleTopThree,
+              boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
+              small: true,
+            })
+          ))
+        )
+      ),
       filtered.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
-        : h('div', null,
+        : !search && !hasActiveFilters && revealedLetters.length === 0
+          ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Loader, { size: 24, className: "animate-spin mb-2", style: { color: P1 } }), h('p', { className: "text-xs" }, "Chargement des jeux..."))
+          : h('div', null,
             h('div', { className: "flex items-center justify-between mb-3" },
-              h('p', { className: "text-[10px] font-bold text-muted-foreground uppercase tracking-wider" }, "Tous les jeux"),
+              h('p', { className: "text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2" }, "Tous les jeux", revealedLetters.length > 0 && revealedLetters.length < letters.length && h('span', { className: "text-[9px] font-normal" }, revealedLetters.join(' ') + ' ...')),
               boosterPoints > 0 && h('div', { className: "flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold", style: { background: `${P1}15`, color: P1 } }, h(Zap, { size: 10, fill: P1 }), boosterPoints + " point" + (boosterPoints > 1 ? "s" : "") + " booster")
             ),
             h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" },
-              filtered.map(game => {
+              allGamesVisible.length > 0 ? allGamesVisible.map(game => {
                 const hasBoosted = userBoostedSet?.has(game.game_id);
                 const boostCount = topBoosted.find(b => b.game_id === game.game_id)?.count || 0;
                 return h(GameCard, {
@@ -906,7 +967,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                   boosterBtn: boosterPoints > 0 && !hasBoosted ? () => onBoostGame?.(game.game_id) : null,
                   boosterActive: hasBoosted,
                 });
-              })
+              }) : null
             ),
           )
     )

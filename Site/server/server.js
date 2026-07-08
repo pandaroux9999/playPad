@@ -27,7 +27,7 @@ const cspDirectives = {
   scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdn.tailwindcss.com"],
   styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
   fontSrc: ["'self'", "https://fonts.gstatic.com"],
-  imgSrc: ["'self'", "data:", "https://cdn.cloudflare.steamstatic.com", "https://steamcdn-a.akamaihd.net", "https://media.rawg.io"],
+  imgSrc: ["'self'", "data:", "https://cdn.cloudflare.steamstatic.com", "https://steamcdn-a.akamaihd.net", "https://media.rawg.io", "https://images.igdb.com"],
   connectSrc: ["'self'", "http://localhost:3456"],
   frameSrc: ["'none'"],
   objectSrc: ["'none'"],
@@ -312,10 +312,17 @@ app.get('/api/reviews/feed', requireAuth, async (req, res) => {
   try {
     const reviews = await db.getAllPublicReviews();
     const ids = reviews.map(r => r.id);
-    const [votes, userVotes] = await Promise.all([
-      ids.length ? db.getReviewVotes(ids) : {},
-      db.getUserReviewVotes(req.session.userId),
-    ]);
+    let votes = {}, userVotes = {};
+    try {
+      const results = await Promise.all([
+        ids.length ? db.getReviewVotes(ids) : {},
+        db.getUserReviewVotes(req.session.userId),
+      ]);
+      votes = results[0];
+      userVotes = results[1];
+    } catch (e) {
+      // review_votes table may not exist yet
+    }
     const enriched = reviews.map(r => ({
       ...r,
       thumbs_up: votes[r.id]?.up || 0,
@@ -335,7 +342,7 @@ app.post('/api/reviews/:id/vote', requireAuth, async (req, res) => {
     const { vote } = req.body;
     if (![1, -1, 0].includes(vote)) return res.status(400).json({ error: 'Vote invalide' });
     if (vote === 0) {
-      await db.supabaseAdmin.from('review_votes').delete().eq('user_id', req.session.userId).eq('review_id', reviewId);
+      await db.supabaseAdmin.from('review_votes').delete().eq('user_id', req.session.userId).eq('review_id', reviewId).catch(() => {});
     } else {
       await db.voteReview(req.session.userId, reviewId, vote);
     }
@@ -1114,6 +1121,8 @@ async function populateSteamFromAppList() {
       if (updated > 0) { db.invalidateCatalogCache(); console.log('[AgeRating]', updated, 'jeux notés par genre'); }
     }
   } catch (e) { console.error('[AgeRating] Erreur:', e.message); }
+  // Démarre le rafraîchissement périodique des actualités
+  startNewsRefresh();
 })();
 
 function rawgApiGet(url) {
@@ -1212,7 +1221,7 @@ async function populateCatalogFromIGDB(clientId, clientSecret) {
             game_id: `igdb-${g.id}`,
             title: g.name,
             platform: plat.prefix,
-            cover: g.cover?.url ? 'https:' + g.cover.url.replace('t_thumb', 't_cover_big') : '',
+      cover: g.cover?.url ? (g.cover.url.startsWith('//') ? 'https:' : '') + g.cover.url.replace('t_thumb', 't_cover_big') : '',
             genre: (g.genres || []).map(gen => gen.name).join(', '),
             year: g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : 0,
           });
@@ -1912,6 +1921,224 @@ app.get('/api/boost/count/:gameId', async (req, res) => {
   } catch (err) {
     console.error('[BoostCount] Error:', err.message);
     res.json({ gameId: req.params.gameId, count: 0 });
+  }
+});
+
+// ─── NEWS : Actualités temps réel ──────────────────────────
+// Sources : IGDB (releases), RSS feeds (drama/actu), Pandascore/Liquipedia (esport)
+const NEWS_REFRESH_INTERVAL = 30 * 60 * 1000; // 30 min
+let newsRefreshTimer = null;
+
+// Helper HTTP GET (texte)
+function httpGet(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
+      let data = '';
+      resp.on('data', c => data += c);
+      resp.on('end', () => resolve(data));
+    }).on('error', reject);
+  });
+}
+
+// ─── RSS Parser simple (sans dépendance) ──────────────────
+function parseRSS(xml) {
+  const items = [];
+  const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+  let match;
+  while ((match = itemRegex.exec(xml)) !== null) {
+    const block = match[1];
+    const get = (tag) => {
+      const m = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i').exec(block);
+      return m ? m[1].trim() : '';
+    };
+    const title = get('title');
+    const desc = get('description').replace(/<[^>]*>/g, '').trim();
+    const link = get('link');
+    const pubDate = get('pubDate');
+    if (title) items.push({ title, desc: desc.slice(0, 300), link, pubDate });
+  }
+  return items;
+}
+
+// ─── 1. FETCH : Sorties jeux via IGDB ─────────────────────
+async function fetchIGDBReleases(clientId, clientSecret) {
+  try {
+    const token = await igdbGetToken(clientId, clientSecret);
+    const now = Math.floor(Date.now() / 1000);
+    const sixMonths = now + 180 * 24 * 3600;
+    const body = `fields name,first_release_date,cover.url,genres.name,summary,platforms.name; where first_release_date >= ${now} & first_release_date <= ${sixMonths} & cover.url != null; sort first_release_date asc; limit 20;`;
+    const data = await igdbApiGet('https://api.igdb.com/v4/games', clientId, token, body);
+    if (!Array.isArray(data)) return [];
+    return data.map(g => ({
+      type: 'release',
+      date: g.first_release_date ? new Date(g.first_release_date * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '2026',
+      title: g.name || 'Titre inconnu',
+      desc: (g.summary || '').slice(0, 120) || `Nouveau jeu ${g.platforms?.[0]?.name || ''}`.trim(),
+      cover: g.cover?.url ? 'https:' + g.cover.url.replace('t_thumb', 't_cover_big') : '',
+      officialUrl: '',
+      sourceUrl: `https://www.igdb.com/games/${(g.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      sourceName: 'IGDB',
+      details: g.summary || 'Aucune description disponible.',
+      platforms: (g.platforms || []).map(p => p.name).join(', '),
+    }));
+  } catch (e) {
+    console.error('[News] IGDB error:', e.message);
+    return [];
+  }
+}
+
+// ─── 2. FETCH : Drama/Actu via RSS ────────────────────────
+const DRAMA_RSS_FEEDS = [
+  { url: 'https://www.jeuxvideo.com/rss/rss.xml', name: 'JeuxVideo.com' },
+  { url: 'https://www.gamekult.com/feed/actualites.xml', name: 'Gamekult' },
+];
+
+async function fetchDramaFromRSS() {
+  const items = [];
+  for (const feed of DRAMA_RSS_FEEDS) {
+    try {
+      const xml = await httpGet(feed.url);
+      const parsed = parseRSS(xml);
+      for (const p of parsed.slice(0, 5)) {
+        const lower = (p.title + ' ' + p.desc).toLowerCase();
+        const tag = lower.includes('licencie') || lower.includes('greve') || lower.includes('controvers') || lower.includes('polemique') || lower.includes('drama')
+          ? 'Drama' : 'Actu';
+        items.push({
+          type: 'drama',
+          title: p.title,
+          desc: p.desc.slice(0, 150),
+          tag,
+          officialUrl: p.link,
+          sourceUrl: p.link,
+          sourceName: feed.name,
+          details: p.desc.slice(0, 500),
+          pubDate: p.pubDate,
+        });
+      }
+    } catch (e) {
+      console.error(`[News] RSS error ${feed.name}:`, e.message);
+    }
+  }
+  items.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
+  return items.slice(0, 15);
+}
+
+// ─── 3. FETCH : E-Sport via RSS ────────────────────────────
+const ESPORT_RSS_FEEDS = [
+  { url: 'https://www.hltv.org/rss/news', name: 'HLTV', game: 'Counter-Strike 2' },
+];
+
+async function fetchEsportFromRSS() {
+  const items = [];
+  for (const feed of ESPORT_RSS_FEEDS) {
+    try {
+      const xml = await httpGet(feed.url);
+      const parsed = parseRSS(xml);
+      for (const p of parsed.slice(0, 8)) {
+        const lower = (p.title + ' ' + p.desc).toLowerCase();
+        let event = p.title;
+        let date = '';
+        const dateMatch = p.title.match(/(\d{4})/);
+        if (dateMatch) date = dateMatch[1];
+        items.push({
+          type: 'esport',
+          event,
+          game: feed.game,
+          date,
+          desc: p.desc.slice(0, 120) || `Actualité ${feed.game}`,
+          officialUrl: p.link,
+          sourceUrl: p.link,
+          sourceName: feed.name,
+          details: p.desc.slice(0, 500),
+          pubDate: p.pubDate,
+        });
+      }
+    } catch (e) {
+      console.error(`[News] Esport RSS error ${feed.name}:`, e.message);
+    }
+  }
+  items.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
+  return items.slice(0, 12);
+}
+
+// ─── 4. REFRESH complet ────────────────────────────────────
+async function refreshAllNews() {
+  console.log('[News] Rafraîchissement des actualités...');
+  const results = { releases: 0, esport: 0, drama: 0 };
+
+  const igdbId = process.env.TWITCH_CLIENT_ID;
+  const igdbSecret = process.env.TWITCH_CLIENT_SECRET;
+
+  if (igdbId && igdbSecret) {
+    const releases = await fetchIGDBReleases(igdbId, igdbSecret);
+    if (releases.length > 0) {
+      await db.replaceNewsCache('releases', releases);
+      results.releases = releases.length;
+    }
+  } else {
+    console.log('[News] TWITCH_CLIENT_ID/SECRET non configurés, skip IGDB releases');
+  }
+
+  const drama = await fetchDramaFromRSS();
+  if (drama.length > 0) {
+    await db.replaceNewsCache('drama', drama);
+    results.drama = drama.length;
+  }
+
+  const esport = await fetchEsportFromRSS();
+  if (esport.length > 0) {
+    await db.replaceNewsCache('esport', esport);
+    results.esport = esport.length;
+  }
+
+  console.log(`[News] ✅ Rafraîchi : ${results.releases} releases, ${results.drama} drama, ${results.esport} esport`);
+  return results;
+}
+
+function startNewsRefresh() {
+  if (newsRefreshTimer) clearInterval(newsRefreshTimer);
+  // Premier refresh immédiat
+  refreshAllNews().catch(e => console.error('[News] Erreur premier refresh:', e.message));
+  // Puis toutes les 30 min
+  newsRefreshTimer = setInterval(() => {
+    refreshAllNews().catch(e => console.error('[News] Erreur refresh périodique:', e.message));
+  }, NEWS_REFRESH_INTERVAL);
+}
+
+// ─── Routes News ───────────────────────────────────────────
+const newsLimiter = rateLimit({ windowMs: 60000, max: 30, message: { error: 'Trop de requêtes actualités' } });
+
+function loadNewsFallback() {
+  try {
+    const raw = require('fs').readFileSync(path.join(__dirname, 'data', 'news.json'), 'utf-8');
+    return JSON.parse(raw);
+  } catch (e) {
+    return { releases: [], esport: [], drama: [] };
+  }
+}
+
+app.get('/api/news', newsLimiter, async (req, res) => {
+  try {
+    const data = await db.getNewsFromCache();
+    const hasData = (data.releases?.length || 0) + (data.esport?.length || 0) + (data.drama?.length || 0) > 0;
+    if (hasData) {
+      res.json(data);
+    } else {
+      // Fallback vers le fichier JSON si le cache DB est vide
+      res.json(loadNewsFallback());
+    }
+  } catch (err) {
+    console.error('[News] DB error, fallback JSON:', err.message);
+    res.json(loadNewsFallback());
+  }
+});
+
+app.post('/api/admin/refresh-news', requireAuth, async (req, res) => {
+  try {
+    const results = await refreshAllNews();
+    res.json({ success: true, ...results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

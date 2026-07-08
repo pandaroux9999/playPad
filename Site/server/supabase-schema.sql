@@ -157,6 +157,16 @@ CREATE TABLE IF NOT EXISTS game_boosts (
   UNIQUE(user_id, game_id, week_start)
 );
 
+-- Cache des actualités (jeux, esport, drama) — rafraîchi automatiquement
+CREATE TABLE IF NOT EXISTS news_cache (
+  id SERIAL PRIMARY KEY,
+  category TEXT NOT NULL CHECK(category IN ('releases', 'esport', 'drama')),
+  item_data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  sort_key INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_news_cache_category ON news_cache(category);
+
 -- Votes sur les critiques communautaires (pouce bleu/rouge)
 CREATE TABLE IF NOT EXISTS review_votes (
   id SERIAL PRIMARY KEY,

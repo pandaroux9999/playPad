@@ -128,6 +128,7 @@ const API = {
   getBoosterPoints: () => API.request('GET', '/api/booster/points'),
   getBoostStatus: (gameId) => API.request('GET', `/api/booster/status/${gameId}`),
   connectEpic: (epicUsername) => API.request('POST', '/api/platform/epic/connect', { epicUsername }),
+  getNews: () => API.request('GET', '/api/news'),
 };
 
 function Icon(paths, viewBox = "0 0 24 24") {
@@ -1068,6 +1069,10 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
   const [friendStatuses, setFriendStatuses] = useState({});
   const [searchFocused, setSearchFocused] = useState(false);
   const [selectedNews, setSelectedNews] = useState(null);
+  const [releases, setReleases] = useState([]);
+  const [esportEvents, setEsportEvents] = useState([]);
+  const [dramaItems, setDramaItems] = useState([]);
+  const [loadingNews, setLoadingNews] = useState(true);
   const [loading, setLoading] = useState(true);
   const load = () => Promise.all([
     API.getFriends().then(d => setFriends(d.friends || [])).catch(() => {}),
@@ -1075,7 +1080,16 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
     API.getReviewsFeed().then(d => setPublicReviews(d.reviews || [])).catch(() => {}),
     API.getSuggestions().then(d => setSuggestions(d.suggestions || [])).catch(() => {}),
   ]).finally(() => setLoading(false));
+  const loadNews = useCallback(() => {
+    setLoadingNews(true);
+    API.getNews().then(d => {
+      setReleases(d.releases || []);
+      setEsportEvents(d.esport || []);
+      setDramaItems(d.drama || []);
+    }).catch(() => {}).finally(() => setLoadingNews(false));
+  }, []);
   useEffect(() => { load(); }, [refreshKey]);
+  useEffect(() => { loadNews(); const t = setInterval(loadNews, 120000); return () => clearInterval(t); }, []);
   const doSearch = useCallback((q) => {
     API.searchUsers(q).then(d => {
       setSearchResults(d.users || []);
@@ -1265,18 +1279,18 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
 
     // --- ONGLET NOUVEAUTES ---
     subTab === "news" && h('div', { className: "px-4 pb-4 space-y-4" },
+      h('div', { className: "flex items-center justify-between mb-2" },
+        h('p', { className: "text-[9px] text-muted-foreground" }, "Mise \u00e0 jour automatique toutes les 2 min"),
+        h('button', { onClick: () => { loadNews(); }, className: "flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold transition-colors", style: { background: `${P1}15`, color: P1 } }, h(RefreshCw, { size: 10 }), "Actualiser")
+      ),
       h('div', null,
         h('div', { className: "flex items-center gap-2 mb-3" },
           h(Calendar, { size: 14, style: { color: P1 } }),
           h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Sorties a venir"),
         ),
-        [
-          { type: "release", date: "24 Juillet 2026", title: "Fable", desc: "Nouvel opus de la saga mythique par Playground Games", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/3030620/library_600x900.jpg", officialUrl: "https://www.xbox.com/fr-FR/games/fable", sourceUrl: "https://www.jeuxvideo.com", sourceName: "JeuxVideo.com", details: "Fable revient dans un tout nouveau chapitre d\u00e9velopp\u00e9 par Playground Games (Forza Horizon). Le jeu promet un monde ouvert riche, un humour britannique l\u00e9gendaire et des choix moraux qui fa\u00e7onnent votre aventure." },
-          { type: "release", date: "Septembre 2026", title: "Avowed", desc: "Le RPG fantasy d'Obsidian dans l'univers d'Eora", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/2457220/library_600x900.jpg", officialUrl: "https://avowed.obsidian.net", sourceUrl: "https://www.gamekult.com", sourceName: "Gamekult", details: "Avowed est un RPG fantasy en vue \u00e0 la premi\u00e8re personne par Obsidian Entertainment, les cr\u00e9ateurs de Fallout: New Vegas et The Outer Worlds. L'aventure se d\u00e9roule dans l'univers d'Eora, le monde de Pillars of Eternity." },
-          { type: "release", date: "Octobre 2026", title: "Borderlands 4", desc: "Retour du looter-shooter culte par Gearbox", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/3285030/library_600x900.jpg", officialUrl: "https://borderlands.2k.com", sourceUrl: "https://www.ign.com", sourceName: "IGN", details: "Gearbox Software revient avec un nouvel opus de la saga Borderlands. Attendez-vous \u00e0 des milliards d'armes, un humour d\u00e9capant et un tout nouveau monde \u00e0 explorer en solo ou en coop\u00e9ratif." },
-          { type: "release", date: "2026", title: "Metroid Prime 4", desc: "L'attendu retour de Samus Aran sur Switch 2", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/3030620/library_600x900.jpg", officialUrl: "https://www.nintendo.com", sourceUrl: "https://www.nintendo.fr", sourceName: "Nintendo France", details: "Le retour tant attendu de Samus Aran dans un tout nouvel \u00e9pisode de la saga Metroid Prime. D\u00e9velopp\u00e9 par Retro Studios, le jeu promet d'exploiter pleinement la puissance de la Switch 2." },
-          { type: "release", date: "2026", title: "GTA VI", desc: "Le jeu le plus attendu de la decennie enfin r\u00e9v\u00e9l\u00e9", cover: "https://cdn.cloudflare.steamstatic.com/steam/apps/271590/library_600x900.jpg", officialUrl: "https://www.rockstargames.com", sourceUrl: "https://www.rockstargames.com", sourceName: "Rockstar Games", details: "Grand Theft Auto VI emm\u00e8ne les joueurs \u00e0 Vice City dans une histoire \u00e9crite par Rockstar Games. Premier opus f\u00e9minin de la s\u00e9rie, le jeu promet une carte immense et des innovations techniques majeures." },
-        ].map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "flex gap-3 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.12)" } },
+        releases.length === 0 && loadingNews && h('div', { className: "flex items-center justify-center py-6" }, h(Loader, { size: 16, className: "animate-spin", style: { color: P1 } })),
+        releases.length === 0 && !loadingNews && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucune actualit\u00e9 pour le moment"),
+        releases.map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "flex gap-3 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.12)" } },
           h('div', { className: "w-10 h-14 rounded-lg overflow-hidden flex-shrink-0" }, h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover" })),
           h('div', { className: "flex-1 min-w-0" },
             h('p', { className: "text-[10px] font-bold", style: { color: P1 } }, item.date),
@@ -1291,12 +1305,9 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
           h(Trophy, { size: 14, style: { color: "#fbbf24" } }),
           h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "E-Sport"),
         ),
-        [
-          { type: "esport", event: "Valorant Champions 2026", game: "Valorant", date: "Ao\u00fbt 2026", desc: "Le tournoi majeur de la scene Valorant", officialUrl: "https://www.vlr.gg", sourceUrl: "https://www.vlr.gg", sourceName: "VLR.gg", details: "Le Valorant Champions est le tournoi le plus prestigieux de la sc\u00e8ne Valorant. Les meilleures \u00e9quipes du monde s'affrontent pour le titre de champion du monde et un prize pool de plusieurs millions de dollars." },
-          { type: "esport", event: "The International 2026", game: "Dota 2", date: "Septembre 2026", desc: "Le plus grand tournoi de MOBA au monde", officialUrl: "https://www.dota2.com/esports", sourceUrl: "https://www.liquipedia.net", sourceName: "Liquipedia", details: "The International est le championnat du monde de Dota 2, organis\u00e9 par Valve. R\u00e9put\u00e9 pour ses prize pools records gr\u00e2ce au financement participatif via le Battle Pass." },
-          { type: "esport", event: "League of Legends Worlds 2026", game: "LoL", date: "Octobre 2026", desc: "Les championnats du monde de League of Legends", officialUrl: "https://lolesports.com", sourceUrl: "https://www.lolesports.com", sourceName: "LoL Esports", details: "Les Worlds de League of Legends rassemblent les meilleures \u00e9quipes des quatre coins du monde. Un mois de comp\u00e9tition intense pour soulever la Summoner's Cup." },
-          { type: "esport", event: "CS2 Major 2026", game: "Counter-Strike 2", date: "Novembre 2026", desc: "Le Major de fin d'annee sur CS2", officialUrl: "https://www.counter-strike.net", sourceUrl: "https://www.hltv.org", sourceName: "HLTV", details: "Le Major Counter-Strike 2 est le tournoi le plus important de la sc\u00e8ne CS. Les 24 meilleures \u00e9quipes du monde s'affrontent dans un tournoi \u00e0 \u00e9limination directe pour le titre de champion Major." },
-        ].map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.1)" } },
+        esportEvents.length === 0 && loadingNews && h('div', { className: "flex items-center justify-center py-6" }, h(Loader, { size: 16, className: "animate-spin", style: { color: P1 } })),
+        esportEvents.length === 0 && !loadingNews && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucun \u00e9v\u00e9nement e-sport pour le moment"),
+        esportEvents.map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.1)" } },
           h(Trophy, { size: 16, style: { color: "#fbbf24", flexShrink: 0 } }),
           h('div', { className: "flex-1 min-w-0" },
             h('p', { className: "text-xs font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event),
@@ -1313,12 +1324,9 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
           h(MessageCircle, { size: 14, style: { color: "#ef4444" } }),
           h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Drama & Actu"),
         ),
-        [
-          { type: "drama", title: "Xbox confirme le portage de plusieurs exclusivites", desc: "Phil Spencer annonce l'arrivee de titres Xbox first-party sur PS5 et Switch 2", tag: "Actu", officialUrl: "https://news.xbox.com", sourceUrl: "https://www.jeuxvideo.com", sourceName: "JeuxVideo.com", details: "Microsoft continue sa strat\u00e9gie multiplateforme en confirmant l'arriv\u00e9e de plusieurs titres first-party sur les consoles concurrentes. Cette d\u00e9cision marque un tournant dans l'industrie du jeu vid\u00e9o." },
-          { type: "drama", title: "Unity licencie 25% de ses effectifs", desc: "Le moteur de jeu continue sa restructuration massive", tag: "Drama", officialUrl: "https://unity.com", sourceUrl: "https://www.gamekult.com", sourceName: "Gamekult", details: "Unity Technologies poursuit sa restructuration avec une nouvelle vague de licenciements massifs. Le cr\u00e9ateur du moteur de jeu \u00e9ponyme cherche \u00e0 retrouver la rentabilit\u00e9 apr\u00e8s une ann\u00e9e difficile." },
-          { type: "drama", title: "Square Enix revoit sa strategie", desc: "Apres des ventes d\u00e9cevantes, Square Enix mise sur le multiplateforme", tag: "Actu", officialUrl: "https://www.square-enix.com", sourceUrl: "https://www.ign.com", sourceName: "IGN", details: "Square Enix annonce un changement majeur de strat\u00e9gie : l'\u00e9diteur japonais abandonne l'exclusivit\u00e9 temporaire et sortira d\u00e9sormais ses jeux simultan\u00e9ment sur toutes les plateformes." },
-          { type: "drama", title: "Gr\u00e8ve des doubleurs jeux video a Hollywood", desc: "Les acteurs r\u00e9clament une protection contre l'IA g\u00e9n\u00e9rative", tag: "Drama", officialUrl: "https://www.sagaftra.org", sourceUrl: "https://www.jeuxvideo.com", sourceName: "JeuxVideo.com", details: "Les doubleurs de jeux vid\u00e9o membres de la SAG-AFTRA sont en gr\u00e8ve pour obtenir des garanties contractuelles face \u00e0 l'utilisation croissante de l'intelligence artificielle g\u00e9n\u00e9rative dans le doublage." },
-        ].map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.1)" } },
+        dramaItems.length === 0 && loadingNews && h('div', { className: "flex items-center justify-center py-6" }, h(Loader, { size: 16, className: "animate-spin", style: { color: P1 } })),
+        dramaItems.length === 0 && !loadingNews && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucune actualit\u00e9 pour le moment"),
+        dramaItems.map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.1)" } },
           h('div', { className: "flex items-start gap-2" },
             h('span', { className: "px-1.5 py-0.5 rounded text-[8px] font-bold flex-shrink-0 mt-0.5", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.2)" : "rgba(59,130,246,0.2)", color: item.tag === "Drama" ? "#ef4444" : "#3b82f6" } }, item.tag),
             h('div', { className: "flex-1 min-w-0" },

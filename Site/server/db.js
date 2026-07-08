@@ -94,10 +94,16 @@ async function markResetTokenUsed(token) {
 async function getUserById(id) {
   const { data, error } = await supabaseAdmin
     .from('users')
-    .select('id, username, display_name, avatar_url, email, created_at, steam_id, xbox_gamertag, epic_username, last_seen')
+    .select('*')
     .eq('id', id)
     .single();
-  checkResult({ data, error });
+  try { checkResult({ data, error }); } catch (e) {
+    // fallback: certains champs peuvent manquer (colonne non ajoutée)
+    const { data: d2, error: e2 } = await supabaseAdmin.from('users').select('id, username, display_name, created_at').eq('id', id).single();
+    if (e2) throw new Error(e2.message);
+    data = d2;
+  }
+  if (data) delete data.password;
   return data;
 }
 
@@ -925,32 +931,45 @@ async function voteReview(userId, reviewId, vote) {
     .from('review_votes')
     .upsert({ user_id: userId, review_id: reviewId, vote },
       { onConflict: 'user_id, review_id' });
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.message?.includes('relation') || error.message?.includes('does not exist')) return;
+    throw new Error(error.message);
+  }
 }
 
 async function getReviewVotes(reviewIds) {
-  let query = supabaseAdmin.from('review_votes').select('review_id, vote');
-  if (reviewIds && reviewIds.length > 0) query = query.in('review_id', reviewIds);
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  const result = {};
-  for (const row of data || []) {
-    if (!result[row.review_id]) result[row.review_id] = { up: 0, down: 0 };
-    if (row.vote === 1) result[row.review_id].up++;
-    else result[row.review_id].down++;
+  try {
+    let query = supabaseAdmin.from('review_votes').select('review_id, vote');
+    if (reviewIds && reviewIds.length > 0) query = query.in('review_id', reviewIds);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const result = {};
+    for (const row of data || []) {
+      if (!result[row.review_id]) result[row.review_id] = { up: 0, down: 0 };
+      if (row.vote === 1) result[row.review_id].up++;
+      else result[row.review_id].down++;
+    }
+    return result;
+  } catch (e) {
+    if (e.message?.includes('relation') || e.message?.includes('does not exist')) return {};
+    throw e;
   }
-  return result;
 }
 
 async function getUserReviewVotes(userId) {
-  const { data, error } = await supabaseAdmin
-    .from('review_votes')
-    .select('review_id, vote')
-    .eq('user_id', userId);
-  if (error) throw new Error(error.message);
-  const result = {};
-  for (const row of data || []) result[row.review_id] = row.vote;
-  return result;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('review_votes')
+      .select('review_id, vote')
+      .eq('user_id', userId);
+    if (error) throw new Error(error.message);
+    const result = {};
+    for (const row of data || []) result[row.review_id] = row.vote;
+    return result;
+  } catch (e) {
+    if (e.message?.includes('relation') || e.message?.includes('does not exist')) return {};
+    throw e;
+  }
 }
 
 async function getUserBoostStatus(userId, gameId) {
@@ -964,6 +983,57 @@ async function getUserBoostStatus(userId, gameId) {
     .maybeSingle();
   if (error) throw new Error(error.message);
   return !!data;
+}
+
+// ─── NEWS ─────────────────────────────────────────────────
+async function replaceNewsCache(category, items) {
+  const { error: delErr } = await supabaseAdmin
+    .from('news_cache')
+    .delete()
+    .eq('category', category);
+  if (delErr) throw new Error(delErr.message);
+  if (items.length === 0) return;
+  const rows = items.map((item, i) => ({
+    category,
+    item_data: item,
+    sort_key: i,
+  }));
+  const { error: insErr } = await supabaseAdmin
+    .from('news_cache')
+    .insert(rows);
+  if (insErr) throw new Error(insErr.message);
+}
+
+async function getNewsFromCache() {
+  const { data, error } = await supabaseAdmin
+    .from('news_cache')
+    .select('category, item_data, sort_key')
+    .order('category')
+    .order('sort_key');
+  if (error) throw new Error(error.message);
+  const result = { releases: [], esport: [], drama: [] };
+  for (const row of data || []) {
+    if (result[row.category]) result[row.category].push(row.item_data);
+  }
+  return result;
+}
+
+async function getNewsCacheAge() {
+  const { data, error } = await supabaseAdmin
+    .from('news_cache')
+    .select('created_at')
+    .limit(1)
+    .order('created_at', { ascending: false });
+  if (error) return null;
+  return data?.length > 0 ? new Date(data[0].created_at) : null;
+}
+
+async function clearNewsCache() {
+  const { error } = await supabaseAdmin
+    .from('news_cache')
+    .delete()
+    .neq('id', 0);
+  if (error) throw new Error(error.message);
 }
 
 module.exports = {
@@ -1034,4 +1104,8 @@ module.exports = {
   voteReview,
   getReviewVotes,
   getUserReviewVotes,
+  replaceNewsCache,
+  getNewsFromCache,
+  getNewsCacheAge,
+  clearNewsCache,
 };

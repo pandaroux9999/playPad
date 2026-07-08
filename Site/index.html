@@ -737,7 +737,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
             }))
       )
     ),
-    h('div', { className: "flex-1 overflow-y-auto px-4 pb-4", style: { scrollbarWidth: "none" } },
+    h('div', { className: "flex-1 overflow-y-auto px-4 pb-20", style: { scrollbarWidth: "none" } },
       filtered.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
         : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: () => onSelect(game), wishlistIds, onWishlist: onToggleWishlist, topThreeIds, onCrown: onToggleTopThree })))
@@ -856,7 +856,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         )
       ),
     ),
-    h('div', { className: "flex-1 overflow-y-auto px-4 pb-4", style: { scrollbarWidth: "none" } },
+    h('div', { className: "flex-1 overflow-y-auto px-4 pb-20", style: { scrollbarWidth: "none" } },
       showBoostSection && topBoosted.length > 0 && h('div', { className: "mb-4" },
         h('div', { className: "flex items-center justify-between mb-2" },
           h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5" }, "\u2728 Boost\u00e9s de la semaine"),
@@ -948,12 +948,12 @@ function CommunityView({ onSelectFriend, onSelectGame, onAddNotification }) {
     return () => clearTimeout(t);
   }, [searchQ, searchFocused, doSearch]);
   const initials = (name) => (name?.charAt(0) || "?").toUpperCase();
-  return h('div', { className: "flex flex-col h-full overflow-y-auto view-enter", style: { scrollbarWidth: "none" } },
+  return h('div', { className: "flex flex-col h-full overflow-y-auto pb-20 view-enter", style: { scrollbarWidth: "none" } },
     h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
       h('h1', { className: "text-xl font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Communaute"),
       h('p', { className: "text-xs text-muted-foreground mt-0.5" }, h('span', { className: "font-bold", style: { color: P1 } }, friends.length), " amis")
     ),
-    h('div', { className: "px-4 pb-6 space-y-3" },
+    h('div', { className: "px-4 pb-20 space-y-3" },
       requests.length > 0 && h('div', { className: "rounded-2xl p-3", style: { background: `${P1}08`, border: `1px solid ${P1}20` } },
         h('p', { className: "text-[10px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5", style: { color: "#fbbf24" } }, h(UserPlus, { size: 10 }), "Demandes en attente"),
         requests.map(r => h('div', { key: r.id, onClick: () => onSelectFriend?.(r), className: "flex items-center gap-2.5 py-1.5 cursor-pointer hover:opacity-80 transition-opacity" },
@@ -1243,7 +1243,7 @@ function ReviewsView({ games, onSelect }) {
       h('h1', { className: "text-xl font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Mes Critiques"),
       h('p', { className: "text-xs text-muted-foreground mt-0.5" }, h('span', { className: "font-bold", style: { color: P1 } }, reviewed.length), " r\u00e9dig\u00e9es \u00b7 ", h('span', { className: "font-bold text-green-400" }, publicCount), " publiques")
     ),
-    h('div', { className: "flex-1 overflow-y-auto px-4 pb-6 space-y-3", style: { scrollbarWidth: "none" } },
+    h('div', { className: "flex-1 overflow-y-auto px-4 pb-20 space-y-3", style: { scrollbarWidth: "none" } },
       reviewed.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Edit3, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucune critique r\u00e9dig\u00e9e"))
         : reviewed.map(game => h('div', { key: game.game_id || game.id, onClick: () => onSelect(game), className: "review-card bg-card border border-border rounded-2xl overflow-hidden" },
@@ -1299,7 +1299,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
       .catch(() => setBridgeStatus('offline'));
   }, []);
 
-  return h('div', { className: "flex flex-col h-full overflow-y-auto view-enter", style: { scrollbarWidth: "none" } },
+  return     h('div', { className: "flex flex-col h-full overflow-y-auto pb-20 view-enter", style: { scrollbarWidth: "none" } },
     h('div', { className: "px-4 pt-4 pb-4" },
       h('div', { className: "flex items-center gap-4" },
         h('div', { onClick: () => setAvatarModal(true), className: "w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black text-white flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden", style: { background: GRAD, boxShadow: "0 8px 24px rgba(139,92,246,0.35)" } },

@@ -73,9 +73,91 @@ const GAMES_CATALOG = [
   { game_id: 'steam-367520', title: 'Risk of Rain 2', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/632360/library_600x900.jpg', genre: 'Rogue-lite', year: 2020, developer: 'Hopoo Games', publisher: 'Gearbox' },
   { game_id: 'steam-1172470', title: 'Apex Legends', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1172470/library_600x900.jpg', genre: 'Battle Royale', year: 2019, developer: 'Respawn', publisher: 'Electronic Arts' },
   { game_id: 'epic-fortnite', title: 'Fortnite', platform: 'epic', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/2394010/library_600x900.jpg', genre: 'Battle Royale', year: 2017, developer: 'Epic Games', publisher: 'Epic Games' },
+  // ── Jeux cultes supplémentaires ──
+  { game_id: 'steam-1938090', title: 'Call of Duty: Modern Warfare II', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1938090/library_600x900.jpg', genre: 'FPS', year: 2022, developer: 'Infinity Ward', publisher: 'Activision' },
+  { game_id: 'steam-2357570', title: 'Call of Duty: Modern Warfare III', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/2357570/library_600x900.jpg', genre: 'FPS', year: 2023, developer: 'Sledgehammer Games', publisher: 'Activision' },
+  { game_id: 'steam-1999770', title: 'Overwatch 2', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1999770/library_600x900.jpg', genre: 'FPS', year: 2022, developer: 'Blizzard Entertainment', publisher: 'Blizzard Entertainment' },
+  { game_id: 'riot-valorant', title: 'Valorant', platform: 'pc', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/35140/library_600x900.jpg', genre: 'FPS Tactique', year: 2020, developer: 'Riot Games', publisher: 'Riot Games' },
+  { game_id: 'riot-lol', title: 'League of Legends', platform: 'pc', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/513710/library_600x900.jpg', genre: 'MOBA', year: 2009, developer: 'Riot Games', publisher: 'Riot Games' },
+  { game_id: 'roblox', title: 'Roblox', platform: 'pc', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1276430/library_600x900.jpg', genre: 'Sandbox', year: 2006, developer: 'Roblox Corporation', publisher: 'Roblox Corporation' },
+  { game_id: 'among-us', title: 'Among Us', platform: 'pc', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/945360/library_600x900.jpg', genre: 'Party Game', year: 2018, developer: 'Innersloth', publisher: 'Innersloth' },
+  { game_id: 'steam-252950', title: 'Rocket League', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/252950/library_600x900.jpg', genre: 'Sport', year: 2015, developer: 'Psyonix', publisher: 'Psyonix' },
+  { game_id: 'steam-359550', title: 'Tom Clancy\'s Rainbow Six Siege', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/359550/library_600x900.jpg', genre: 'FPS Tactique', year: 2015, developer: 'Ubisoft', publisher: 'Ubisoft' },
+  { game_id: 'steam-2208920', title: 'Assassin\'s Creed Mirage', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/2208920/library_600x900.jpg', genre: 'Action-Aventure', year: 2023, developer: 'Ubisoft Bordeaux', publisher: 'Ubisoft' },
+  { game_id: 'steam-13500', title: 'Far Cry 3', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/13500/library_600x900.jpg', genre: 'FPS', year: 2012, developer: 'Ubisoft Montreal', publisher: 'Ubisoft' },
+  { game_id: 'steam-1238810', title: 'Battlefield 2042', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1238810/library_600x900.jpg', genre: 'FPS', year: 2021, developer: 'DICE', publisher: 'Electronic Arts' },
+  { game_id: 'steam-1817070', title: 'Marvel\'s Spider-Man Remastered', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1817070/library_600x900.jpg', genre: 'Action-Aventure', year: 2022, developer: 'Insomniac Games', publisher: 'Sony' },
+  { game_id: 'steam-1593500', title: 'God of War', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1593500/library_600x900.jpg', genre: 'Action-Aventure', year: 2022, developer: 'Santa Monica Studio', publisher: 'Sony' },
+  { game_id: 'steam-1222140', title: 'The Last of Us Part I', platform: 'steam', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1222140/library_600x900.jpg', genre: 'Action-Aventure', year: 2023, developer: 'Naughty Dog', publisher: 'Sony' },
+  { game_id: 'nintendo-zelda-botw', title: 'The Legend of Zelda: Breath of the Wild', platform: 'nintendo', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/431970/library_600x900.jpg', genre: 'Action-Aventure', year: 2017, developer: 'Nintendo', publisher: 'Nintendo' },
+  { game_id: 'nintendo-mario-odyssey', title: 'Super Mario Odyssey', platform: 'nintendo', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/301810/library_600x900.jpg', genre: 'Plateforme', year: 2017, developer: 'Nintendo', publisher: 'Nintendo' },
+  { game_id: 'nintendo-smash', title: 'Super Smash Bros. Ultimate', platform: 'nintendo', cover: 'https://cdn.cloudflare.steamstatic.com/steam/apps/1203800/library_600x900.jpg', genre: 'Combat', year: 2018, developer: 'Bandai Namco', publisher: 'Nintendo' },
 ];
 
 const STATUSES = ['not_started', 'playing', 'completed', 'dropped', 'paused'];
+
+const AGE_RATINGS = {
+  'steam-730': 16,       // Counter-Strike 2
+  'steam-570': 12,       // Dota 2
+  'steam-1245620': 16,   // Elden Ring
+  'steam-292030': 18,    // The Witcher 3
+  'steam-1091500': 18,   // Cyberpunk 2077
+  'steam-367520': 7,     // Hollow Knight
+  'steam-1174180': 18,   // Red Dead Redemption 2
+  'steam-1086940': 18,   // Baldur's Gate 3
+  'steam-814380': 16,    // Sekiro
+  'steam-374320': 16,    // Dark Souls III
+  'steam-271590': 18,    // GTA V
+  'steam-782330': 18,    // DOOM Eternal
+  'steam-1426210': 12,   // It Takes Two
+  'steam-2215430': 18,   // Ghost of Tsushima
+  'steam-990080': 12,    // Hogwarts Legacy
+  'steam-1627720': 18,   // Lies of P
+  'steam-1551360': 3,    // Forza Horizon 5
+  'steam-2050650': 18,   // Resident Evil 4
+  'steam-1364780': 12,   // Street Fighter 6
+  'steam-1794680': 7,    // Vampire Survivors
+  'steam-2344520': 18,   // Diablo IV
+  'steam-1328670': 18,   // Mass Effect LE
+  'steam-2322010': 18,   // God of War Ragnarök
+  'steam-440': 16,       // Team Fortress 2
+  'steam-105600': 12,    // Terraria
+  'steam-413150': 3,     // Stardew Valley
+  'steam-1145360': 12,   // Hades
+  'steam-252490': 16,    // Rust
+  'steam-230410': 16,    // Arma 3
+  'steam-250900': 16,    // Binding of Isaac
+  'steam-504230': 7,     // Celeste
+  'steam-388410': 7,     // Crypt of the NecroDancer
+  'steam-427520': 3,     // Factorio
+  'steam-646570': 12,    // Slay the Spire
+  'steam-548430': 12,    // Deep Rock Galactic
+  'steam-1385380': 7,    // Brotato
+  'steam-1222680': 12,   // NFS Heat
+  'steam-397540': 18,    // Borderlands 3
+  'steam-12210': 18,     // GTA IV
+  'steam-236850': 3,     // ETS 2
+  'steam-304930': 3,     // Untitled Goose Game
+  'steam-212480': 7,     // Sonic Generations
+  'steam-317820': 7,     // Cuphead
+  'mojang-minecraft': 7, // Minecraft
+  'steam-976730': 16,    // Halo MCC
+  'steam-1097840': 18,   // Gears 5
+  'steam-1895880': 3,    // Forza Motorsport
+  'steam-992062': 12,    // Sea of Thieves
+  'steam-1325900': 12,   // Psychonauts 2
+  'steam-397060': 18,    // Fallout 4 (wrong id, but keeping)
+  'steam-72850': 16,     // Skyrim
+  'steam-220': 16,       // Half-Life 2
+  'steam-400': 7,        // Portal
+  'steam-620': 7,        // Portal 2
+  'steam-550': 18,       // L4D2
+  'steam-264710': 12,    // Subnautica
+  'steam-322330': 12,    // Don't Starve Together
+  'steam-212680': 7,     // FTL
+  'steam-1172470': 16,   // Apex Legends
+  'epic-fortnite': 12,   // Fortnite
+};
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -131,13 +213,15 @@ async function seedDemoData() {
       const rating = status === 'not_started' ? 0 : 1 + Math.floor(Math.random() * 5);
       const hasReview = rating >= 4 && Math.random() > 0.5;
       const reviewText = hasReview ? pick(REVIEW_TEXTS) : '';
+      const age = AGE_RATINGS[g.game_id] || 0;
       await db.supabaseAdmin.from('games').upsert({
         user_id: userId, game_id: g.game_id, title: g.title, platform: g.platform,
         cover: g.cover, genre: g.genre, year: g.year, status, playtime,
         user_rating: rating, review_text: reviewText, review_public: hasReview, has_review: hasReview,
+        age_rating: age,
       }, { onConflict: 'user_id, game_id' }).catch(() => {});
       // Ensure in catalog
-      await db.supabaseAdmin.from('catalog').upsert(g, { onConflict: 'game_id', ignoreDuplicates: true }).catch(() => {});
+      await db.supabaseAdmin.from('catalog').upsert({ ...g, age_rating: age }, { onConflict: 'game_id', ignoreDuplicates: true }).catch(() => {});
     }
     // Wishlist
     const wishGames = shuffle(GAMES_CATALOG).slice(0, 3);
@@ -210,4 +294,4 @@ async function seedDemoData() {
   console.log('[Seed] 💡 Comptes démo : alex92 / Alex1234 | sarah_g / Sarah1234 | max_rpg / Max1234 | lea_gg / Lea1234 | tom_pvp / Tom1234');
 }
 
-module.exports = { seedDemoData };
+module.exports = { seedDemoData, GAMES_CATALOG };

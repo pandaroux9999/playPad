@@ -1065,6 +1065,16 @@ async function populateSteamFromAppList() {
   } else {
     console.log('[Catalog] TWITCH_CLIENT_ID/SECRET non configurés, skip IGDB');
   }
+  // Jeux cultes : toujours insérés (indépendant du seed)
+  try {
+    const { GAMES_CATALOG } = require('./seed');
+    const curatedIds = new Set(GAMES_CATALOG.map(g => g.game_id));
+    const existing = await db.getCatalog();
+    const existingIds = new Set(existing.map(g => g.game_id));
+    const missing = GAMES_CATALOG.filter(g => !existingIds.has(g.game_id));
+    if (missing.length > 0) { await db.batchUpsertCatalog(missing); }
+    console.log(`[Catalog] ${missing.length} jeux cultes ajoutés (${GAMES_CATALOG.length - missing.length} déjà présents)`);
+  } catch (e) { console.error('[Catalog] Erreur jeux cultes:', e.message); }
   // Données de démonstration après le catalogue
   try {
     const { seedDemoData } = require('./seed');
@@ -1072,6 +1082,38 @@ async function populateSteamFromAppList() {
   } catch (e) {
     console.error('[Seed] Erreur:', e.message);
   }
+  // Age ratings par défaut basés sur le genre
+  try {
+    const ratingMap = [
+      { genres: ['adult','erotic','nsfw'], rating: 18 },
+      { genres: ['horror','survival horror','gore'], rating: 18 },
+      { genres: ['fps','first-person','shooter','battle royale','tactical shooter'], rating: 16 },
+      { genres: ['action rpg','souls-like','hack and slash'], rating: 16 },
+      { genres: ['open world','rpg','mmo','mmorpg','jrpg'], rating: 12 },
+      { genres: ['mo','moba','strategy','rts','tower defense'], rating: 7 },
+      { genres: ['platformer','adventure','action-adventure','metroidvania'], rating: 7 },
+      { genres: ['puzzle','racing','sports','simulation','sandbox'], rating: 3 },
+      { genres: ['casual','rhythm','music','party'], rating: 3 },
+      { genres: ['rogue-lite','roguelike','deck-building'], rating: 7 },
+      { genres: ['visual novel','point-and-click'], rating: 7 },
+    ];
+    const { data: noAge } = await db.supabaseAdmin.from('catalog').select('game_id,genre').is('age_rating', null).limit(5000);
+    if (noAge && noAge.length > 0) {
+      let updated = 0;
+      for (const g of noAge) {
+        const genre = (g.genre || '').toLowerCase();
+        let age = 0;
+        for (const entry of ratingMap) {
+          if (entry.genres.some(kw => genre.includes(kw))) { age = entry.rating; break; }
+        }
+        if (age > 0) {
+          await db.supabaseAdmin.from('catalog').update({ age_rating: age }).eq('game_id', g.game_id).catch(() => {});
+          updated++;
+        }
+      }
+      if (updated > 0) { db.invalidateCatalogCache(); console.log('[AgeRating]', updated, 'jeux notés par genre'); }
+    }
+  } catch (e) { console.error('[AgeRating] Erreur:', e.message); }
 })();
 
 function rawgApiGet(url) {

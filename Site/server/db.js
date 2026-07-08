@@ -929,9 +929,9 @@ async function voteReview(userId, reviewId, vote) {
 }
 
 async function getReviewVotes(reviewIds) {
-  const { data, error } = await supabaseAdmin
-    .from('review_votes')
-    .select('review_id, vote');
+  let query = supabaseAdmin.from('review_votes').select('review_id, vote');
+  if (reviewIds && reviewIds.length > 0) query = query.in('review_id', reviewIds);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   const result = {};
   for (const row of data || []) {

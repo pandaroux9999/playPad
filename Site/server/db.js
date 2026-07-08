@@ -106,7 +106,8 @@ async function getGames(userId) {
   const { data, error } = await supabaseAdmin
     .from('games')
     .select('*')
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .limit(100000);
   checkResult({ data, error });
   // Fusionner les jeux avec le même titre (cross-platform)
   const merged = {};
@@ -583,7 +584,8 @@ async function getCatalog() {
   const { data, error } = await supabaseAdmin
     .from('catalog')
     .select('*')
-    .order('title');
+    .order('title')
+    .limit(100000);
   if (error) throw new Error(error.message);
   return data || [];
 }

@@ -852,34 +852,35 @@ async function populateSteamFromAppList() {
   try {
     console.log('[SteamAppList] Importation de tous les jeux Steam...');
     let apps = [];
-    // Essayer SteamSpy paginé (commence à page 1)
-    for (let page = 1; page < 60; page++) {
+    // Steam Store Search API (sans clé, 50 jeux par page)
+    for (let page = 1; page <= 1000; page++) {
       try {
         const d = await new Promise((resolve, reject) => {
-          const req = https.get('https://steamspy.com/api.php?request=page&page=' + page, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
+          const req = https.get('https://store.steampowered.com/api/search?term=&category1=998&page=' + page + '&cc=US', { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
             let b = '';
             resp.on('data', c => b += c);
             resp.on('end', () => {
-              if (resp.statusCode !== 200) return reject(new Error('HTTP ' + resp.statusCode + ' body:' + b.slice(0, 100)));
+              if (resp.statusCode !== 200) return reject(new Error('HTTP ' + resp.statusCode));
               try { resolve(JSON.parse(b)); }
-              catch (e) { console.log('[SteamAppList] Parse error page', page, ':', b.slice(0, 200)); reject(e); }
+              catch (e) { reject(e); }
             });
           });
           req.on('error', reject);
-          req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout')); });
+          req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout')); });
         });
-        const entries = Object.entries(d || {}).filter(([, v]) => v && v.name).map(([k, v]) => ({
-          appid: parseInt(k), name: v.name,
-          developer: v.developer || '', publisher: v.publisher || '',
-          genre: v.tags ? Object.keys(v.tags).slice(0, 5).join(', ') : '',
+        if (!d?.items || d.items.length === 0) break;
+        const entries = d.items.filter(i => i.id).map(i => ({
+          appid: i.id, name: i.name || '',
+          developer: '', publisher: '',
+          genre: (i.tags || []).slice(0, 5).join(', ') || '',
         }));
-        if (entries.length === 0) break;
         apps = apps.concat(entries);
+        if (page === 1) console.log('[SteamAppList] Total approx:', d.total_count, 'jeux');
         console.log('[SteamAppList] Page', page, ':', entries.length, 'jeux (total', apps.length + ')');
-        if (page > 1) await new Promise(r => setTimeout(r, 1500));
+        if (apps.length >= (d.total_count || 99999)) break;
       } catch (e) { console.log('[SteamAppList] Page', page, 'échouée:', e.message); break; }
     }
-    // Fallback si SteamSpy paginé n'a rien donné
+    // Fallback SteamSpy si rien
     if (apps.length === 0) {
       try {
         const d = await new Promise((resolve, reject) => {
@@ -900,8 +901,8 @@ async function populateSteamFromAppList() {
           developer: v.developer || '', publisher: v.publisher || '',
           genre: v.tags ? Object.keys(v.tags).slice(0, 5).join(', ') : '',
         }));
-        console.log('[SteamAppList]', apps.length, 'jeux via request=all');
-      } catch (e) { console.log('[SteamAppList] Fallback request=all échoué:', e.message); }
+        console.log('[SteamAppList]', apps.length, 'jeux via SteamSpy');
+      } catch (e) { console.log('[SteamAppList] SteamSpy échoué:', e.message); }
     }
     if (apps.length === 0) {
       const existing = await db.getCatalog();

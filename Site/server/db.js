@@ -410,10 +410,17 @@ async function getPendingRequests(userId) {
   return (data || []).map(r => ({ id: r.users.id, username: r.users.username, display_name: r.users.display_name, avatar_url: r.users.avatar_url, last_seen: r.users.last_seen }));
 }
 
-async function getFriendGames(friendId) {
+async function getFriendGames(userId, friendId) {
+  const { data: rel } = await supabaseAdmin
+    .from('friends')
+    .select('status')
+    .eq('user_id', userId)
+    .eq('friend_id', friendId)
+    .maybeSingle();
+  if (!rel || rel.status !== 'accepted') return [];
   const { data, error } = await supabaseAdmin
     .from('games')
-    .select('*')
+    .select('game_id, title, platform, cover, genre, year, playtime, status, developer, publisher')
     .eq('user_id', friendId);
   if (error) throw new Error(error.message);
   return data || [];
@@ -463,7 +470,16 @@ async function getGameSuggestions(userId) {
   return data || [];
 }
 
-async function removeGameSuggestion(id) {
+async function removeGameSuggestion(id, userId) {
+  const { data: sug } = await supabaseAdmin
+    .from('game_suggestions')
+    .select('from_user_id, to_user_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (!sug) throw new Error('Suggestion introuvable');
+  if (sug.from_user_id !== userId && sug.to_user_id !== userId) {
+    throw new Error('Non autorisé');
+  }
   const { error } = await supabaseAdmin
     .from('game_suggestions')
     .delete()

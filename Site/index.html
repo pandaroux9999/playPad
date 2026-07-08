@@ -62,7 +62,7 @@ const n = g => g && { ...g, hasReview: g.has_review ?? g.hasReview, userRating: 
 
 const API = {
   async request(method, url, body) {
-    const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
+    const opts = { method, headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' };
     if (body) opts.body = JSON.stringify(body);
     console.log(`[API] ${method} ${url}`, body || '');
     const res = await fetch(url, opts);

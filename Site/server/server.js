@@ -11,6 +11,7 @@ const db = require('./db');
 const SupabaseSessionStore = require('./session-store');
 
 const app = express();
+app.disable('x-powered-by');
 const PORT = process.env.PORT || 3000;
 
 // Validation du secret de session au démarrage
@@ -22,6 +23,7 @@ if (!SESSION_SECRET || SESSION_SECRET.length < 16) {
 
 // Sécurité : headers HTTP (CSP, HSTS, X-Frame-Options, etc.)
 app.use(helmet({
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -32,7 +34,7 @@ app.use(helmet({
       connectSrc: ["'self'", "http://localhost:3456"],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? true : null,
     },
   },
 }));
@@ -56,6 +58,10 @@ const authLimiter = rateLimit({
   message: { error: 'Trop de tentatives, réessaie dans 15 minutes.' },
 });
 
+// Rate limiting : catalogue et recherche (évite le crawling intensif)
+const catalogLimiter = rateLimit({ windowMs: 60000, max: 30, message: { error: 'Trop de requêtes catalogue' } });
+const searchLimiter = rateLimit({ windowMs: 60000, max: 20, message: { error: 'Trop de recherches' } });
+
 const corsOrigin = process.env.PUBLIC_URL || 'http://localhost:3000';
 app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json());
@@ -76,6 +82,16 @@ app.use(session({
 }));
 
 app.use(express.static(path.join(__dirname, '..')));
+
+// CSRF protection : exiger X-Requested-With sur toute requête qui modifie l'état
+app.use((req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    if (req.headers['x-requested-with'] !== 'XMLHttpRequest') {
+      return res.status(403).json({ error: 'Requête cross-site refusée' });
+    }
+  }
+  next();
+});
 
 function requireAuth(req, res, next) {
   if (!req.session.userId) {
@@ -101,7 +117,7 @@ function validateEmail(email) {
 app.post('/api/register', authLimiter, async (req, res) => {
   try {
     const { username, displayName, password, email } = req.body;
-    console.log('[Register] Request:', { username, displayName, email });
+    console.log('[Register] Request:', { username, displayName, email: email ? email[0] + '***' : undefined });
     if (!username || !displayName || !password || !email) {
       return res.status(400).json({ error: 'Tous les champs sont requis' });
     }
@@ -119,10 +135,10 @@ app.post('/api/register', authLimiter, async (req, res) => {
     }
     const existingEmail = await db.getUserByEmail(email);
     if (existingEmail) {
-      console.log('[Register] Email already used:', email);
+      console.log('[Register] Email already used:', email[0] + '***');
       return res.status(409).json({ error: 'Cet email est déjà utilisé par un autre compte' });
     }
-    const hashed = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(password, 12);
     const userId = await db.createUser(username, displayName, hashed, email);
     const user = await db.getUserById(userId);
     req.session.userId = userId;
@@ -131,7 +147,7 @@ app.post('/api/register', authLimiter, async (req, res) => {
     res.json({ user });
   } catch (err) {
     console.error('[Register] Error:', err.message, err.stack);
-    res.status(500).json({ error: 'Erreur serveur: ' + err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -142,7 +158,7 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
     const user = await db.getUserByEmail(email);
     if (user) {
       const token = await db.createResetToken(user.id, 'password');
-      console.log('[ForgotPassword] Token créé pour', email);
+      console.log('[ForgotPassword] Token créé pour', email[0] + '***');
       // En production, envoie le lien par email ici
     }
     // Toujours retourner le même message (pas de fuite d'info)
@@ -159,7 +175,7 @@ app.post('/api/auth/forgot-username', authLimiter, async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Email requis' });
     const user = await db.getUserByEmail(email);
     if (user) {
-      console.log('[ForgotUsername] Demande pour', email);
+      console.log('[ForgotUsername] Demande pour', email[0] + '***');
       // En production, envoie l'identifiant par email ici
     }
     // Toujours retourner le même message
@@ -178,7 +194,7 @@ app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
     if (passwordError) return res.status(400).json({ error: passwordError });
     const rt = await db.getResetToken(token);
     if (!rt) return res.status(400).json({ error: 'Token invalide ou expiré' });
-    const hashed = await bcrypt.hash(newPassword, 10);
+    const hashed = await bcrypt.hash(newPassword, 12);
     const { error } = await db.supabaseAdmin.from('users').update({ password: hashed }).eq('id', rt.user_id);
     if (error) throw new Error(error.message);
     await db.markResetTokenUsed(token);
@@ -200,7 +216,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
     const user = await db.getUserByUsername(username);
     if (!user) {
       console.log('[Login] User not found:', username);
-      await bcrypt.compare(password, '$2a$10$' + 'x'.repeat(53));
+      await bcrypt.compare(password, '$2b$12$' + 'x'.repeat(53));
       return res.status(401).json({ error: 'Identifiant ou mot de passe incorrect' });
     }
     console.log('[Login] User found, comparing password');
@@ -215,13 +231,15 @@ app.post('/api/login', authLimiter, async (req, res) => {
     res.json({ user: { id: user.id, username: user.username, display_name: user.display_name, email: user.email, created_at: user.created_at } });
   } catch (err) {
     console.error('[Login] Error:', err.message, err.stack);
-    res.status(500).json({ error: 'Erreur serveur: ' + err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
 app.post('/api/logout', (req, res) => {
-  req.session.destroy();
-  res.json({ ok: true });
+  req.session.destroy((err) => {
+    if (err) { console.error('[Logout] Error:', err.message); return res.status(500).json({ error: 'Erreur lors de la déconnexion' }); }
+    res.json({ ok: true });
+  });
 });
 
 app.get('/api/me', requireAuth, async (req, res) => {
@@ -231,7 +249,7 @@ app.get('/api/me', requireAuth, async (req, res) => {
     res.json({ user });
   } catch (err) {
     console.error('[Me] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -241,7 +259,7 @@ app.get('/api/games', requireAuth, async (req, res) => {
     res.json({ games });
   } catch (err) {
     console.error('[Games] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -262,7 +280,7 @@ app.post('/api/games/sync', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[Sync] Error:', err.message, err.stack);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -273,7 +291,7 @@ app.post('/api/games/status', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[Status] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -288,7 +306,7 @@ app.post('/api/games/review', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[Review] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -298,7 +316,7 @@ app.get('/api/reviews/feed', requireAuth, async (req, res) => {
     res.json({ reviews });
   } catch (err) {
     console.error('[ReviewsFeed] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -310,7 +328,7 @@ app.get('/api/games/reviews', requireAuth, async (req, res) => {
     res.json({ reviews });
   } catch (err) {
     console.error('[GameReviews] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -320,7 +338,7 @@ app.get('/api/wishlist', requireAuth, async (req, res) => {
     res.json({ wishlist: ids });
   } catch (err) {
     console.error('[Wishlist] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -331,7 +349,7 @@ app.post('/api/wishlist/toggle', requireAuth, async (req, res) => {
     res.json({ added });
   } catch (err) {
     console.error('[WishlistToggle] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -341,7 +359,7 @@ app.get('/api/topthree', requireAuth, async (req, res) => {
     res.json({ topThree: top });
   } catch (err) {
     console.error('[TopThree] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -352,7 +370,7 @@ app.post('/api/topthree', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[TopThreeSet] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -363,7 +381,7 @@ app.delete('/api/account', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[AccountDelete] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -373,17 +391,17 @@ app.get('/api/games/ratings', async (req, res) => {
     res.json({ ratings });
   } catch (err) {
     console.error('[Ratings] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
-app.get('/api/catalog', async (req, res) => {
+app.get('/api/catalog', catalogLimiter, async (req, res) => {
   try {
     const catalog = await db.getCatalog();
     res.json({ catalog });
   } catch (err) {
     console.error('[Catalog] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -393,7 +411,7 @@ app.delete('/api/games', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[GameDeleteAll] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -403,7 +421,7 @@ app.delete('/api/games/:gameId', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[GameDelete] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -413,7 +431,7 @@ app.delete('/api/games/platform/:platform', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[PlatformDelete] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -429,7 +447,7 @@ app.post('/api/admin/reset', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[Admin] Reset error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -439,7 +457,7 @@ app.post('/api/heartbeat', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[Heartbeat] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -598,7 +616,7 @@ app.post('/api/platform/steam/resync', requireAuth, async (req, res) => {
     res.json({ ok: true, count: games.length });
   } catch (err) {
     console.error('[SteamResync] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -669,7 +687,7 @@ app.post('/api/platform/steam/connect', requireAuth, async (req, res) => {
     res.json({ ok: true, count: games.length });
   } catch (err) {
     console.error('[SteamConnect] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -699,7 +717,7 @@ app.post('/api/platform/xbox/connect', requireAuth, async (req, res) => {
     res.json({ ok: true, count, warning, diagnostic });
   } catch (err) {
     console.error('[XboxConnect] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -729,7 +747,7 @@ const CATALOG_PAGES = 50; // 50 pages × 40 jeux = 2000 jeux par plateforme
 let lastCatalogPopulate = 0;
 const CATALOG_COOLDOWN = 60000; // 1 min entre chaque peuplement
 
-app.post('/api/catalog/populate', async (req, res) => {
+app.post('/api/catalog/populate', requireAuth, async (req, res) => {
   try {
     const now = Date.now();
     if (now - lastCatalogPopulate < CATALOG_COOLDOWN) {
@@ -751,7 +769,7 @@ app.post('/api/catalog/populate', async (req, res) => {
     res.json({ ok: true, count: total, steamCount: steamTotal });
   } catch (err) {
     console.error('[CatalogPopulate] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1104,14 +1122,14 @@ function xboxApiGet(apiKey, url) {
   });
 }
 
-app.get('/api/users/search', requireAuth, async (req, res) => {
+app.get('/api/users/search', requireAuth, searchLimiter, async (req, res) => {
   try {
     const { q } = req.query;
     const users = await db.searchUsers(q || '', req.session.userId);
     res.json({ users });
   } catch (err) {
     console.error('[UserSearch] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1122,7 +1140,7 @@ app.post('/api/friends/request', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[FriendRequest] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1133,7 +1151,7 @@ app.post('/api/friends/accept', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[FriendAccept] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1144,7 +1162,7 @@ app.post('/api/friends/remove', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[FriendRemove] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1154,7 +1172,7 @@ app.get('/api/friends', requireAuth, async (req, res) => {
     res.json({ friends });
   } catch (err) {
     console.error('[Friends] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1164,17 +1182,17 @@ app.get('/api/friends/requests', requireAuth, async (req, res) => {
     res.json({ requests });
   } catch (err) {
     console.error('[FriendRequests] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
 app.get('/api/friends/:id/games', requireAuth, async (req, res) => {
   try {
-    const games = await db.getFriendGames(req.params.id);
+    const games = await db.getFriendGames(req.session.userId, req.params.id);
     res.json({ games: games || [] });
   } catch (err) {
     console.error('[FriendGames] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1184,7 +1202,7 @@ app.get('/api/friends/status/:id', requireAuth, async (req, res) => {
     res.json({ status: status || 'none' });
   } catch (err) {
     console.error('[FriendStatus] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1195,7 +1213,7 @@ app.post('/api/account/avatar', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[Avatar] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1203,6 +1221,7 @@ app.post('/api/account/email', requireAuth, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email requis' });
+    if (!validateEmail(email)) return res.status(400).json({ error: 'Format d\'email invalide' });
     const existing = await db.getUserByEmail(email);
     if (existing && existing.id !== Number(req.session.userId)) {
       return res.status(409).json({ error: 'Cet email est déjà utilisé par un autre compte' });
@@ -1212,7 +1231,7 @@ app.post('/api/account/email', requireAuth, async (req, res) => {
     res.json({ ok: true, email });
   } catch (err) {
     console.error('[Email] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1220,13 +1239,19 @@ app.post('/api/account/email', requireAuth, async (req, res) => {
 app.get('/api/users/:id/profile', requireAuth, async (req, res) => {
   try {
     const user = await db.getUserById(req.params.id);
-    const games = await db.getFriendGames(req.params.id);
+    if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    const isSelf = Number(req.params.id) === Number(req.session.userId);
+    if (!isSelf) {
+      delete user.email; delete user.steam_id; delete user.xbox_gamertag;
+    }
+    const games = isSelf
+      ? await db.getGames(req.session.userId)
+      : await db.getFriendGames(req.session.userId, req.params.id);
     const topThree = await db.getTopThree(req.params.id);
     const reviews = await db.getUserPublicReviews(req.params.id);
     res.json({ user, games: games || [], topThree, reviews });
   } catch (err) {
-    console.error('[UserProfile] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1239,7 +1264,7 @@ app.post('/api/suggestions', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[Suggestion] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1249,17 +1274,17 @@ app.get('/api/suggestions', requireAuth, async (req, res) => {
     res.json({ suggestions });
   } catch (err) {
     console.error('[Suggestions] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
 app.delete('/api/suggestions/:id', requireAuth, async (req, res) => {
   try {
-    await db.removeGameSuggestion(req.params.id);
+    await db.removeGameSuggestion(req.params.id, req.session.userId);
     res.json({ ok: true });
   } catch (err) {
-    console.error('[SuggestionDelete] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    if (err.message === 'Non autorisé') return res.status(403).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1272,7 +1297,7 @@ app.post('/api/messages/send', requireAuth, async (req, res) => {
     res.json({ message: msg });
   } catch (err) {
     console.error('[MessageSend] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1293,7 +1318,7 @@ app.get('/api/messages/unread', requireAuth, async (req, res) => {
     res.json({ unread: data || [] });
   } catch (err) {
     console.error('[UnreadMessages] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1303,7 +1328,7 @@ app.get('/api/messages/conversations', requireAuth, async (req, res) => {
     res.json({ conversations });
   } catch (err) {
     console.error('[Conversations] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1314,7 +1339,7 @@ app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
     res.json({ messages });
   } catch (err) {
     console.error('[Messages] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1524,7 +1549,7 @@ app.get('/api/booster/points', requireAuth, async (req, res) => {
     res.json({ points: data.points });
   } catch (err) {
     console.error('[BoosterPoints] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1546,7 +1571,7 @@ app.get('/api/booster/top', async (req, res) => {
     res.json({ top });
   } catch (err) {
     console.error('[BoosterTop] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1556,7 +1581,7 @@ app.get('/api/booster/status/:gameId', requireAuth, async (req, res) => {
     res.json({ boosted });
   } catch (err) {
     console.error('[BoosterStatus] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1594,7 +1619,7 @@ app.get('/api/boost/points', requireAuth, async (req, res) => {
     res.json({ points: bp.boost_points, reset: false });
   } catch (err) {
     console.error('[BoostPoints] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -1621,7 +1646,7 @@ app.get('/api/boost/top', async (req, res) => {
     res.json({ top: enriched.filter(b => b.game) });
   } catch (err) {
     console.error('[BoostTop] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 

@@ -850,29 +850,36 @@ async function populateSteamFromAppList() {
   if (!steamKey) { console.log('[SteamAppList] STEAM_API_KEY non configurée, skip'); return 0; }
   let total = 0;
   try {
+    console.log('[SteamAppList] Importation de tous les jeux Steam via GetAppList...');
     const data = await rawgApiGet('https://api.steampowered.com/ISteamApps/GetAppList/v2/?key=' + steamKey + '&format=json');
     if (!data?.applist?.apps) { console.log('[SteamAppList] Réponse invalide'); return 0; }
     const existing = await db.getCatalog();
     const existingIds = new Set(existing.filter(g => g.game_id.startsWith('steam-')).map(g => g.game_id));
-    // Only filter obvious non-games that would never be a game title
     const nonGameKeywords = ['soundtrack', 'dlc pack', 'wallpaper', 'sdk', 'artbook', 'season pass', 'expansion pack', 'playtest'];
+    const batch = [];
     const totalApps = data.applist.apps.length;
-    for (let i = 0; i < data.applist.apps.length; i++) {
-      const app = data.applist.apps[i];
+    for (const app of data.applist.apps) {
       const gameId = `steam-${app.appid}`;
       if (existingIds.has(gameId)) continue;
       const name = (app.name || '').trim();
       if (!name || name.length < 2) continue;
       if (nonGameKeywords.some(kw => name.toLowerCase().includes(kw))) continue;
-      try {
-        await db.ensureCatalogGame({
-          game_id: gameId, title: name, platform: 'steam',
-          cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${app.appid}/library_600x900.jpg`,
-          genre: '', year: 0, developer: '', publisher: ''
-        });
-        total++;
-      } catch (e) { /* skip individual errors */ }
-      if (total % 1000 === 0) console.log(`[SteamAppList] ${total} / ~${Math.round(totalApps * 0.15)} jeux ajoutés...`);
+      batch.push({
+        game_id: gameId, title: name, platform: 'steam',
+        cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${app.appid}/library_600x900.jpg`,
+        genre: '', year: 0, developer: '', publisher: ''
+      });
+      existingIds.add(gameId);
+      if (batch.length >= 500) {
+        await db.batchUpsertCatalog(batch);
+        total += batch.length;
+        console.log(`[SteamAppList] ${total} / ~${Math.round(totalApps * 0.15)} jeux ajoutés...`);
+        batch.length = 0;
+      }
+    }
+    if (batch.length > 0) {
+      await db.batchUpsertCatalog(batch);
+      total += batch.length;
     }
     console.log(`[SteamAppList] ${total} jeux Steam ajoutés`);
   } catch (e) { console.error('[SteamAppList] Error:', e.message); }

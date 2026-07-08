@@ -1756,7 +1756,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
           avatarUrl && h('div', { className: "w-20 h-20 rounded-xl mx-auto mb-3 overflow-hidden" }, h('img', { src: avatarUrl, alt: "preview", className: "w-full h-full object-cover", onError: e => e.target.style.display = "none" })),
           h('div', { className: "flex gap-2" },
             h('button', { onClick: () => setAvatarModal(false), className: "flex-1 py-2 text-xs font-bold rounded-lg", style: { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, "Annuler"),
-            h('button', { onClick: async () => { setAvatarSaving(true); await onUpdateAvatar?.(avatarUrl); setAvatarSaving(false); setAvatarModal(false); }, disabled: avatarSaving, className: "flex-1 py-2 text-xs font-bold rounded-lg text-white", style: { background: GRAD } }, avatarSaving ? "..." : "Sauvegarder")
+            h('button', { onClick: async () => { setAvatarSaving(true); try { await onUpdateAvatar?.(avatarUrl); } catch (e) {} setAvatarSaving(false); setAvatarModal(false); }, disabled: avatarSaving, className: "flex-1 py-2 text-xs font-bold rounded-lg text-white", style: { background: GRAD } }, avatarSaving ? "..." : "Sauvegarder")
           )
         )
       ),
@@ -2417,12 +2417,14 @@ function App() {
     }
     await API.saveReview(gameId, rating, reviewText, reviewPublic, gameTitle, gameCover);
     setCommunityRefreshKey(k => k + 1);
-    const [g2] = await Promise.all([API.getGames()]);
-    next = g2.games.map(n);
-    setGames(next);
-    const updated = next.find(g => g.game_id === gameId) || next.find(g => g.title === gameTitle);
-    if (updated) setSelectedGame(updated);
     showToast("Critique sauvegard\u00e9e !");
+    try {
+      const [g2] = await Promise.all([API.getGames()]);
+      next = g2.games.map(n);
+      setGames(next);
+      const updated = next.find(g => g.game_id === gameId) || next.find(g => g.title === gameTitle);
+      if (updated) setSelectedGame(updated);
+    } catch (e) { console.error('Post-save refresh failed', e); }
   };
 
   const handleLoginSuccess = (userData) => {

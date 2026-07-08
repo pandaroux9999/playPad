@@ -99,7 +99,7 @@ async function getUserById(id) {
     .single();
   try { checkResult({ data, error }); } catch (e) {
     // fallback: certains champs peuvent manquer (colonne non ajoutée)
-    const { data: d2, error: e2 } = await supabaseAdmin.from('users').select('id, username, display_name, created_at').eq('id', id).single();
+    const { data: d2, error: e2 } = await supabaseAdmin.from('users').select('id, username, display_name, email, avatar_url, epic_username, created_at').eq('id', id).single();
     if (e2) throw new Error(e2.message);
     data = d2;
   }

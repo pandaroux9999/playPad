@@ -62,7 +62,7 @@ const searchLimiter = rateLimit({ windowMs: 60000, max: 20, message: { error: 'T
 
 const corsOrigin = process.env.PUBLIC_URL || 'http://localhost:3000';
 app.use(cors({ origin: corsOrigin, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 app.set('trust proxy', 1);
 const sessionStore = new SupabaseSessionStore();

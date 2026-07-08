@@ -1469,6 +1469,12 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
     setDetailsLoading(true);
     API.getGameDetails(gameId, game.cover).then(d => setGameDetails(d.details)).catch(() => {}).finally(() => setDetailsLoading(false));
   }, [gameId]);
+  useEffect(() => {
+    setDraftRating(game.userRating);
+    setDraftReview(game.review_text || game.reviewText || "");
+    setDraftPublic(game.review_public !== undefined ? game.review_public : (game.reviewPublic !== false));
+    setStatus(game.status);
+  }, [game]);
   const statusCfg = status ? STATUS_CONFIG[status] : STATUS_CONFIG.not_started;
   const inWishlist = wishlistIds?.has(gameId);
   const inTopThree = topThreeIds?.has(gameId);

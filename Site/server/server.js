@@ -6,6 +6,7 @@ const path = require('path');
 const https = require('https');
 const querystring = require('querystring');
 const helmet = require('helmet');
+const decodeHtml = s => s.replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#x27;/g,"'").replace(/&#x2F;/g,'/');
 const rateLimit = require('express-rate-limit');
 const db = require('./db');
 const SupabaseSessionStore = require('./session-store');
@@ -852,31 +853,36 @@ async function populateSteamFromAppList() {
   try {
     console.log('[SteamAppList] Importation de tous les jeux Steam...');
     let apps = [];
-    // Steam Store Search API avec headers navigateur
-    const browserHeaders = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', 'Accept': 'application/json, text/plain, */*', 'Referer': 'https://store.steampowered.com/' };
+    // 1) Scraping HTML de la page search Steam (résiste mieux au 403)
+    const htmlHeaders = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', 'Accept': 'text/html,application/xhtml+xml', 'Referer': 'https://store.steampowered.com/' };
     for (let page = 1; page <= 1000; page++) {
       try {
-        const d = await new Promise((resolve, reject) => {
-          const req = https.get('https://store.steampowered.com/api/search?term=&category1=998&page=' + page + '&cc=US', { headers: browserHeaders }, (resp) => {
+        const html = await new Promise((resolve, reject) => {
+          const req = https.get('https://store.steampowered.com/search/?category1=998&page=' + page + '&cc=US&l=english', { headers: htmlHeaders }, (resp) => {
             let b = '';
             resp.on('data', c => b += c);
             resp.on('end', () => {
               if (resp.statusCode !== 200) return reject(new Error('HTTP ' + resp.statusCode));
-              try { resolve(JSON.parse(b)); }
-              catch (e) { reject(e); }
+              resolve(b);
             });
           });
           req.on('error', reject);
           req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout')); });
         });
-        if (!d?.items || d.items.length === 0) break;
-        const entries = d.items.filter(i => i.id).map(i => ({ appid: i.id, name: i.name || '', developer: '', publisher: '', genre: (i.tags || []).slice(0, 5).join(', ') || '' }));
+        // Extraction des jeux depuis le HTML de la page search Steam
+        const rowMatches = [...html.matchAll(/<a[^>]*class="[^"]*search_result_row[^"]*"[^>]*data-ds-appid="(\d+)"[^>]*>([\s\S]*?)<\/a>/g)];
+        if (rowMatches.length === 0) break;
+        const entries = rowMatches.map(m => {
+          const nameMatch = m[2].match(/<span class="title">([^<]*)<\/span>/);
+          return { appid: parseInt(m[1]), name: nameMatch ? decodeHtml(nameMatch[1].trim()) : '', developer: '', publisher: '', genre: '' };
+        }).filter(e => e.name);
         apps = apps.concat(entries);
-        if (page === 1) console.log('[SteamAppList] Total approx:', d.total_count, 'jeux');
-        if (apps.length >= (d.total_count || 99999)) break;
+        console.log('[SteamAppList] Page', page, ':', entries.length, 'jeux (total', apps.length + ')');
+        if (entries.length < 50) break;
+        await new Promise(r => setTimeout(r, 500));
       } catch (e) { console.log('[SteamAppList] Page', page, 'échouée:', e.message); break; }
     }
-    // Fallback SteamSpy
+    // 2) Fallback SteamSpy si rien
     if (apps.length === 0) {
       try {
         const d = await new Promise((resolve, reject) => {

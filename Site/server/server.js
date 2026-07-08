@@ -851,22 +851,28 @@ async function populateSteamFromAppList() {
   let total = 0;
   try {
     console.log('[SteamAppList] Importation de tous les jeux Steam via GetAppList...');
-    const data = await new Promise((resolve, reject) => {
-      const url = 'https://api.steampowered.com/ISteamApps/GetAppList/v2/?key=' + encodeURIComponent(steamKey) + '&format=json';
-      https.get(url, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
-        let d = '';
-        resp.on('data', c => d += c);
-        resp.on('end', () => {
-          if (resp.statusCode !== 200) {
-            console.error('[SteamAppList] HTTP', resp.statusCode, d.slice(0, 300));
-            return reject(new Error('HTTP ' + resp.statusCode));
-          }
-          try { resolve(JSON.parse(d)); }
-          catch (e) { console.error('[SteamAppList] Parse error, response start:', d.slice(0, 300)); reject(e); }
+    const urls = [
+      'https://api.steampowered.com/ISteamApps/GetAppList/v1/?key=' + encodeURIComponent(steamKey),
+      'https://api.steampowered.com/ISteamApps/GetAppList/v0001/?key=' + encodeURIComponent(steamKey),
+    ];
+    let data = null;
+    for (const url of urls) {
+      try {
+        data = await new Promise((resolve, reject) => {
+          https.get(url, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
+            let d = '';
+            resp.on('data', c => d += c);
+            resp.on('end', () => {
+              if (resp.statusCode !== 200) return reject(new Error('HTTP ' + resp.statusCode));
+              try { resolve(JSON.parse(d)); }
+              catch (e) { reject(e); }
+            });
+          }).on('error', reject);
         });
-      }).on('error', reject);
-    });
-    if (!data?.applist?.apps) { console.log('[SteamAppList] Réponse invalide'); return 0; }
+        if (data?.applist?.apps) break;
+      } catch (e) { console.log('[SteamAppList] Tentative échouée:', url.slice(0, 60) + '...', e.message); }
+    }
+    if (!data?.applist?.apps) { console.log('[SteamAppList] Toutes les tentatives ont échoué'); return 0; }
     const existing = await db.getCatalog();
     const existingIds = new Set(existing.filter(g => g.game_id.startsWith('steam-')).map(g => g.game_id));
     const nonGameKeywords = ['soundtrack', 'dlc pack', 'wallpaper', 'sdk', 'artbook', 'season pass', 'expansion pack', 'playtest'];

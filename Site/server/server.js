@@ -734,6 +734,19 @@ app.get('/api/platform/xbox/diagnostic', requireAuth, async (req, res) => {
   res.json({ diagnostic: diag.join(' | ') });
 });
 
+// Epic Games — connexion manuelle via nom d'utilisateur
+app.post('/api/platform/epic/connect', requireAuth, async (req, res) => {
+  let { epicUsername } = req.body;
+  if (!epicUsername) return res.status(400).json({ error: 'Nom d\'utilisateur Epic requis' });
+  try {
+    await db.setEpicUsername(req.session.userId, epicUsername);
+    res.json({ ok: true, count: 0, username: epicUsername });
+  } catch (err) {
+    console.error('[EpicConnect] Error:', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
 // Catalogue — importe les jeux populaires depuis RAWG API dans le catalogue global
 // (utilise RAWG platform IDs: 4=PC, 7=Nintendo Switch, 187=PS5, 186=Xbox Series, 1=Xbox One, 18=PS4)
 const CATALOG_PLATFORMS = [
@@ -964,6 +977,13 @@ async function populateSteamFromAppList() {
     }
   } catch (e) {
     console.error('[Catalog] Erreur peuplement initial:', e.message);
+  }
+  // Données de démonstration après le catalogue
+  try {
+    const { seedDemoData } = require('./seed');
+    await seedDemoData();
+  } catch (e) {
+    console.error('[Seed] Erreur:', e.message);
   }
 })();
 
@@ -1670,6 +1690,7 @@ app.listen(PORT, () => {
   console.log('[Server] STEAM_API_KEY:', process.env.STEAM_API_KEY ? 'defined' : 'NON DÉFINI — Steam import ne marchera pas');
   console.log('[Server] XBL_API_KEY:', process.env.XBL_API_KEY ? 'defined' : 'NON DÉFINI — Xbox import ne marchera pas');
   console.log('[Server] RAWG_API_KEY:', process.env.RAWG_API_KEY ? 'defined' : 'NON DÉFINI — catalogue RAWG indisponible');
+  console.log('[Server] Epic Games : connexion par nom d\'utilisateur (sans API)');
   if (!process.env.PUBLIC_URL) {
     console.warn('⚠️  PUBLIC_URL manquant. Steam OpenID redirigera vers localhost au lieu de l\'URL publique.');
     console.warn('    Ajoute PUBLIC_URL=https://ton-app.render.com dans les env vars Render.');

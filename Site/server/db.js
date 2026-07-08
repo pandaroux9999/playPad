@@ -43,6 +43,14 @@ async function getUserByUsername(username) {
   return data;
 }
 
+async function getUserCount() {
+  const { count, error } = await supabaseAdmin
+    .from('users')
+    .select('*', { count: 'exact', head: true });
+  if (error) throw new Error(error.message);
+  return count || 0;
+}
+
 async function getUserByEmail(email) {
   const { data, error } = await supabaseAdmin
     .from('users')
@@ -86,7 +94,7 @@ async function markResetTokenUsed(token) {
 async function getUserById(id) {
   const { data, error } = await supabaseAdmin
     .from('users')
-    .select('id, username, display_name, avatar_url, email, created_at, steam_id, xbox_gamertag, last_seen')
+    .select('id, username, display_name, avatar_url, email, created_at, steam_id, xbox_gamertag, epic_username, last_seen')
     .eq('id', id)
     .single();
   checkResult({ data, error });
@@ -503,10 +511,12 @@ async function ensureCatalogGame(game) {
         .from('catalog')
         .upsert(fallback, { onConflict: 'game_id', ignoreDuplicates: false });
       if (e2 && e2.code !== '23505') throw new Error(e2.message);
+      invalidateCatalogCache();
       return;
     }
     throw new Error(error.message);
   }
+  invalidateCatalogCache();
 }
 
 async function batchUpsertCatalog(games) {
@@ -520,6 +530,7 @@ async function batchUpsertCatalog(games) {
     .from('catalog')
     .upsert(payloads, { onConflict: 'game_id', ignoreDuplicates: false });
   if (error) console.error('[batchUpsertCatalog] Error:', error.message);
+  invalidateCatalogCache();
 }
 
 async function dedupeCatalog() {
@@ -596,14 +607,30 @@ async function mergeCatalogDuplicatesByTitle() {
   return totalDeleted;
 }
 
+let catalogCache = null;
+
 async function getCatalog() {
+  if (catalogCache) return catalogCache;
   const { data, error } = await supabaseAdmin
     .from('catalog')
     .select('*')
     .order('title')
     .limit(100000);
   if (error) throw new Error(error.message);
-  return data || [];
+  if (!data) return [];
+  data.sort((a, b) => {
+    const aLetter = /^[a-zA-ZÀ-ÿ]/.test(a.title);
+    const bLetter = /^[a-zA-ZÀ-ÿ]/.test(b.title);
+    if (aLetter && !bLetter) return -1;
+    if (!aLetter && bLetter) return 1;
+    return a.title.localeCompare(b.title, 'fr');
+  });
+  catalogCache = data;
+  return data;
+}
+
+function invalidateCatalogCache() {
+  catalogCache = null;
 }
 
 async function getCatalogCount() {
@@ -675,6 +702,14 @@ async function setXboxGamertag(userId, gamertag) {
   const { error } = await supabaseAdmin
     .from('users')
     .update({ xbox_gamertag: gamertag })
+    .eq('id', userId);
+  if (error) throw new Error(error.message);
+}
+
+async function setEpicUsername(userId, epicUsername) {
+  const { error } = await supabaseAdmin
+    .from('users')
+    .update({ epic_username: epicUsername })
     .eq('id', userId);
   if (error) throw new Error(error.message);
 }
@@ -901,6 +936,7 @@ async function getUserBoostStatus(userId, gameId) {
 module.exports = {
   supabaseAdmin,
   createUser,
+  getUserCount,
   getUserByUsername,
   getUserByEmail,
   createResetToken,
@@ -943,6 +979,7 @@ module.exports = {
   mergeCatalogDuplicatesByTitle,
   getCatalog,
   getCatalogCount,
+  invalidateCatalogCache,
   updateGamePlatform,
   deletePlatformGames,
   updateLastSeen,

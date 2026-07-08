@@ -126,6 +126,7 @@ const API = {
   getGamePrices: (gameId) => API.request('GET', `/api/game-prices/${gameId}`),
   getBoosterPoints: () => API.request('GET', '/api/booster/points'),
   getBoostStatus: (gameId) => API.request('GET', `/api/booster/status/${gameId}`),
+  connectEpic: (epicUsername) => API.request('POST', '/api/platform/epic/connect', { epicUsername }),
 };
 
 function Icon(paths, viewBox = "0 0 24 24") {
@@ -491,7 +492,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSync, setShowSync] = useState(false);
   const [syncing, setSyncing] = useState(null);
-  const [connected, setConnected] = useState({ ps5: true, steam: !!(user?.steam_id), epic: true, nintendo: false, xbox: !!(user?.xbox_gamertag) });
+  const [connected, setConnected] = useState({ ps5: true, steam: !!(user?.steam_id), epic: !!(user?.epic_username), nintendo: false, xbox: !!(user?.xbox_gamertag) });
   const connectedCount = Object.values(connected).filter(Boolean).length;
   const unread = notifications.filter(n => !n.read).length;
   const [buyGame, setBuyGame] = useState(null);
@@ -645,25 +646,27 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
           const cfg = PLATFORM_CONFIG[platform];
            const isConnected = connected[platform];
           const isXbox = platform === "xbox";
+          const isEpic = platform === "epic";
           const onConnect = platform === "steam"
             ? () => { window.location.href = "/api/auth/steam"; }
             : async () => {
-              const label = isXbox ? 'Gamertag Xbox' : 'identifiant';
-              const current = isXbox ? user?.xbox_gamertag : '';
+              const label = isXbox ? 'Gamertag Xbox' : isEpic ? 'nom d\'utilisateur Epic' : 'identifiant';
+              const current = isXbox ? user?.xbox_gamertag : isEpic ? user?.epic_username : '';
               const g = prompt(`Entrez votre ${label} :`, current || '');
               if (g) {
                 try {
                   if (isXbox) { const r = await API.connectXbox(g); if (r.warning) showToast(r.warning); if (r.count === 0 && !r.warning?.includes('XBL_API_KEY')) { showToast('Aucun jeu trouvé pour ce Gamertag'); return; } }
+                  if (isEpic) { await API.connectEpic(g); }
                   setConnected(c => ({ ...c, [platform]: true })); onSyncComplete?.();
-                  showToast(`${cfg.name} ${isConnected ? 're-synchronisé' : 'connecté'}${isXbox && g === current ? ' · re-sync' : ''}`);
+                  showToast(`${cfg.name} ${isConnected ? 're-synchronisé' : 'connecté'}${(isXbox || isEpic) && g === current ? ' · re-sync' : ''}`);
                 } catch (err) { showToast('Erreur ' + cfg.name + ' : ' + (err.message || 'inconnue')); }
               }
             };
-          return h('div', { key: platform, className: "flex items-center gap-2.5 py-1.5" + (isXbox ? " cursor-pointer hover:opacity-80 transition-opacity" : ""), onClick: isXbox ? onConnect : undefined },
+          return h('div', { key: platform, className: "flex items-center gap-2.5 py-1.5" + ((isXbox || isEpic) ? " cursor-pointer hover:opacity-80 transition-opacity" : ""), onClick: (isXbox || isEpic) ? onConnect : undefined },
             h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0", style: { background: cfg.color + "20" } }, h(PlatformLogo, { platform, size: 16 })),
             h('div', { className: "flex-1 min-w-0" },
               h('div', { className: "flex items-center gap-1.5" }, h('span', { className: "text-[11px] font-bold text-foreground" }, cfg.name), h('div', { className: "w-1 h-1 rounded-full", style: { background: isConnected ? "#4ade80" : "#ef444450", boxShadow: isConnected ? "0 0 4px #4ade8080" : "none" } })),
-              h('p', { className: "text-[9px] text-muted-foreground" }, isConnected ? (isXbox ? (user?.xbox_gamertag || '') + ' · ' : '') + `${gameCount} jeux · ${lastSync}` : "Non connecté")
+              h('p', { className: "text-[9px] text-muted-foreground" }, isConnected ? (isXbox ? (user?.xbox_gamertag || '') + ' · ' : isEpic ? (user?.epic_username || '') + ' · ' : '') + `${gameCount} jeux · ${lastSync}` : "Non connecté")
             ),
             h('div', { className: "flex items-center gap-1" },
               isConnected
@@ -672,10 +675,14 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
                       ? h('button', { onClick: async (e) => { e.stopPropagation(); if (syncing === 'steam') return; setSyncing('steam'); try { const r = await API.resyncSteam(); showToast(`${r.count} jeux Steam ajoutés à la bibliothèque et au catalogue`); onSyncComplete?.(); } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); } finally { setSyncing(null); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, syncing === 'steam' ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
                       : h('a', { href: "/api/auth/steam", className: "p-1.5 rounded-lg inline-flex", style: { background: `${P1}15` } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
                     )
-                    : (isXbox && user?.xbox_gamertag
-                      ? h('button', { onClick: async (e) => { e.stopPropagation(); setSyncing('xbox'); try { const r = await API.connectXbox(user.xbox_gamertag); if (r.diagnostic) showToast('Diagnostic: ' + r.diagnostic); if (r.warning) showToast(r.warning); showToast(`${r.count} jeux Xbox synchronisés`); onSyncComplete?.(); } catch (err) { showToast('Erreur Xbox: ' + (err.message || 'inconnue')); } finally { setSyncing(null); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, syncing === 'xbox' ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
+                    : null,
+                  (isXbox && user?.xbox_gamertag
+                    ? h('button', { onClick: async (e) => { e.stopPropagation(); setSyncing('xbox'); try { const r = await API.connectXbox(user.xbox_gamertag); if (r.diagnostic) showToast('Diagnostic: ' + r.diagnostic); if (r.warning) showToast(r.warning); showToast(`${r.count} jeux Xbox synchronisés`); onSyncComplete?.(); } catch (err) { showToast('Erreur Xbox: ' + (err.message || 'inconnue')); } finally { setSyncing(null); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, syncing === 'xbox' ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
+                    : (isEpic && user?.epic_username
+                      ? h('button', { onClick: async (e) => { e.stopPropagation(); try { await API.connectEpic(user.epic_username); setConnected(c => ({ ...c, epic: true })); showToast('Compte Epic re-synchronisé'); } catch (err) { showToast('Erreur Epic: ' + (err.message || 'inconnue')); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
                       : null
                     ),
+                  ),
                   isXbox && user?.xbox_gamertag && h('button', { onClick: async (e) => { e.stopPropagation(); try { const r = await API.xboxDiagnostic(user.xbox_gamertag); showToast('Xbox: ' + r.diagnostic); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center hover:opacity-80", style: { background: "rgba(139,92,246,0.1)", color: "#8B5CF6", width: 24, height: 24 } }, h(Search, { size: 10 })),
                   h('button', { onClick: async (e) => { e.stopPropagation(); if (!confirm(`Supprimer tous les jeux ${cfg.name} de votre bibliothèque ?`)) return; await API.disconnectPlatform(platform); setConnected(c => ({ ...c, [platform]: false })); onSyncComplete?.(); showToast(`Jeux ${cfg.name} retirés`); }, className: "p-1.5 rounded-lg hover:opacity-80", style: { background: "rgba(239,68,68,0.15)" } }, h(Trash2, { size: 10, style: { color: "#ef4444" } }))]
                 : [h('button', { onClick: onConnect, className: "px-2 py-1 text-[9px] font-bold rounded-md text-white whitespace-nowrap", style: { background: GRAD } }, "+ " + cfg.name)]

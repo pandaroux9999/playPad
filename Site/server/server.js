@@ -852,27 +852,48 @@ async function populateSteamFromAppList() {
   try {
     console.log('[SteamAppList] Importation de tous les jeux Steam via GetAppList...');
     const urls = [
-      'https://api.steampowered.com/ISteamApps/GetAppList/v1/?key=' + encodeURIComponent(steamKey),
-      'https://api.steampowered.com/ISteamApps/GetAppList/v0001/?key=' + encodeURIComponent(steamKey),
+      'https://api.steampowered.com/ISteamApps/GetAppList/v2/?key=' + encodeURIComponent(steamKey) + '&format=json',
+      'https://api.steampowered.com/ISteamApps/GetAppList/v1/?key=' + encodeURIComponent(steamKey) + '&format=json',
+      'https://steamcommunity.com/ISteamApps/GetAppList/v2/?key=' + encodeURIComponent(steamKey) + '&format=json',
     ];
     let data = null;
     for (const url of urls) {
       try {
         data = await new Promise((resolve, reject) => {
-          https.get(url, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
+          const req = https.get(url, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
             let d = '';
             resp.on('data', c => d += c);
             resp.on('end', () => {
-              if (resp.statusCode !== 200) return reject(new Error('HTTP ' + resp.statusCode));
+              if (resp.statusCode !== 200) {
+                console.log('[SteamAppList] Code', resp.statusCode, 'Réponse:', d.slice(0, 300));
+                return reject(new Error('HTTP ' + resp.statusCode));
+              }
               try { resolve(JSON.parse(d)); }
               catch (e) { reject(e); }
             });
-          }).on('error', reject);
+          });
+          req.on('error', reject);
+          req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout')); });
         });
         if (data?.applist?.apps) break;
-      } catch (e) { console.log('[SteamAppList] Tentative échouée:', url.slice(0, 60) + '...', e.message); }
+      } catch (e) { console.log('[SteamAppList] Échec:', e.message); }
     }
-    if (!data?.applist?.apps) { console.log('[SteamAppList] Toutes les tentatives ont échoué'); return 0; }
+    if (!data?.applist?.apps) {
+      // Fallback: SteamDatabase GitHub (IDs uniquement, noms récupérés plus tard)
+      console.log('[SteamAppList] Fallback GitHub...');
+      data = await new Promise((resolve, reject) => {
+        const req = https.get('https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/StoreAppIds.txt', { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
+          let d = '';
+          resp.on('data', c => d += c);
+          resp.on('end', () => {
+            if (resp.statusCode !== 200) return reject(new Error('HTTP ' + resp.statusCode));
+            resolve({ applist: { apps: d.split('\n').filter(Boolean).map(line => { const m = line.match(/^(\d+)/); return m ? { appid: parseInt(m[1]), name: `Steam App ${m[1]}` } : null; }).filter(Boolean) } });
+          });
+        });
+        req.on('error', reject);
+        req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout')); });
+      });
+    }
     const existing = await db.getCatalog();
     const existingIds = new Set(existing.filter(g => g.game_id.startsWith('steam-')).map(g => g.game_id));
     const nonGameKeywords = ['soundtrack', 'dlc pack', 'wallpaper', 'sdk', 'artbook', 'season pass', 'expansion pack', 'playtest'];

@@ -669,39 +669,25 @@ let catalogCache = null;
 
 async function getCatalog() {
   if (catalogCache) return catalogCache;
+  // Pas de ORDER BY SQL (lent sur 96k lignes sans index) → tri local après
   const { data, error } = await supabaseAdmin
     .from('catalog')
     .select('*')
-    .order('title')
     .limit(100000);
   if (error) throw new Error(error.message);
   if (!data) return [];
-  const letterRe = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/;
-  data.sort((a, b) => {
-    const aTitle = a.title || '';
-    const bTitle = b.title || '';
-    const aLetter = letterRe.test(aTitle);
-    const bLetter = letterRe.test(bTitle);
-    if (aLetter && !bLetter) return -1;
-    if (!aLetter && bLetter) return 1;
-    const al = aTitle.toLowerCase();
-    const bl = bTitle.toLowerCase();
-    if (al < bl) return -1;
-    if (al > bl) return 1;
-    return 0;
-  });
+  data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   catalogCache = data;
   return data;
 }
 
 async function getCatalogPage(page = 1, limit = 500) {
   const offset = (page - 1) * limit;
-  // Pas de ORDER BY SQL sur 96k lignes (trop lent sans index) — tri local
+  // range() contourne la limite PostgREST de 1000 lignes
   const { data, error } = await supabaseAdmin
     .from('catalog')
     .select('*')
-    .limit(limit)
-    .offset(offset);
+    .range(offset, offset + limit - 1);
   if (error) throw new Error(error.message);
   if (!data) return [];
   data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));

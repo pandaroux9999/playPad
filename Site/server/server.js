@@ -23,18 +23,9 @@ if (!SESSION_SECRET || SESSION_SECRET.length < 16) {
 }
 
 // Sécurité : headers HTTP (CSP, HSTS, X-Frame-Options, etc.)
-const cspDirectives = {
-  defaultSrc: ["'self'"],
-  scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdn.tailwindcss.com"],
-  styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
-  fontSrc: ["'self'", "https://fonts.gstatic.com"],
-  imgSrc: ["'self'", "data:", "https:"],
-  connectSrc: ["'self'"],
-  frameSrc: ["'self'", "https://accounts.google.com"],
-  objectSrc: ["'none'"],
-};
 app.use(helmet({
-  contentSecurityPolicy: { directives: cspDirectives },
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
 }));
 
 // Sécurité : rate limiting global (200 req / 15 min par IP)

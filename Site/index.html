@@ -881,8 +881,12 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const [boostedGamesLocal, setBoostedGamesLocal] = useState(new Set());
   const [showBoostSection, setShowBoostSection] = useState(false);
   const [showBoosterGames, setShowBoosterGames] = useState(true);
-  const [revealedLetters, setRevealedLetters] = useState([]);
   const [sponsored, setSponsored] = useState([]);
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogAllLoaded, setCatalogAllLoaded] = useState(false);
+  const CATALOG_LIMIT = 500;
+  const catalogRef = useRef(null);
   useEffect(() => {
     if (catalog.length > 0 && sponsored.length === 0) {
       const shuffled = [...catalog].sort(() => Math.random() - 0.5);
@@ -890,43 +894,16 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     }
   }, [catalog]);
   useEffect(() => {
+    setCatalog([]);
+    setCatalogPage(1);
+    setCatalogAllLoaded(false);
     let cancelled = false;
-    async function loadPages() {
-      let all = [];
-      let p = 1;
-      const LIMIT = 500;
-      let total = 0;
-      try {
-        const first = await API.getCatalog(p, LIMIT);
-        if (cancelled) return;
-        total = first.total;
-        const cat = first.catalog || [];
-        if (cat.length > 0) {
-          all = cat;
-          setCatalog(cat);
-          p++;
-        } else {
-          setCatalog(CATALOGUE);
-          return;
-        }
-      } catch (e) {
-        if (cancelled) return;
-        setCatalog(CATALOGUE);
-        return;
-      }
-      while (p * LIMIT < total) {
-        try {
-          const d = await API.getCatalog(p, LIMIT);
-          if (cancelled) return;
-          const chunk = d.catalog || [];
-          if (chunk.length === 0) break;
-          all = all.concat(chunk);
-          setCatalog([...all]);
-          p++;
-        } catch (e) { break; }
-      }
-    }
-    loadPages();
+    API.getCatalog(1, CATALOG_LIMIT).then(d => {
+      if (cancelled) return;
+      const cat = d.catalog || [];
+      setCatalog(cat.length > 0 ? cat : CATALOGUE);
+      if (cat.length === 0 || cat.length >= d.total) setCatalogAllLoaded(true);
+    }).catch(() => { if (!cancelled) setCatalog(CATALOGUE); setCatalogAllLoaded(true); });
     API.getTopBoosted().then(d => {
       setTopBoosted(d.top || []);
       if ((d.top || []).length > 0) setShowBoostSection(true);
@@ -934,6 +911,26 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     API.getBoostPoints().then(d => setBoostPoints(d.points)).catch(() => {});
     return () => { cancelled = true; };
   }, [refreshKey]);
+  // Infinite scroll
+  useEffect(() => {
+    if (catalogAllLoaded || catalogLoading) return;
+    const el = catalogRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      if (el.scrollHeight - el.scrollTop - el.clientHeight < 800 && !catalogLoading && !catalogAllLoaded) {
+        setCatalogLoading(true);
+        const nextPage = catalogPage + 1;
+        API.getCatalog(nextPage, CATALOG_LIMIT).then(d => {
+          const chunk = d.catalog || [];
+          setCatalog(prev => [...prev, ...chunk]);
+          setCatalogPage(nextPage);
+          if (chunk.length < CATALOG_LIMIT) setCatalogAllLoaded(true);
+        }).catch(() => {}).finally(() => setCatalogLoading(false));
+      }
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [catalogPage, catalogAllLoaded, catalogLoading]);
 
   const genres = useMemo(() => ["all", ...new Set(catalog.flatMap(g => (g.genre || '').split(',').map(s => s.trim()).filter(Boolean)))], [catalog]);
   const platforms = ["all", ...Object.keys(PLATFORM_CONFIG)];
@@ -960,23 +957,6 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     return [...catalog].filter(g => (ratings?.[g.game_id] || 0) >= 4).sort((a, b) => (ratings?.[b.game_id] || 0) - (ratings?.[a.game_id] || 0)).slice(0, 20);
   }, [catalog, ratings, search]);
   const boostedGameIds = useMemo(() => new Set(topBoosted.map(b => b.game_id)), [topBoosted]);
-  const letters = useMemo(() => [...new Set(catalog.map(g => (g.title || '?')[0].toUpperCase()))].sort(), [catalog]);
-  useEffect(() => {
-    if (letters.length === 0) { setRevealedLetters([]); return; }
-    setRevealedLetters([letters[0]]);
-    let idx = 0;
-    const timer = setInterval(() => {
-      idx++;
-      if (idx >= letters.length) { clearInterval(timer); return; }
-      setRevealedLetters(prev => [...prev, letters[idx]]);
-    }, 250);
-    return () => clearInterval(timer);
-  }, [letters.length]);
-  const allGamesVisible = useMemo(() => {
-    if (search || hasActiveFilters) return filtered;
-    if (revealedLetters.length === 0) return [];
-    return filtered.filter(g => revealedLetters.includes((g.title || '?')[0].toUpperCase()));
-  }, [filtered, revealedLetters, search, hasActiveFilters]);
   const handleBoost = async (gameId, e) => {
     if (e) e.stopPropagation();
     if (boostedGamesLocal.has(gameId)) { showToast?.('Tu as déjà boosté ce jeu'); return; }
@@ -991,9 +971,9 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     } catch (err) { showToast?.(err.message); }
   };
 
-  return h('div', { className: "flex flex-col h-full view-enter" },
-    h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
-      h('div', { className: "flex items-center gap-2.5 mb-3" },
+    return h('div', { ref: catalogRef, className: "flex flex-col h-full view-enter overflow-y-auto" },
+      h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
+        h('div', { className: "flex items-center gap-2.5 mb-3" },
         h('img', { src: "img/logo_hackaton.png", alt: "PlayPad", className: "w-9 h-9 object-contain" }),
         h('div', null,
           h('h1', { className: "text-xl font-black text-foreground leading-none", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Catalogue Complet"),
@@ -1133,15 +1113,15 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       ),
       filtered.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
-        : !search && !hasActiveFilters && revealedLetters.length === 0
+        : catalog.length === 0 && !catalogAllLoaded
           ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Loader, { size: 24, className: "animate-spin mb-2", style: { color: P1 } }), h('p', { className: "text-xs" }, "Chargement des jeux..."))
           : h('div', null,
             h('div', { className: "flex items-center justify-between mb-3" },
-              h('p', { className: "text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2" }, "Tous les jeux", revealedLetters.length > 0 && revealedLetters.length < letters.length && h('span', { className: "text-[9px] font-normal" }, revealedLetters.join(' ') + ' ...')),
+              h('p', { className: "text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2" }, "Tous les jeux", h('span', { className: "text-[9px] font-normal text-muted-foreground" }, "(" + catalog.length + " charg\u00e9s)")),
               boosterPoints > 0 && h('div', { className: "flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold", style: { background: `${P1}15`, color: P1 } }, h(Zap, { size: 10, fill: P1 }), boosterPoints + " point" + (boosterPoints > 1 ? "s" : "") + " booster")
             ),
             h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" },
-              allGamesVisible.length > 0 ? allGamesVisible.map(game => {
+              filtered.length > 0 ? filtered.map(game => {
                 const hasBoosted = userBoostedSet?.has(game.game_id);
                 const boostCount = topBoosted.find(b => b.game_id === game.game_id)?.count || 0;
                 return h(GameCard, {
@@ -1158,6 +1138,13 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                   boosterActive: hasBoosted,
                 });
               }) : null
+            ),
+            catalogLoading && h('div', { className: "flex items-center justify-center py-6 text-muted-foreground" },
+              h(Loader, { size: 18, className: "animate-spin mr-2", style: { color: P1 } }),
+              h('span', { className: "text-xs" }, "Chargement...")
+            ),
+            !catalogLoading && !catalogAllLoaded && filtered.length > 0 && h('div', { className: "flex items-center justify-center py-6 text-muted-foreground" },
+              h('span', { className: "text-xs" }, "Scrollez pour charger plus de jeux")
             ),
           )
     )

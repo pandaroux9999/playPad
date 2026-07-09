@@ -696,13 +696,17 @@ async function getCatalog() {
 
 async function getCatalogPage(page = 1, limit = 500) {
   const offset = (page - 1) * limit;
+  // Évite ORDER BY coûteux sur 96k lignes sans index → on ne trie que la page
   const { data, error } = await supabaseAdmin
     .from('catalog')
     .select('*')
     .order('title')
-    .range(offset, offset + limit - 1);
+    .limit(limit)
+    .offset(offset);
   if (error) throw new Error(error.message);
-  return data || [];
+  if (!data) return [];
+  data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  return data;
 }
 
 function invalidateCatalogCache() {

@@ -2045,11 +2045,14 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
         ),
         // Email
         h('div', { className: "flex items-center justify-between py-2.5 border-b border-border" },
-          h('div', { className: "flex items-center gap-2" },
+          h('div', { className: "flex items-center gap-2 min-w-0" },
             h(Mail, { size: 13, style: { color: `${P1}aa` } }),
-            h('span', { className: "text-xs font-medium text-foreground" }, "Email")
+            h('div', { className: "min-w-0" },
+              h('p', { className: "text-xs font-medium text-foreground" }, "Email"),
+              h('p', { className: "text-[9px] text-muted-foreground truncate mt-px" }, email || "Non renseign\u00e9")
+            )
           ),
-          h('button', { onClick: () => { setSettingsOpen(false); setEmailModal(true); }, className: "text-[10px] font-bold", style: { color: P1 } }, email ? "Changer" : "Ajouter")
+          h('button', { onClick: () => { setSettingsOpen(false); setEmailModal(true); }, className: "text-[10px] font-bold flex-shrink-0 ml-2", style: { color: P1 } }, email ? "Changer" : "Ajouter")
         ),
         // Notifications email
         h('div', { className: "flex items-center justify-between py-2.5 border-b border-border" },

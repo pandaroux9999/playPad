@@ -696,11 +696,10 @@ async function getCatalog() {
 
 async function getCatalogPage(page = 1, limit = 500) {
   const offset = (page - 1) * limit;
-  // Évite ORDER BY coûteux sur 96k lignes sans index → on ne trie que la page
+  // Pas de ORDER BY SQL sur 96k lignes (trop lent sans index) — tri local
   const { data, error } = await supabaseAdmin
     .from('catalog')
     .select('*')
-    .order('title')
     .limit(limit)
     .offset(offset);
   if (error) throw new Error(error.message);

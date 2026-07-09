@@ -902,7 +902,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       if (cancelled) return;
       const cat = d.catalog || [];
       setCatalog(cat.length > 0 ? cat : CATALOGUE);
-      if (cat.length === 0 || cat.length >= d.total) setCatalogAllLoaded(true);
+      if (cat.length < CATALOG_LIMIT) setCatalogAllLoaded(true);
     }).catch(() => { if (!cancelled) setCatalog(CATALOGUE); setCatalogAllLoaded(true); });
     API.getTopBoosted().then(d => {
       setTopBoosted(d.top || []);

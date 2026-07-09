@@ -513,9 +513,9 @@ app.get('/api/catalog', catalogLimiter, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 500, 5000);
     const catalog = await db.getCatalogPage(page, limit);
-    const total = await db.getCatalogCount();
-    res.json({ catalog, total, page, limit });
+    res.json({ catalog, total: catalog.length < limit ? (page - 1) * limit + catalog.length : -1 });
   } catch (err) {
+    console.error('[Catalog] Error:', err.message);
     res.status(500).json({ error: 'Erreur interne' });
   }
 });

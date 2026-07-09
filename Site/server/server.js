@@ -100,6 +100,7 @@ function requireAuth(req, res, next) {
 
 // Validation de la complexité du mot de passe
 function validatePassword(password) {
+  // Exported for testing
   if (password.length < 8) return 'Le mot de passe doit contenir au moins 8 caractères';
   if (!/[A-Z]/.test(password)) return 'Le mot de passe doit contenir au moins une majuscule';
   if (!/[a-z]/.test(password)) return 'Le mot de passe doit contenir au moins une minuscule';
@@ -2099,8 +2100,6 @@ async function refreshAllNews() {
       await db.addNewsItems('releases', releases);
       results.releases = releases.length;
     }
-  } else {
-    console.log('[News] TWITCH_CLIENT_ID/SECRET non configurés, skip IGDB releases');
   }
 
   const drama = await fetchDramaFromRSS();
@@ -2113,9 +2112,9 @@ async function refreshAllNews() {
   if (esport.length > 0) {
     await db.addNewsItems('esport', esport);
     results.esport = esport.length;
+    notifyFavoriteUsers('esport', esport).catch(e => console.error('[Notify] Error:', e.message));
   }
 
-  // Nettoie les vieux posts (garde max 50 par catégorie)
   await db.pruneNewsCache(50).catch(e => console.error('[News] Prune error:', e.message));
   console.log(`[News] ✅ Rafraîchi : ${results.releases} releases, ${results.drama} drama, ${results.esport} esport`);
   return results;
@@ -2167,6 +2166,174 @@ app.post('/api/admin/refresh-news', requireAuth, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ─── E-SPORT FAVORITES ──────────────────────────────────────
+app.post('/api/esport/favorite/toggle', requireAuth, async (req, res) => {
+  try {
+    const { event } = req.body;
+    if (!event) return res.status(400).json({ error: 'Event data required' });
+    const result = await db.toggleEsportFavorite(req.session.userId, event);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/esport/favorites', requireAuth, async (req, res) => {
+  try {
+    const favorites = await db.getEsportFavorites(req.session.userId);
+    res.json({ favorites });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/esport/favorites/check', requireAuth, async (req, res) => {
+  try {
+    const { title, game } = req.query;
+    const favorited = await db.isEsportFavorite(req.session.userId, title, game);
+    res.json({ favorited });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── NOTIFICATION PREFERENCES ───────────────────────────────
+app.get('/api/account/notifications', requireAuth, async (req, res) => {
+  try {
+    const prefs = await db.getNotificationPrefs(req.session.userId);
+    res.json(prefs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/account/notifications', requireAuth, async (req, res) => {
+  try {
+    const { emailNotifications } = req.body;
+    await db.setNotificationPrefs(req.session.userId, { emailNotifications });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PLAYER SEARCH ──────────────────────────────────────────
+app.get('/api/players/search', requireAuth, async (req, res) => {
+  try {
+    const { game } = req.query;
+    if (!game) return res.json({ players: [] });
+    const players = await db.searchPlayersByGame(game, req.session.userId);
+    res.json({ players });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── STREAMER SEARCH (Twitch) ───────────────────────────────
+app.get('/api/streamers/search', requireAuth, async (req, res) => {
+  try {
+    const { game } = req.query;
+    if (!game) return res.json({ streamers: [] });
+    const twitchId = process.env.TWITCH_CLIENT_ID;
+    const twitchSecret = process.env.TWITCH_CLIENT_SECRET;
+    const streamers = await db.searchStreamers(game, twitchId, twitchSecret);
+    res.json({ streamers });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── EMAIL NOTIFICATION SYSTEM ──────────────────────────────
+const nodemailer = require('nodemailer');
+
+function createMailTransporter() {
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpPort = process.env.SMTP_PORT;
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  if (!smtpHost || !smtpUser || !smtpPass) return null;
+  return nodemailer.createTransport({
+    host: smtpHost,
+    port: parseInt(smtpPort || '587'),
+    secure: smtpPort === '465',
+    auth: { user: smtpUser, pass: smtpPass },
+  });
+}
+
+async function sendEsportNotificationEmail(user, event, action) {
+  const transporter = createMailTransporter();
+  if (!transporter || !user.email) return;
+  try {
+    const subject = action === 'favorite'
+      ? `Nouvel événement e-sport : ${event.event || event.title}`
+      : `Rappel : ${event.event || event.title}`;
+    const html = `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:20px;background:#1a1a2e;color:#e0e0f0;border-radius:16px;">
+        <h2 style="color:#fbbf24;">🏆 PlayPad - E-Sport</h2>
+        <h3>${subject}</h3>
+        <p>${event.desc || ''}</p>
+        <p style="color:#8888aa;">${event.date || ''} — ${event.game || ''}</p>
+        <hr style="border-color:#333;" />
+        <p style="font-size:12px;color:#666;">Tu reçois cet email car tu as activé les notifications e-sport dans ton profil PlayPad.</p>
+      </div>`;
+    await transporter.sendMail({
+      from: `"PlayPad" <${process.env.SMTP_USER}>`,
+      to: user.email,
+      subject,
+      html,
+    });
+    console.log(`[Email] Notification e-sport envoyée à ${user.email}`);
+  } catch (e) {
+    console.error('[Email] Send error:', e.message);
+  }
+}
+
+// On refresh, notifier les utilisateurs qui ont des favoris correspondant au jeu
+async function notifyFavoriteUsers(newsCategory, items) {
+  if (newsCategory !== 'esport' || !items || items.length === 0) return;
+  const transporter = createMailTransporter();
+  if (!transporter) return;
+  // Get all users with email notifications enabled AND who have at least one favorite
+  const { data: notifUsers } = await db.supabaseAdmin
+    .from('users')
+    .select('id, email')
+    .eq('email_notifications', true)
+    .neq('email', '')
+    .not('email', 'is', null);
+  if (!notifUsers || notifUsers.length === 0) return;
+  const userIds = notifUsers.map(u => u.id);
+  // Get their favorites in batch
+  const { data: allFavs } = await db.supabaseAdmin
+    .from('esport_favorites')
+    .select('user_id, event_game, event_title')
+    .in('user_id', userIds);
+  if (!allFavs || allFavs.length === 0) return;
+  // Build a map: userId -> Set of game names they follow
+  const favMap = {};
+  for (const f of allFavs) {
+    if (!favMap[f.user_id]) favMap[f.user_id] = new Set();
+    if (f.event_game) favMap[f.user_id].add(f.event_game.toLowerCase());
+    if (f.event_title) favMap[f.user_id].add(f.event_title.toLowerCase());
+  }
+  const userEmailMap = {};
+  for (const u of notifUsers) userEmailMap[u.id] = u.email;
+  // For each new esport item, check if any user follows it
+  for (const item of items) {
+    const game = (item.game || '').toLowerCase();
+    const title = (item.event || item.title || '').toLowerCase();
+    if (!game && !title) continue;
+    for (const userId of Object.keys(favMap)) {
+      const terms = favMap[userId];
+      if (terms.has(game) || terms.has(title)) {
+        const email = userEmailMap[userId];
+        if (email) {
+          sendEsportNotificationEmail({ id: userId, email }, item, 'favorite').catch(() => {});
+        }
+      }
+    }
+  }
+}
 
 app.listen(PORT, () => {
   console.log(`PlayPad server running on http://localhost:${PORT}`);

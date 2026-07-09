@@ -1005,6 +1005,131 @@ async function getUserBoostStatus(userId, gameId) {
   return !!data;
 }
 
+// ─── E-SPORT FAVORITES ─────────────────────────────────────
+async function toggleEsportFavorite(userId, event) {
+  const title = event.event || event.title || '';
+  const game = event.game || '';
+  if (!title) throw new Error('Event title required');
+  // Check if already favorited
+  const { data: existing } = await supabaseAdmin
+    .from('esport_favorites')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('event_title', title)
+    .eq('event_game', game)
+    .maybeSingle();
+  if (existing) {
+    const { error } = await supabaseAdmin
+      .from('esport_favorites')
+      .delete()
+      .eq('id', existing.id);
+    if (error) throw new Error(error.message);
+    return { favorited: false };
+  } else {
+    const { error } = await supabaseAdmin
+      .from('esport_favorites')
+      .insert({ user_id: userId, event_title: title, event_game: game, event_desc: event.desc || '', event_date: event.date || '' });
+    if (error) throw new Error(error.message);
+    return { favorited: true };
+  }
+}
+
+async function getEsportFavorites(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('esport_favorites')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+async function isEsportFavorite(userId, eventTitle, game) {
+  const { data } = await supabaseAdmin
+    .from('esport_favorites')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('event_title', eventTitle)
+    .eq('event_game', game || '')
+    .maybeSingle();
+  return !!data;
+}
+
+// ─── NOTIFICATION PREFERENCES ──────────────────────────────
+async function getNotificationPrefs(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select('email, email_notifications')
+    .eq('id', userId)
+    .single();
+  if (error) throw new Error(error.message);
+  return { email: data?.email || '', emailNotifications: data?.email_notifications || false };
+}
+
+async function setNotificationPrefs(userId, prefs) {
+  const updates = {};
+  if (prefs.emailNotifications !== undefined) updates.email_notifications = prefs.emailNotifications;
+  if (Object.keys(updates).length === 0) return;
+  const { error } = await supabaseAdmin
+    .from('users')
+    .update(updates)
+    .eq('id', userId);
+  if (error) throw new Error(error.message);
+}
+
+// ─── PLAYER SEARCH ─────────────────────────────────────────
+async function searchPlayersByGame(gameTitle, currentUserId) {
+  const { data, error } = await supabaseAdmin
+    .from('games')
+    .select('user_id, users!inner(id, username, display_name, avatar_url)')
+    .neq('user_id', currentUserId)
+    .ilike('title', `%${gameTitle}%`)
+    .limit(20);
+  if (error) throw new Error(error.message);
+  const seen = new Set();
+  const players = [];
+  for (const row of data || []) {
+    const u = row.users;
+    if (!u || seen.has(u.id)) continue;
+    seen.add(u.id);
+    players.push({ id: u.id, username: u.username, displayName: u.display_name, avatarUrl: u.avatar_url || '' });
+  }
+  return players;
+}
+
+// ─── STREAMER SEARCH (Twitch) ──────────────────────────────
+async function searchStreamers(game, twitchClientId, twitchClientSecret) {
+  if (!twitchClientId || !twitchClientSecret) return [];
+  try {
+    // Get Twitch access token
+    const tokenRes = await fetch('https://id.twitch.tv/oauth2/token', {
+      method: 'POST',
+      body: new URLSearchParams({ client_id: twitchClientId, client_secret: twitchClientSecret, grant_type: 'client_credentials' }),
+    });
+    const tokenData = await tokenRes.json();
+    const accessToken = tokenData.access_token;
+    if (!accessToken) return [];
+    // Search channels by game name
+    const searchRes = await fetch(`https://api.twitch.tv/helix/search/channels?query=${encodeURIComponent(game)}&first=10`, {
+      headers: { 'Client-ID': twitchClientId, 'Authorization': `Bearer ${accessToken}` },
+    });
+    const searchData = await searchRes.json();
+    return (searchData.data || []).map(ch => ({
+      id: ch.id,
+      displayName: ch.display_name,
+      broadcasterLanguage: ch.broadcaster_language,
+      thumbnailUrl: ch.thumbnail_url,
+      isLive: ch.is_live,
+      gameName: ch.game_name,
+      title: ch.title,
+      login: ch.broadcaster_login,
+    }));
+  } catch (e) {
+    console.error('[StreamerSearch] Error:', e.message);
+    return [];
+  }
+}
+
 // ─── NEWS ─────────────────────────────────────────────────
 async function addNewsItems(category, items) {
   if (!items || items.length === 0) return;
@@ -1163,4 +1288,11 @@ module.exports = {
   getNewsCacheAge,
   clearNewsCache,
   pruneNewsCache,
+  toggleEsportFavorite,
+  getEsportFavorites,
+  isEsportFavorite,
+  getNotificationPrefs,
+  setNotificationPrefs,
+  searchPlayersByGame,
+  searchStreamers,
 };

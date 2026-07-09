@@ -177,6 +177,21 @@ CREATE TABLE IF NOT EXISTS review_replies (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Favoris e-sport (pour notifications)
+CREATE TABLE IF NOT EXISTS esport_favorites (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  event_title TEXT NOT NULL,
+  event_game TEXT DEFAULT '',
+  event_desc TEXT DEFAULT '',
+  event_date TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, event_title, event_game)
+);
+
+-- Préférences de notification des utilisateurs
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_notifications BOOLEAN DEFAULT FALSE;
+
 -- Votes sur les critiques communautaires (pouce bleu/rouge)
 CREATE TABLE IF NOT EXISTS review_votes (
   id SERIAL PRIMARY KEY,

@@ -871,9 +871,11 @@ async function getBoosterPoints(userId) {
 async function claimFirstLoginPoints(userId) {
   const existing = await getBoosterPoints(userId);
   if (existing.claimed_first_login) return existing;
+  // Si l'utilisateur a déjà des points (ex: ajoutés manuellement), on les conserve
+  const points = existing.points > 0 ? existing.points : 1;
   const { data, error } = await supabaseAdmin
     .from('booster_points')
-    .upsert({ user_id: userId, points: 1, claimed_first_login: true }, { onConflict: 'user_id' })
+    .upsert({ user_id: userId, points, claimed_first_login: true }, { onConflict: 'user_id' })
     .select('points, claimed_first_login')
     .single();
   if (error) throw new Error(error.message);

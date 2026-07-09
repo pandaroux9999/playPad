@@ -2075,7 +2075,7 @@ function cheapsharkGet(url) {
 app.get('/api/booster/points', requireAuth, async (req, res) => {
   try {
     const data = await db.getBoosterPoints(req.session.userId);
-    if (!data.claimed_first_login) {
+    if (data.points === 0 && !data.claimed_first_login) {
       await db.claimFirstLoginPoints(req.session.userId);
       data.points = 1;
       data.claimed_first_login = true;

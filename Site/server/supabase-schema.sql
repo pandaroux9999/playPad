@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS booster_points (
   claimed_first_login BOOLEAN DEFAULT FALSE,
   UNIQUE(user_id)
 );
+ALTER TABLE booster_points ADD COLUMN IF NOT EXISTS claimed_first_login BOOLEAN DEFAULT FALSE;
 
 -- Boost de jeux par les utilisateurs (un boost = 1 point par jeu par semaine)
 CREATE TABLE IF NOT EXISTS game_boosts (
@@ -178,6 +179,7 @@ CREATE TABLE IF NOT EXISTS news_cache (
   sort_key INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_news_cache_category ON news_cache(category);
+ALTER TABLE news_cache ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE;
 
 -- Réponses aux critiques communautaires
 CREATE TABLE IF NOT EXISTS review_replies (

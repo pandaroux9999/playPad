@@ -669,31 +669,55 @@ let catalogCache = null;
 
 async function getCatalog() {
   if (catalogCache) return catalogCache;
-  // Charge TOUTES les pages du catalogue (contourne la limite 1000 PostgREST)
-  let all = [];
-  const PAGE_SIZE = 1000;
-  let page = 0;
-  while (true) {
-    const { data, error } = await supabaseAdmin
-      .from('catalog')
-      .select('*')
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
-    if (!data || data.length === 0) break;
-    all = all.concat(data);
-    page++;
-    if (data.length < PAGE_SIZE) break;
+  // Charge le cache complet en arrière-plan (utilisé par d'autres fonctions)
+  rebuildCatalogCache();
+  // En attendant, retourne les 1000 premiers (limite PostgREST par défaut)
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .limit(1000);
+  if (error) throw new Error(error.message);
+  if (!data) return [];
+  data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  catalogCache = data;
+  return data;
+}
+
+async function rebuildCatalogCache() {
+  try {
+    let all = [];
+    const PAGE_SIZE = 1000;
+    let page = 0;
+    while (true) {
+      const { data, error } = await supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) break;
+      all = all.concat(data);
+      page++;
+      if (data.length < PAGE_SIZE) break;
+    }
+    all.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    catalogCache = all;
+    console.log(`[Catalog] Cache complet: ${all.length} jeux (${page} pages)`);
+  } catch (e) {
+    console.error('[Catalog] Erreur rebuild cache:', e.message);
   }
-  all.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-  catalogCache = all;
-  console.log(`[Catalog] Cache chargé: ${all.length} jeux (${page} pages)`);
-  return all;
 }
 
 async function getCatalogPage(page = 1, limit = 500) {
-  const all = await getCatalog();
   const offset = (page - 1) * limit;
-  return all.slice(offset, offset + limit);
+  // Requête directe rapide (une seule page, pas de ORDER BY)
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .range(offset, offset + limit - 1);
+  if (error) throw new Error(error.message);
+  if (!data) return [];
+  data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  return data;
 }
 
 function invalidateCatalogCache() {
@@ -1318,6 +1342,7 @@ module.exports = {
   mergeCatalogDuplicatesByTitle,
   getCatalog,
   getCatalogPage,
+  rebuildCatalogCache,
   getCatalogCount,
   invalidateCatalogCache,
   updateGamePlatform,

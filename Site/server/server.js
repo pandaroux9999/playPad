@@ -13,6 +13,7 @@ const SupabaseSessionStore = require('./session-store');
 const app = express();
 app.disable('x-powered-by');
 const PORT = process.env.PORT || 3000;
+const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 
 // Validation du secret de session au démarrage
 const SESSION_SECRET = process.env.SESSION_SECRET;
@@ -29,7 +30,7 @@ const cspDirectives = {
   fontSrc: ["'self'", "https://fonts.gstatic.com"],
   imgSrc: ["'self'", "data:", "https://cdn.cloudflare.steamstatic.com", "https://steamcdn-a.akamaihd.net", "https://media.rawg.io", "https://images.igdb.com"],
   connectSrc: ["'self'", "http://localhost:3456"],
-  frameSrc: ["'none'"],
+  frameSrc: ["'self'", "https://accounts.google.com"],
   objectSrc: ["'none'"],
 };
 if (process.env.NODE_ENV === 'production') cspDirectives.upgradeInsecureRequests = [];
@@ -241,6 +242,51 @@ app.post('/api/logout', (req, res) => {
   });
 });
 
+// ─── Google OAuth ───────────────────────────────────────────
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+
+app.get('/api/auth/google', (req, res) => {
+  if (!GOOGLE_CLIENT_ID) return res.status(501).json({ error: 'Google OAuth non configuré' });
+  const redirectUri = `${PUBLIC_URL}/api/auth/google/callback`;
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20profile%20email&access_type=offline`;
+  res.redirect(url);
+});
+
+app.get('/api/auth/google/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+    if (!code) return res.status(400).send('Code manquant');
+    const redirectUri = `${PUBLIC_URL}/api/auth/google/callback`;
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code, client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: redirectUri, grant_type: 'authorization_code',
+      }),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.id_token) return res.status(400).send('Token invalide');
+    const payload = JSON.parse(Buffer.from(tokenData.id_token.split('.')[1], 'base64').toString());
+    const googleEmail = payload.email;
+    const googleName = payload.name || googleEmail.split('@')[0];
+    let user = await db.getUserByEmail(googleEmail);
+    if (!user) {
+      const username = 'google_' + payload.sub.slice(0, 8);
+      const hashed = await bcrypt.hash(payload.sub + process.env.SESSION_SECRET, 10);
+      const userId = await db.createUser(username, googleName, hashed, googleEmail);
+      await db.updateAvatar(userId, payload.picture || '');
+      user = await db.getUserById(userId);
+    }
+    req.session.userId = user.id;
+    res.redirect(`${PUBLIC_URL}/?google_login=1`);
+  } catch (err) {
+    console.error('[GoogleAuth] Error:', err.message);
+    res.status(500).send('Erreur authentification Google');
+  }
+});
+
 app.get('/api/me', requireAuth, async (req, res) => {
   try {
     const user = await db.getUserById(req.session.userId);
@@ -354,7 +400,7 @@ app.post('/api/reviews/:id/vote', requireAuth, async (req, res) => {
     }
     res.json({ ok: true });
   } catch (err) {
-    console.error('[ReviewVote] Error:', err.message);
+    console.error('[ReviewVote] Error:', err.message, err.stack?.split('\n')[1]);
     res.status(500).json({ error: 'Erreur interne' });
   }
 });

@@ -975,14 +975,23 @@ async function getTopBoostedGames() {
 }
 
 async function voteReview(userId, reviewId, vote) {
-  const { error } = await supabaseAdmin
-    .from('review_votes')
-    .upsert({ user_id: userId, review_id: reviewId, vote },
-      { onConflict: 'user_id, review_id' });
-  if (error) {
-    if (error.message?.includes('relation') || error.message?.includes('does not exist')) return;
-    throw new Error(error.message);
+  try {
+    const { error } = await supabaseAdmin
+      .from('review_votes')
+      .upsert({ user_id: userId, review_id: reviewId, vote },
+        { onConflict: 'user_id,review_id' });
+    if (error) {
+      if (error.code === '42P01' || error.message?.includes('relation') || error.message?.includes('does not exist')) return;
+      throw new Error(error.message);
+    }
+  } catch (e) {
+    if (e.code === '42P01' || e.message?.includes('relation') || e.message?.includes('does not exist')) return;
+    throw e;
   }
+}
+
+async function isMissingTable(e) {
+  return e?.code === '42P01' || e?.message?.includes('relation') || e?.message?.includes('does not exist');
 }
 
 async function getReviewVotes(reviewIds) {
@@ -990,7 +999,7 @@ async function getReviewVotes(reviewIds) {
     let query = supabaseAdmin.from('review_votes').select('review_id, vote');
     if (reviewIds && reviewIds.length > 0) query = query.in('review_id', reviewIds);
     const { data, error } = await query;
-    if (error) throw new Error(error.message);
+    if (error) { if (isMissingTable(error)) return {}; throw new Error(error.message); }
     const result = {};
     for (const row of data || []) {
       if (!result[row.review_id]) result[row.review_id] = { up: 0, down: 0 };
@@ -999,7 +1008,7 @@ async function getReviewVotes(reviewIds) {
     }
     return result;
   } catch (e) {
-    if (e.message?.includes('relation') || e.message?.includes('does not exist')) return {};
+    if (isMissingTable(e)) return {};
     throw e;
   }
 }
@@ -1010,12 +1019,12 @@ async function getUserReviewVotes(userId) {
       .from('review_votes')
       .select('review_id, vote')
       .eq('user_id', userId);
-    if (error) throw new Error(error.message);
+    if (error) { if (isMissingTable(error)) return {}; throw new Error(error.message); }
     const result = {};
     for (const row of data || []) result[row.review_id] = row.vote;
     return result;
   } catch (e) {
-    if (e.message?.includes('relation') || e.message?.includes('does not exist')) return {};
+    if (isMissingTable(e)) return {};
     throw e;
   }
 }
@@ -1324,3 +1333,19 @@ module.exports = {
   searchPlayersByGame,
   searchStreamers,
 };
+
+// ─── AUTO-SCHEMA (création des tables manquantes au démarrage) ──
+async function ensureMissingTables() {
+  try {
+    const fs = require('fs');
+    const sql = fs.readFileSync(__dirname + '/supabase-schema.sql', 'utf8');
+    const statements = sql.split(';').map(s => s.trim()).filter(s => s && !s.startsWith('--'));
+    for (const stmt of statements) {
+      await supabaseAdmin.rpc('exec_sql', { query: stmt + ';' }).catch(() => {});
+    }
+    console.log('[DB] Tables OK');
+  } catch (e) {
+    // silent - nécessite exec_sql dans Supabase
+  }
+}
+ensureMissingTables();

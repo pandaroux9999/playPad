@@ -216,6 +216,7 @@ const UserCheck = Icon(["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 7a4 4 0
 const UserX = Icon(["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M17 8l4 4m0-4-4 4"]);
 const Send = Icon(["M22 2 11 13", "M22 2l-7 20-4-9-9-4 20-7z"]);
 const ChevronRight = Icon(["M9 18l6-6-6-6"]);
+const ChevronLeft = Icon(["M15 18l-6-6 6-6"]);
 const Upload = Icon(["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M17 8l-5-5-5 5", "M12 3v12"]);
 const Trash2 = Icon(["M3 6h18", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"]);
 const Mail = Icon(["M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z", "m22 6-10 7L2 6"]);
@@ -1326,8 +1327,8 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
             ),
             r.review_text && h('p', { className: "text-[10px] text-foreground/70 leading-relaxed line-clamp-2" }, r.review_text),
             h('div', { className: "flex items-center gap-3 mt-1.5" },
-              h('span', { className: "flex items-center gap-1 text-[8px] font-bold text-muted-foreground" }, h(ThumbsUp, { size: 8, stroke: "currentColor" }), r.thumbs_up || 0),
-              h('span', { className: "flex items-center gap-1 text-[8px] font-bold text-muted-foreground" }, h(ThumbsDown, { size: 8, stroke: "currentColor" }), r.thumbs_down || 0)
+              h('button', { onClick: async () => { try { const nv = r.my_vote === 1 ? 0 : 1; await API.voteReview(r.id, nv); load(); } catch(e) { console.error('[Vote]', e); } }, className: `flex items-center gap-1 text-[8px] font-bold transition-colors ${r.my_vote === 1 ? "text-sky-400" : "text-muted-foreground hover:text-sky-400"}` }, h(ThumbsUp, { size: 8, fill: r.my_vote === 1 ? "#38bdf8" : "none", stroke: r.my_vote === 1 ? "#38bdf8" : "currentColor" }), r.thumbs_up || 0),
+              h('button', { onClick: async () => { try { const nv = r.my_vote === -1 ? 0 : -1; await API.voteReview(r.id, nv); load(); } catch(e) { console.error('[Vote]', e); } }, className: `flex items-center gap-1 text-[8px] font-bold transition-colors ${r.my_vote === -1 ? "text-red-400" : "text-muted-foreground hover:text-red-400"}` }, h(ThumbsDown, { size: 8, fill: r.my_vote === -1 ? "#f87171" : "none", stroke: r.my_vote === -1 ? "#f87171" : "currentColor" }), r.thumbs_down || 0)
             )
           );
         })
@@ -2021,13 +2022,16 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
       )
     ),
     emailModal && h('div', { className: "fixed inset-0 z-50 flex items-center justify-center" },
-      h('div', { className: "absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: () => setEmailModal(false) }),
+      h('div', { className: "absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: () => { setEmailModal(false); setSettingsOpen(true); } }),
       h('div', { className: "relative bg-card border border-border rounded-2xl p-5 w-80", style: { zIndex: 1 } },
-        h('p', { className: "text-sm font-black text-foreground mb-3", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Modifier l'email"),
+        h('div', { className: "flex items-center gap-2 mb-3" },
+          h('button', { onClick: () => { setEmailModal(false); setSettingsOpen(true); }, className: "p-1 rounded hover:opacity-80" }, h(ChevronLeft, { size: 16, style: { color: '#8888aa' } })),
+          h('p', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, user?.email ? "Modifier l'email" : "Ajouter un email")
+        ),
         h('input', { value: email, onChange: e => setEmail(e.target.value), type: "email", placeholder: "ton@email.com", className: "w-full bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none mb-3" }),
         h('div', { className: "flex gap-2" },
-          h('button', { onClick: () => setEmailModal(false), className: "flex-1 py-2 text-xs font-bold rounded-lg", style: { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, "Annuler"),
-          h('button', { onClick: async () => { setEmailSaving(true); try { await onUpdateEmail?.(email); setEmailModal(false); } catch (e) { } setEmailSaving(false); }, disabled: emailSaving, className: "flex-1 py-2 text-xs font-bold rounded-lg text-white", style: { background: GRAD } }, emailSaving ? "..." : "Sauvegarder")
+          h('button', { onClick: () => { setEmailModal(false); setSettingsOpen(true); }, className: "flex-1 py-2 text-xs font-bold rounded-lg", style: { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, "Retour"),
+          h('button', { onClick: async () => { setEmailSaving(true); try { await onUpdateEmail?.(email); setEmailModal(false); setSettingsOpen(true); } catch (e) { } setEmailSaving(false); }, disabled: emailSaving, className: "flex-1 py-2 text-xs font-bold rounded-lg text-white", style: { background: GRAD } }, emailSaving ? "..." : "Sauvegarder")
         )
       )
     ),
@@ -2391,7 +2395,7 @@ function AuthPage({ onLoginSuccess, resetToken, onResetComplete }) {
       }
       if (isRegister) {
         if (!displayName.trim()) { setError("Le nom d'affichage est requis"); setLoading(false); return; }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError("Format d'email invalide"); setLoading(false); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError("Email valide requis"); setLoading(false); return; }
         const pwError = validatePassword(password);
         if (pwError) { setError(pwError); setLoading(false); return; }
         await API.register(username, displayName, password, email);
@@ -2456,7 +2460,7 @@ function AuthPage({ onLoginSuccess, resetToken, onResetComplete }) {
           h('p', { className: "text-[10px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider" }, "Nom d'affichage"),
           h('input', { value: displayName, onChange: e => setDisplayName(e.target.value), placeholder: "Ton pseudo public", className: "w-full bg-secondary/60 border border-border rounded-xl px-3.5 py-3 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-purple-500 transition-colors" })
         ),
-        h('div', null,
+        isRegister && h('div', null,
           h('p', { className: "text-[10px] font-bold text-muted-foreground mb-1.5 uppercase tracking-wider" }, "Email"),
           h('input', { value: email, onChange: e => setEmail(e.target.value), type: "email", placeholder: "ton@email.com", className: "w-full bg-secondary/60 border border-border rounded-xl px-3.5 py-3 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-purple-500 transition-colors" })
         ),
@@ -2470,6 +2474,19 @@ function AuthPage({ onLoginSuccess, resetToken, onResetComplete }) {
           loading && h(Loader, { size: 14, className: "animate-spin" }),
           isRegister ? "Cr\u00e9er mon compte" : "Se connecter"
         )
+      ),
+      !isRegister && h('div', { className: "flex items-center gap-3 mt-4" },
+        h('div', { className: "flex-1 h-px", style: { background: 'rgba(255,255,255,0.08)' } }),
+        h('span', { className: "text-[9px] text-muted-foreground" }, "OU"),
+        h('div', { className: "flex-1 h-px", style: { background: 'rgba(255,255,255,0.08)' } })
+      ),
+      !isRegister && h('a', {
+        href: "/api/auth/google",
+        className: "w-full py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2.5 mt-3 hover:opacity-90 transition-opacity",
+        style: { background: '#fff', color: '#333' }
+      },
+        h('span', { className: "text-base font-black mr-0.5", style: { background: 'linear-gradient(135deg,#4285f4,#ea4335,#fbbc05,#34a853)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' } }, "G"),
+        "Continuer avec Google"
       ),
       !isRegister && h('div', { className: "flex gap-4 mt-3" },
         h('button', { onClick: () => setForgotMode('password'), className: "text-[10px] font-medium hover:opacity-80", style: { color: `${P1}aa` } }, "Mot de passe oubli\u00e9 ?"),
@@ -2528,6 +2545,7 @@ function App() {
   useEffect(() => {
     console.log('[App] Checking session...');
     const params = new URLSearchParams(window.location.search);
+    if (params.get('google_login')) window.history.replaceState({}, '', window.location.pathname);
     const token = params.get('token');
     if (token) {
       setResetToken(token);

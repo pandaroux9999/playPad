@@ -1,6 +1,17 @@
 -- Exécute ce script dans l'éditeur SQL de Supabase (Dashboard > SQL Editor)
 -- pour créer les tables nécessaires à PlayPad.
 
+-- Fonction utilitaire pour création automatique des tables manquantes
+CREATE OR REPLACE FUNCTION exec_sql(query text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  EXECUTE query;
+END;
+$$;
+
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,

@@ -294,6 +294,7 @@ async function seedBoosts(userIds) {
   const shuffledCatalog = shuffle(catalogGames);
   const boostedGames = shuffledCatalog.slice(0, 12);
   const boostPairs = new Set();
+  let totalBoosts = 0;
   for (const g of boostedGames) {
     const targetCount = 3 + Math.floor(Math.random() * 8);
     let count = 0;
@@ -303,13 +304,14 @@ async function seedBoosts(userIds) {
       if (boostPairs.has(key)) continue;
       boostPairs.add(key);
       const daysAgo = Math.floor(Math.random() * 6);
-      await db.supabaseAdmin.from('boosts').insert({
+      const { error } = await db.supabaseAdmin.from('boosts').insert({
         user_id: u, game_id: g.game_id,
         created_at: new Date(Date.now() - daysAgo * 86400000).toISOString(),
-      }).catch(() => {});
-      count++;
+      });
+      if (!error) { count++; totalBoosts++; }
     }
   }
+  console.log(`[Seed] ${totalBoosts} boosts ajoutés pour ${boostedGames.length} jeux`);
 }
 
 module.exports = { seedDemoData, GAMES_CATALOG };

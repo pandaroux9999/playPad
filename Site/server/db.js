@@ -709,8 +709,11 @@ async function searchCatalog({ search, letter, page = 1, limit = 500 }) {
   if (search && search.trim()) {
     query = query.ilike('title', `%${search.trim()}%`);
   } else if (letter && letter !== 'all') {
-    const l = letter.toLowerCase();
-    query = query.or(`title.ilike.${l}%,title.ilike.${l.toUpperCase()}%`);
+    if (letter === '#') {
+      query = query.not('title', '~', '^[A-Za-z]');
+    } else {
+      query = query.ilike('title', `${letter}%`);
+    }
   }
   const from = (page - 1) * limit;
   const to = from + limit - 1;

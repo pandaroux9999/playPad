@@ -981,17 +981,19 @@ async function voteReview(userId, reviewId, vote) {
       .upsert({ user_id: userId, review_id: reviewId, vote },
         { onConflict: 'user_id,review_id' });
     if (error) {
-      if (error.code === '42P01' || error.message?.includes('relation') || error.message?.includes('does not exist')) return;
+      if (isMissingTable(error)) return;
       throw new Error(error.message);
     }
   } catch (e) {
-    if (e.code === '42P01' || e.message?.includes('relation') || e.message?.includes('does not exist')) return;
+    if (isMissingTable(e)) return;
     throw e;
   }
 }
 
-async function isMissingTable(e) {
-  return e?.code === '42P01' || e?.message?.includes('relation') || e?.message?.includes('does not exist');
+function isMissingTable(e) {
+  const msg = (e?.message || e?.error || '') + ' ' + (e?.details || '');
+  return e?.code === '42P01' || msg.includes('relation') || msg.includes('does not exist')
+    || msg.includes('schema cache') || msg.includes('not found') || msg.includes('Could not find');
 }
 
 async function getReviewVotes(reviewIds) {
@@ -1044,52 +1046,66 @@ async function getUserBoostStatus(userId, gameId) {
 
 // ─── E-SPORT FAVORITES ─────────────────────────────────────
 async function toggleEsportFavorite(userId, event) {
-  const title = event.event || event.title || '';
-  const game = event.game || '';
-  if (!title) throw new Error('Event title required');
-  // Check if already favorited
-  const { data: existing } = await supabaseAdmin
-    .from('esport_favorites')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('event_title', title)
-    .eq('event_game', game)
-    .maybeSingle();
-  if (existing) {
-    const { error } = await supabaseAdmin
+  try {
+    const title = event.event || event.title || '';
+    const game = event.game || '';
+    if (!title) throw new Error('Event title required');
+    const { data: existing } = await supabaseAdmin
       .from('esport_favorites')
-      .delete()
-      .eq('id', existing.id);
-    if (error) throw new Error(error.message);
-    return { favorited: false };
-  } else {
-    const { error } = await supabaseAdmin
-      .from('esport_favorites')
-      .insert({ user_id: userId, event_title: title, event_game: game, event_desc: event.desc || '', event_date: event.date || '' });
-    if (error) throw new Error(error.message);
-    return { favorited: true };
+      .select('id')
+      .eq('user_id', userId)
+      .eq('event_title', title)
+      .eq('event_game', game)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await supabaseAdmin
+        .from('esport_favorites')
+        .delete()
+        .eq('id', existing.id);
+      if (error) { if (isMissingTable(error)) return { favorited: false }; throw new Error(error.message); }
+      return { favorited: false };
+    } else {
+      const { error } = await supabaseAdmin
+        .from('esport_favorites')
+        .insert({ user_id: userId, event_title: title, event_game: game, event_desc: event.desc || '', event_date: event.date || '' });
+      if (error) { if (isMissingTable(error)) return { favorited: false }; throw new Error(error.message); }
+      return { favorited: true };
+    }
+  } catch (e) {
+    if (isMissingTable(e)) return { favorited: false };
+    throw e;
   }
 }
 
 async function getEsportFavorites(userId) {
-  const { data, error } = await supabaseAdmin
-    .from('esport_favorites')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-  if (error) throw new Error(error.message);
-  return data || [];
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('esport_favorites')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) { if (isMissingTable(error)) return []; throw new Error(error.message); }
+    return data || [];
+  } catch (e) {
+    if (isMissingTable(e)) return [];
+    throw e;
+  }
 }
 
 async function isEsportFavorite(userId, eventTitle, game) {
-  const { data } = await supabaseAdmin
-    .from('esport_favorites')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('event_title', eventTitle)
-    .eq('event_game', game || '')
-    .maybeSingle();
-  return !!data;
+  try {
+    const { data } = await supabaseAdmin
+      .from('esport_favorites')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('event_title', eventTitle)
+      .eq('event_game', game || '')
+      .maybeSingle();
+    return !!data;
+  } catch (e) {
+    if (isMissingTable(e)) return false;
+    throw e;
+  }
 }
 
 // ─── NOTIFICATION PREFERENCES ──────────────────────────────

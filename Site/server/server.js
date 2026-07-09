@@ -2251,7 +2251,8 @@ app.get('/api/esport/favorites', requireAuth, async (req, res) => {
     const favorites = await db.getEsportFavorites(req.session.userId);
     res.json({ favorites });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[EsportFavorites]', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 

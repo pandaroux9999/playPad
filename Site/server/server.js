@@ -510,10 +510,12 @@ app.get('/api/games/ratings', async (req, res) => {
 
 app.get('/api/catalog', catalogLimiter, async (req, res) => {
   try {
+    const catalog = await db.getCatalog();
     const page = parseInt(req.query.page) || 1;
-    const limit = Math.min(parseInt(req.query.limit) || 500, 5000);
-    const catalog = await db.getCatalogPage(page, limit);
-    res.json({ catalog, total: catalog.length < limit ? (page - 1) * limit + catalog.length : -1 });
+    const limit = Math.min(parseInt(req.query.limit) || 100000, 100000);
+    const offset = (page - 1) * limit;
+    const total = catalog.length;
+    res.json({ catalog: catalog.slice(offset, offset + limit), total, page, limit });
   } catch (err) {
     console.error('[Catalog] Error:', err.message);
     res.status(500).json({ error: 'Erreur interne' });
@@ -916,32 +918,22 @@ const CATALOG_PAGES = 50; // 50 pages × 40 jeux = 2000 jeux par plateforme
 let lastCatalogPopulate = 0;
 const CATALOG_COOLDOWN = 60000; // 1 min entre chaque peuplement
 
-let catalogImporting = false;
-let catalogImportEnd = 0;
-
-app.get('/api/catalog/import-status', async (req, res) => {
-  res.json({ importing: catalogImporting, endedAt: catalogImportEnd });
-});
-
 app.post('/api/catalog/populate', requireAuth, async (req, res) => {
   const now = Date.now();
-  if (catalogImporting) return res.json({ ok: true, pending: true, already: true });
   if (now - lastCatalogPopulate < CATALOG_COOLDOWN) {
     return res.json({ ok: true, count: 0, cooldown: true });
   }
   lastCatalogPopulate = now;
-  catalogImporting = true;
-  catalogImportEnd = 0;
-  res.json({ ok: true, pending: true });
+  res.json({ ok: true, pending: true, message: "L'import prend plusieurs minutes, il tourne en arrière-plan" });
   (async () => {
     try {
       const rawgKey = process.env.RAWG_API_KEY;
       const igdbId = process.env.TWITCH_CLIENT_ID;
       const igdbSecret = process.env.TWITCH_CLIENT_SECRET;
       const existingCount = await db.getCatalogCount();
-      let total = 0, steamTotal = 0, igdbTotal = 0;
+      let steamTotal = 0, igdbTotal = 0;
       if (existingCount < 500 && rawgKey) {
-        total = await populateCatalogFromRAWG(rawgKey);
+        await populateCatalogFromRAWG(rawgKey);
       }
       console.log('[Catalog] Démarrage import Steam...');
       steamTotal = await populateSteamFromAppList();
@@ -953,24 +945,12 @@ app.post('/api/catalog/populate', requireAuth, async (req, res) => {
         db.mergeCatalogDuplicatesByTitle().then(n => { if (n > 0) console.log(`[Catalog] ${n} doublons fusionnés`); }).catch(e => console.error('[Catalog] Merge error:', e.message));
         refreshCatalogDescriptions().catch(() => {});
       }
-      console.log(`[Catalog] Import terminé: ${total} RAWG, ${steamTotal} Steam, ${igdbTotal} IGDB`);
+      db.invalidateCatalogCache();
+      console.log(`[Catalog] Import terminé: ${steamTotal} Steam, ${igdbTotal} IGDB`);
     } catch (err) {
       console.error('[CatalogPopulate] Error:', err.message);
-    } finally {
-      catalogImporting = false;
-      catalogImportEnd = Date.now();
-      db.invalidateCatalogCache();
     }
   })();
-});
-
-app.get('/api/catalog/count', async (req, res) => {
-  try {
-    const count = await db.getCatalogCount();
-    res.json({ count });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 });
 
 let lastDescriptionRefresh = 0;

@@ -128,8 +128,6 @@ const API = {
   connectXbox: (gamertag) => API.request('POST', '/api/platform/xbox/connect', { gamertag }),
   xboxDiagnostic: (gamertag) => API.request('GET', '/api/platform/xbox/diagnostic?gamertag=' + encodeURIComponent(gamertag)),
   populateCatalog: () => API.request('POST', '/api/catalog/populate'),
-  getCatalogCount: () => API.request('GET', '/api/catalog/count'),
-  getCatalogImportStatus: () => API.request('GET', '/api/catalog/import-status'),
   setStatus: (gameId, status) => API.request('POST', '/api/games/status', { gameId, status }),
   saveReview: (gameId, rating, reviewText, reviewPublic, gameTitle, gameCover) => API.request('POST', '/api/games/review', { gameId, rating, reviewText, reviewPublic, gameTitle, gameCover }),
   getWishlist: () => API.request('GET', '/api/wishlist'),
@@ -882,11 +880,6 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const [showBoostSection, setShowBoostSection] = useState(false);
   const [showBoosterGames, setShowBoosterGames] = useState(true);
   const [sponsored, setSponsored] = useState([]);
-  const [catalogPage, setCatalogPage] = useState(1);
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [catalogAllLoaded, setCatalogAllLoaded] = useState(false);
-  const CATALOG_LIMIT = 500;
-  const catalogRef = useRef(null);
   useEffect(() => {
     if (catalog.length > 0 && sponsored.length === 0) {
       const shuffled = [...catalog].sort(() => Math.random() - 0.5);
@@ -894,43 +887,16 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     }
   }, [catalog]);
   useEffect(() => {
-    setCatalog([]);
-    setCatalogPage(1);
-    setCatalogAllLoaded(false);
-    let cancelled = false;
-    API.getCatalog(1, CATALOG_LIMIT).then(d => {
-      if (cancelled) return;
+    API.getCatalog().then(d => {
       const cat = d.catalog || [];
       setCatalog(cat.length > 0 ? cat : CATALOGUE);
-      if (cat.length < CATALOG_LIMIT) setCatalogAllLoaded(true);
-    }).catch(() => { if (!cancelled) setCatalog(CATALOGUE); setCatalogAllLoaded(true); });
+    }).catch(() => setCatalog(CATALOGUE));
     API.getTopBoosted().then(d => {
       setTopBoosted(d.top || []);
       if ((d.top || []).length > 0) setShowBoostSection(true);
     }).catch(() => {});
     API.getBoostPoints().then(d => setBoostPoints(d.points)).catch(() => {});
-    return () => { cancelled = true; };
   }, [refreshKey]);
-  // Infinite scroll
-  useEffect(() => {
-    if (catalogAllLoaded || catalogLoading) return;
-    const el = catalogRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      if (el.scrollHeight - el.scrollTop - el.clientHeight < 800 && !catalogLoading && !catalogAllLoaded) {
-        setCatalogLoading(true);
-        const nextPage = catalogPage + 1;
-        API.getCatalog(nextPage, CATALOG_LIMIT).then(d => {
-          const chunk = d.catalog || [];
-          setCatalog(prev => [...prev, ...chunk]);
-          setCatalogPage(nextPage);
-          if (chunk.length < CATALOG_LIMIT) setCatalogAllLoaded(true);
-        }).catch(() => {}).finally(() => setCatalogLoading(false));
-      }
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [catalogPage, catalogAllLoaded, catalogLoading]);
 
   const genres = useMemo(() => ["all", ...new Set(catalog.flatMap(g => (g.genre || '').split(',').map(s => s.trim()).filter(Boolean)))], [catalog]);
   const platforms = ["all", ...Object.keys(PLATFORM_CONFIG)];
@@ -971,7 +937,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     } catch (err) { showToast?.(err.message); }
   };
 
-    return h('div', { ref: catalogRef, className: "flex flex-col h-full view-enter overflow-y-auto" },
+    return h('div', { className: "flex flex-col h-full view-enter" },
       h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
         h('div', { className: "flex items-center gap-2.5 mb-3" },
         h('img', { src: "img/logo_hackaton.png", alt: "PlayPad", className: "w-9 h-9 object-contain" }),
@@ -1113,15 +1079,13 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       ),
       filtered.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
-        : catalog.length === 0 && !catalogAllLoaded
-          ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Loader, { size: 24, className: "animate-spin mb-2", style: { color: P1 } }), h('p', { className: "text-xs" }, "Chargement des jeux..."))
-          : h('div', null,
+        : h('div', null,
             h('div', { className: "flex items-center justify-between mb-3" },
-              h('p', { className: "text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2" }, "Tous les jeux", h('span', { className: "text-[9px] font-normal text-muted-foreground" }, "(" + catalog.length + " charg\u00e9s)")),
+              h('p', { className: "text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2" }, "Tous les jeux"),
               boosterPoints > 0 && h('div', { className: "flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold", style: { background: `${P1}15`, color: P1 } }, h(Zap, { size: 10, fill: P1 }), boosterPoints + " point" + (boosterPoints > 1 ? "s" : "") + " booster")
             ),
             h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" },
-              filtered.length > 0 ? filtered.map(game => {
+              filtered.map(game => {
                 const hasBoosted = userBoostedSet?.has(game.game_id);
                 const boostCount = topBoosted.find(b => b.game_id === game.game_id)?.count || 0;
                 return h(GameCard, {
@@ -1137,14 +1101,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                   boosterBtn: boosterPoints > 0 && !hasBoosted ? () => onBoostGame?.(game.game_id) : null,
                   boosterActive: hasBoosted,
                 });
-              }) : null
-            ),
-            catalogLoading && h('div', { className: "flex items-center justify-center py-6 text-muted-foreground" },
-              h(Loader, { size: 18, className: "animate-spin mr-2", style: { color: P1 } }),
-              h('span', { className: "text-xs" }, "Chargement...")
-            ),
-            !catalogLoading && !catalogAllLoaded && filtered.length > 0 && h('div', { className: "flex items-center justify-center py-6 text-muted-foreground" },
-              h('span', { className: "text-xs" }, "Scrollez pour charger plus de jeux")
+              })
             ),
           )
     )
@@ -2622,16 +2579,6 @@ function App() {
     }).then(([bpData, topData]) => {
       setBoosterPoints(bpData.points || 0);
       setBoostedGames(topData.top || []);
-      API.populateCatalog().then(() => {
-        const poll = setInterval(() => {
-          API.getCatalogImportStatus().then(s => {
-            if (!s.importing) {
-              clearInterval(poll);
-              setCatalogRefreshKey(k => k + 1);
-            }
-          }).catch(() => { clearInterval(poll); setCatalogRefreshKey(k => k + 1); });
-        }, 3000);
-      }).catch(() => {});
     }).catch((err) => {
       console.log('[App] No session (expected if not logged in):', err?.message);
     }).finally(() => {

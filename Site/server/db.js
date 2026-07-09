@@ -669,49 +669,34 @@ let catalogCache = null;
 
 async function getCatalog() {
   if (catalogCache) return catalogCache;
-  // Charge le cache complet en arrière-plan
-  rebuildCatalogCache();
-  // En attendant, retourne les 1000 premiers (limite PostgREST par défaut)
   const { data, error } = await supabaseAdmin
     .from('catalog')
     .select('*')
-    .limit(1000);
+    .order('title')
+    .limit(100000);
   if (error) throw new Error(error.message);
   if (!data) return [];
-  data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-  // Ne pas écraser si rebuildCatalogCache a déjà mis le cache complet
-  if (!catalogCache) catalogCache = data;
-  return catalogCache;
-}
-
-async function rebuildCatalogCache() {
-  try {
-    let all = [];
-    const PAGE_SIZE = 1000;
-    let page = 0;
-    while (true) {
-      const { data, error } = await supabaseAdmin
-        .from('catalog')
-        .select('*')
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-      if (error) throw new Error(error.message);
-      if (!data || data.length === 0) break;
-      all = all.concat(data);
-      page++;
-      if (data.length < PAGE_SIZE) break;
-    }
-    all.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-    catalogCache = all;
-    console.log(`[Catalog] Cache complet: ${all.length} jeux (${page} pages)`);
-  } catch (e) {
-    console.error('[Catalog] Erreur rebuild cache:', e.message);
-  }
+  const letterRe = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/;
+  data.sort((a, b) => {
+    const aTitle = a.title || '';
+    const bTitle = b.title || '';
+    const aLetter = letterRe.test(aTitle);
+    const bLetter = letterRe.test(bTitle);
+    if (aLetter && !bLetter) return -1;
+    if (!aLetter && bLetter) return 1;
+    const al = aTitle.toLowerCase();
+    const bl = bTitle.toLowerCase();
+    if (al < bl) return -1;
+    if (al > bl) return 1;
+    return 0;
+  });
+  catalogCache = data;
+  return data;
 }
 
 async function getCatalogPage(page = 1, limit = 500) {
-  const all = await getCatalog(); // rapide : cache (1000 jeux min) ou limit(1000)
+  const all = await getCatalog();
   const offset = (page - 1) * limit;
-  if (offset >= all.length) return [];
   return all.slice(offset, offset + limit);
 }
 
@@ -1337,7 +1322,6 @@ module.exports = {
   mergeCatalogDuplicatesByTitle,
   getCatalog,
   getCatalogPage,
-  rebuildCatalogCache,
   getCatalogCount,
   invalidateCatalogCache,
   updateGamePlatform,

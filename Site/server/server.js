@@ -1271,8 +1271,6 @@ async function fixMissingCovers() {
   }
   // Démarre le rafraîchissement périodique des actualités
   startNewsRefresh();
-  // Rebuild le cache catalogue en arrière-plan
-  db.rebuildCatalogCache().catch(() => {});
   console.log('[Startup] Prêt');
 })();
 

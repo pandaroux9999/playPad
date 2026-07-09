@@ -1221,34 +1221,7 @@ async function fixMissingCovers() {
   } catch (e) {
     console.error('[Catalog] Erreur peuplement initial:', e.message);
   }
-  // Steam App List : toujours importé (ne dépend pas de RAWG, utilise SteamSpy gratuit)
-  try {
-    const steamCount = await populateSteamFromAppList();
-    if (steamCount > 0) console.log(`[Catalog] ${steamCount} jeux Steam ajoutés`);
-  } catch (e) {
-    console.error('[Catalog] Erreur Steam App List:', e.message);
-  }
-  // IGDB (Twitch) : jeux toutes plateformes (Xbox, PS, Nintendo)
-  const igdbId = process.env.TWITCH_CLIENT_ID;
-  const igdbSecret = process.env.TWITCH_CLIENT_SECRET;
-  if (igdbId && igdbSecret) {
-    try {
-      const igdbCount = await populateCatalogFromIGDB(igdbId, igdbSecret);
-      if (igdbCount > 0) console.log(`[Catalog] ${igdbCount} jeux IGDB ajoutés`);
-    } catch (e) {
-      console.error('[Catalog] Erreur IGDB:', e.message);
-    }
-  } else {
-    console.log('[Catalog] TWITCH_CLIENT_ID/SECRET non configurés, skip IGDB');
-  }
-  // Jeux en ligne/multi : tous les démarrages
-  const rawgKey = process.env.RAWG_API_KEY;
-  if (rawgKey) {
-    try {
-      const onlineCount = await populateOnlineGames(rawgKey);
-      if (onlineCount > 0) console.log(`[Catalog] ${onlineCount} jeux en ligne ajoutés`);
-    } catch (e) { console.error('[Catalog] Erreur online games:', e.message); }
-  }
+  // Steam App List : importé UNIQUEMENT via l'API /api/catalog/populate (pas au démarrage)
   // Jeux cultes : toujours insérés (indépendant du seed)
   try {
     const { GAMES_CATALOG } = require('./seed');
@@ -1268,40 +1241,9 @@ async function fixMissingCovers() {
   } catch (e) {
     console.error('[Seed] Erreur:', e.message);
   }
-  // Age ratings par défaut basés sur le genre
-  try {
-    const ratingMap = [
-      { genres: ['adult','erotic','nsfw'], rating: 18 },
-      { genres: ['horror','survival horror','gore'], rating: 18 },
-      { genres: ['fps','first-person','shooter','battle royale','tactical shooter'], rating: 16 },
-      { genres: ['action rpg','souls-like','hack and slash'], rating: 16 },
-      { genres: ['open world','rpg','mmo','mmorpg','jrpg'], rating: 12 },
-      { genres: ['mo','moba','strategy','rts','tower defense'], rating: 7 },
-      { genres: ['platformer','adventure','action-adventure','metroidvania'], rating: 7 },
-      { genres: ['puzzle','racing','sports','simulation','sandbox'], rating: 3 },
-      { genres: ['casual','rhythm','music','party'], rating: 3 },
-      { genres: ['rogue-lite','roguelike','deck-building'], rating: 7 },
-      { genres: ['visual novel','point-and-click'], rating: 7 },
-    ];
-    const { data: noAge } = await db.supabaseAdmin.from('catalog').select('game_id,genre').is('age_rating', null).limit(5000);
-    if (noAge && noAge.length > 0) {
-      let updated = 0;
-      for (const g of noAge) {
-        const genre = (g.genre || '').toLowerCase();
-        let age = 0;
-        for (const entry of ratingMap) {
-          if (entry.genres.some(kw => genre.includes(kw))) { age = entry.rating; break; }
-        }
-        if (age > 0) {
-          await db.supabaseAdmin.from('catalog').update({ age_rating: age }).eq('game_id', g.game_id).catch(() => {});
-          updated++;
-        }
-      }
-      if (updated > 0) { db.invalidateCatalogCache(); console.log('[AgeRating]', updated, 'jeux notés par genre'); }
-    }
-  } catch (e) { console.error('[AgeRating] Erreur:', e.message); }
   // Démarre le rafraîchissement périodique des actualités
   startNewsRefresh();
+  console.log('[Startup] Prêt');
 })();
 
 function rawgApiGet(url) {

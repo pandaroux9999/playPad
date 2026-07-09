@@ -282,6 +282,8 @@ async function seedDemoData() {
 
 async function seedBoosts(userIds) {
   console.log('[Seed] Ajout des boosts communautaires (jeux alÃ©atoires du catalogue)...');
+  // Vérifie/crée la table boosts si absente
+  await db.supabaseAdmin.rpc('exec_sql', { query: `CREATE TABLE IF NOT EXISTS boosts (id SERIAL PRIMARY KEY, user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE, game_id TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(user_id, game_id));` }).catch(() => {});
   // Nettoie les anciens boosts (> 7 jours) pour garder la table propre
   await db.supabaseAdmin.from('boosts').delete().lt('created_at', new Date(Date.now() - 7 * 86400000).toISOString()).catch(() => {});
   let catalogGames = [];

@@ -33,9 +33,7 @@
     .pill-btn { transition: all 0.2s ease; }
     .pill-btn:hover { opacity: 0.85; }
     .no-underline { text-decoration: none; }
-    .review-card { transition: border-color 0.2s ease, transform 0.15s ease; cursor: pointer; }
-    .review-card:hover { border-color: #8B5CF6 !important; transform: scale(1.01); }
-    .review-card:active { transform: scale(0.98); }
+    .review-card { transition: border-color 0.2s ease; }
     .sheet-close-btn { transition: background 0.2s ease; }
     .sheet-close-btn:hover { background: rgba(0,0,0,0.7) !important; }
     .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 999; padding: 10px 24px; border-radius: 12px; font-size: 13px; font-weight: 600; color: #fff; animation: fadeSlideIn 0.3s ease-out; pointer-events: none; }
@@ -1361,8 +1359,8 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
               h('span', { className: "text-[8px] font-bold ml-auto", style: { color: ratingColor(r.rating) } }, r.rating >= 4 ? "Recommand\u00e9" : r.rating >= 3 ? "Mitig\u00e9" : "D\u00e9conseill\u00e9")
             ),
             h('div', { className: "flex items-center gap-3 mt-1" },
-              h('button', { onClick: async () => { try { const newVote = r.my_vote === 1 ? 0 : 1; await API.voteReview(r.id, newVote); load(); } catch(e) {} }, className: `flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-colors ${r.my_vote === 1 ? "text-sky-400" : "text-muted-foreground hover:text-sky-400"}` }, h(ThumbsUp, { size: 10, fill: r.my_vote === 1 ? "#38bdf8" : "none", stroke: r.my_vote === 1 ? "#38bdf8" : "currentColor" }), r.thumbs_up || 0),
-              h('button', { onClick: async () => { try { const newVote = r.my_vote === -1 ? 0 : -1; await API.voteReview(r.id, newVote); load(); } catch(e) {} }, className: `flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-colors ${r.my_vote === -1 ? "text-red-400" : "text-muted-foreground hover:text-red-400"}` }, h(ThumbsDown, { size: 10, fill: r.my_vote === -1 ? "#f87171" : "none", stroke: r.my_vote === -1 ? "#f87171" : "currentColor" }), r.thumbs_down || 0),
+              h('button', { onClick: async () => { try { const newVote = r.my_vote === 1 ? 0 : 1; await API.voteReview(r.id, newVote); load(); } catch(e) { console.error('[Vote]', e); } }, className: `flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-colors ${r.my_vote === 1 ? "text-sky-400" : "text-muted-foreground hover:text-sky-400"}` }, h(ThumbsUp, { size: 10, fill: r.my_vote === 1 ? "#38bdf8" : "none", stroke: r.my_vote === 1 ? "#38bdf8" : "currentColor" }), r.thumbs_up || 0),
+              h('button', { onClick: async () => { try { const newVote = r.my_vote === -1 ? 0 : -1; await API.voteReview(r.id, newVote); load(); } catch(e) { console.error('[Vote]', e); } }, className: `flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold transition-colors ${r.my_vote === -1 ? "text-red-400" : "text-muted-foreground hover:text-red-400"}` }, h(ThumbsDown, { size: 10, fill: r.my_vote === -1 ? "#f87171" : "none", stroke: r.my_vote === -1 ? "#f87171" : "currentColor" }), r.thumbs_down || 0),
               h('button', { onClick: async () => {
                 if (replyState.reviewId === r.id) { setReplyState({ reviewId: null, text: '' }); return; }
                 setReplyState({ reviewId: r.id, text: '' });
@@ -1864,6 +1862,9 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   const [email, setEmail] = useState(user?.email || "");
   const [emailSaving, setEmailSaving] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactMsg, setContactMsg] = useState('');
+  const [contactSending, setContactSending] = useState(false);
   const [syncingPlatform, setSyncingPlatform] = useState(null);
   const [bridgeStatus, setBridgeStatus] = useState('unknown');
   const [emailNotifs, setEmailNotifs] = useState(false);
@@ -2066,7 +2067,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
           )
         ),
         // Nous contacter
-        h('a', { href: "mailto:contact@playpad.app", className: "flex items-center gap-2 py-2.5 text-xs font-medium text-foreground hover:opacity-80 border-b border-border" },
+        h('button', { onClick: () => { setContactOpen(true); }, className: "flex items-center gap-2 py-2.5 text-xs font-medium text-foreground hover:opacity-80 border-b border-border w-full text-left" },
           h(MessageCircle, { size: 13, style: { color: `${P1}aa` } }),
           "Nous contacter"
         ),
@@ -2074,6 +2075,42 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
         h('button', { onClick: () => { setSettingsOpen(false); onDeleteAccount(); }, className: "flex items-center gap-2 py-2.5 text-xs font-medium w-full text-left", style: { color: "#ef444488" } },
           h(Trash2, { size: 13, style: { color: "#ef444488" } }),
           "Supprimer mon compte"
+        )
+      )
+    ),
+    // ─── Contact modal ───────────────────────────────────────
+    contactOpen && h('div', { className: "fixed inset-0 z-50 flex items-center justify-center" },
+      h('div', { className: "absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: () => setContactOpen(false) }),
+      h('div', { className: "relative bg-card border border-border rounded-2xl p-5 w-80", style: { zIndex: 1 } },
+        h('div', { className: "flex items-center gap-2 mb-3" },
+          h(MessageCircle, { size: 16, style: { color: P1 } }),
+          h('p', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Nous contacter")
+        ),
+        h('p', { className: "text-[10px] text-muted-foreground mb-3" }, "Un bug, une id\u00e9e, un retour ? \u00c9cris-nous ici :"),
+        h('textarea', {
+          value: contactMsg,
+          onChange: e => setContactMsg(e.target.value),
+          placeholder: "Ton message...",
+          rows: 4,
+          className: "w-full bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none resize-none mb-3"
+        }),
+        h('div', { className: "flex gap-2" },
+          h('button', { onClick: () => setContactOpen(false), className: "flex-1 py-2 text-xs font-bold rounded-lg", style: { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, "Annuler"),
+          h('button', {
+            onClick: async () => {
+              if (!contactMsg.trim()) return;
+              setContactSending(true);
+              try {
+                await API.request('POST', '/api/contact', { message: contactMsg, email: user?.email || '' });
+                setContactOpen(false);
+                setContactMsg('');
+                showToast('Message envoy\u00e9 !');
+              } catch (e) { showToast('Erreur: ' + (e.message || '')); }
+              finally { setContactSending(false); }
+            },
+            disabled: contactSending || !contactMsg.trim(),
+            className: "flex-1 py-2 text-xs font-bold rounded-lg text-white", style: { background: GRAD }
+          }, contactSending ? h(Loader, { size: 12, className: "animate-spin" }) : "Envoyer")
         )
       )
     ),
@@ -2249,8 +2286,8 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
                 h('div', { className: "flex items-center gap-2 mt-1.5" },
           h('span', { className: "text-[8px] font-bold", style: { color: ratingColor(review.rating) } }, review.rating >= 4 ? "Recommand\u00e9" : review.rating >= 3 ? "Mitig\u00e9" : "D\u00e9conseill\u00e9"),
           h('div', { className: "flex items-center gap-1 ml-auto" },
-            h('button', { onClick: async () => { try { const newVote = review.my_vote === 1 ? 0 : 1; await API.voteReview(review.id, newVote); const d = await API.getGameReviews(gameId); setCommunityReviews(d.reviews || []); } catch(e) {} }, className: `flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-bold transition-colors ${review.my_vote === 1 ? "text-sky-400" : "text-muted-foreground hover:text-sky-400"}` }, h(ThumbsUp, { size: 8, fill: review.my_vote === 1 ? "#38bdf8" : "none", stroke: review.my_vote === 1 ? "#38bdf8" : "currentColor" }), review.thumbs_up || 0),
-            h('button', { onClick: async () => { try { const newVote = review.my_vote === -1 ? 0 : -1; await API.voteReview(review.id, newVote); const d = await API.getGameReviews(gameId); setCommunityReviews(d.reviews || []); } catch(e) {} }, className: `flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-bold transition-colors ${review.my_vote === -1 ? "text-red-400" : "text-muted-foreground hover:text-red-400"}` }, h(ThumbsDown, { size: 8, fill: review.my_vote === -1 ? "#f87171" : "none", stroke: review.my_vote === -1 ? "#f87171" : "currentColor" }), review.thumbs_down || 0)
+            h('button', { onClick: async () => { try { const newVote = review.my_vote === 1 ? 0 : 1; await API.voteReview(review.id, newVote); const d = await API.getGameReviews(gameId); setCommunityReviews(d.reviews || []); } catch(e) { console.error('[Vote]', e); } }, className: `flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-bold transition-colors ${review.my_vote === 1 ? "text-sky-400" : "text-muted-foreground hover:text-sky-400"}` }, h(ThumbsUp, { size: 8, fill: review.my_vote === 1 ? "#38bdf8" : "none", stroke: review.my_vote === 1 ? "#38bdf8" : "currentColor" }), review.thumbs_up || 0),
+            h('button', { onClick: async () => { try { const newVote = review.my_vote === -1 ? 0 : -1; await API.voteReview(review.id, newVote); const d = await API.getGameReviews(gameId); setCommunityReviews(d.reviews || []); } catch(e) { console.error('[Vote]', e); } }, className: `flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-bold transition-colors ${review.my_vote === -1 ? "text-red-400" : "text-muted-foreground hover:text-red-400"}` }, h(ThumbsDown, { size: 8, fill: review.my_vote === -1 ? "#f87171" : "none", stroke: review.my_vote === -1 ? "#f87171" : "currentColor" }), review.thumbs_down || 0)
           )
         )
       );

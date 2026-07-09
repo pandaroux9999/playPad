@@ -192,6 +192,15 @@ CREATE TABLE IF NOT EXISTS esport_favorites (
 -- Préférences de notification des utilisateurs
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_notifications BOOLEAN DEFAULT FALSE;
 
+-- Messages de contact (formulaire "Nous contacter")
+CREATE TABLE IF NOT EXISTS contact_messages (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email TEXT DEFAULT '',
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Votes sur les critiques communautaires (pouce bleu/rouge)
 CREATE TABLE IF NOT EXISTS review_votes (
   id SERIAL PRIMARY KEY,

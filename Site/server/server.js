@@ -310,7 +310,7 @@ app.post('/api/games/review', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[Review] Error:', err.message);
     console.error('[Review] Stack:', err.stack);
-    res.status(500).json({ error: 'Erreur interne' });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -2260,6 +2260,31 @@ app.get('/api/streamers/search', requireAuth, async (req, res) => {
     const twitchSecret = process.env.TWITCH_CLIENT_SECRET;
     const streamers = await db.searchStreamers(game, twitchId, twitchSecret);
     res.json({ streamers });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── CONTACT FORM ───────────────────────────────────────────
+app.post('/api/contact', requireAuth, async (req, res) => {
+  try {
+    const { message, email } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message requis' });
+    const transporter = createMailTransporter();
+    if (transporter) {
+      await transporter.sendMail({
+        from: `"PlayPad Contact" <${process.env.SMTP_USER}>`,
+        to: process.env.SMTP_USER,
+        subject: `[PlayPad] Message de ${email || 'utilisateur #' + req.session.userId}`,
+        html: `<p><b>De :</b> ${email || 'inconnu'}</p><p><b>Message :</b></p><p>${message}</p>`,
+      });
+    }
+    // Stocker en DB même si l'email échoue
+    const { error } = await db.supabaseAdmin
+      .from('contact_messages')
+      .insert({ user_id: req.session.userId, email: email || '', message });
+    if (error) console.error('[Contact] DB error:', error.message);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

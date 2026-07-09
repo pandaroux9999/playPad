@@ -296,6 +296,7 @@ async function deleteUserAccount(userId) {
 
 async function savePublicReview(userId, gameId, rating, reviewText, gameTitle, gameCover) {
   console.log('[savePublicReview] Params:', { userId, gameId, rating, reviewTextLength: reviewText?.length, gameTitle });
+  // Try upsert first (requires UNIQUE(user_id, game_id) constraint)
   const { data, error } = await supabaseAdmin
     .from('community_reviews')
     .upsert({
@@ -305,13 +306,29 @@ async function savePublicReview(userId, gameId, rating, reviewText, gameTitle, g
       game_cover: gameCover || '',
       rating,
       review_text: reviewText,
-    }, { onConflict: 'user_id, game_id' })
-    .select();
+    }, { onConflict: 'user_id, game_id' });
   if (error) {
-    console.error('[savePublicReview] Supabase error:', error);
-    throw new Error(error.message);
+    console.log('[savePublicReview] Upsert failed, trying insert/update fallback:', error.message);
+    // Fallback: delete existing then insert (for tables without the UNIQUE constraint)
+    await supabaseAdmin.from('community_reviews').delete().eq('user_id', userId).eq('game_id', gameId);
+    const { error: e2 } = await supabaseAdmin
+      .from('community_reviews')
+      .insert({
+        user_id: userId,
+        game_id: gameId,
+        game_title: gameTitle || '',
+        game_cover: gameCover || '',
+        rating,
+        review_text: reviewText,
+      });
+    if (e2) {
+      console.error('[savePublicReview] Fallback also failed:', e2);
+      throw new Error(e2.message);
+    }
+    console.log('[savePublicReview] Fallback insert succeeded');
+    return;
   }
-  console.log('[savePublicReview] Upsert result data:', data);
+  console.log('[savePublicReview] Upsert succeeded, data:', data);
 }
 
 async function getGameReviews(gameId) {

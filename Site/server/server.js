@@ -1006,10 +1006,10 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
   const yearRanges = [];
   for (let y = 1980; y <= 2026; y += 2) {
     const end = Math.min(y + 1, 2026);
-    yearRanges.push({ label: String(y), start: `${y}-01-01`, end: `${end}-12-31`, pages: 10 });
+    yearRanges.push({ label: String(y), start: `${y}-01-01`, end: `${end}-12-31`, pages: 30 });
   }
   // catch-all for games missing dates
-  yearRanges.push({ label: 'nodate', start: '1970-01-01', end: '2026-12-31', pages: 15 });
+  yearRanges.push({ label: 'nodate', start: '1970-01-01', end: '2026-12-31', pages: 40 });
 
   for (const plat of targets) {
     for (const range of yearRanges) {
@@ -1044,6 +1044,59 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
     }
   }
   console.log(`[Catalog] ${total} ajoutés, ${skipped} ignorés (déjà présents)`);
+  return total;
+}
+
+async function populateOnlineGames(apiKey) {
+  if (!apiKey) return 0;
+  console.log('[OnlineGames] Récupération des jeux en ligne/multi...');
+  let total = 0;
+  const seen = new Set();
+  try {
+    const existing = await db.getCatalog();
+    for (const g of existing) seen.add(g.game_id);
+  } catch (e) {}
+  const queries = [
+    // Jeux multijoueur populaires (tag multiplayer + rating > 3)
+    { url: `https://api.rawg.io/api/games?key=${apiKey}&tags=multiplayer&ordering=-rating&page_size=40`, pages: 10 },
+    // Jeux MMO/online
+    { url: `https://api.rawg.io/api/games?key=${apiKey}&tags=mmo&ordering=-added&page_size=40`, pages: 8 },
+    // Battle royale
+    { url: `https://api.rawg.io/api/games?key=${apiKey}&tags=battle-royale&ordering=-added&page_size=40`, pages: 5 },
+    // Free to play les plus populaires
+    { url: `https://api.rawg.io/api/games?key=${apiKey}&tags=free-to-play&ordering=-rating&page_size=40`, pages: 10 },
+    // Meilleurs jeux跨-plateforme (Steam)
+    { url: `https://api.rawg.io/api/games?key=${apiKey}&stores=1&ordering=-metacritic&page_size=40`, pages: 15 },
+    // Nouveautés populaires
+    { url: `https://api.rawg.io/api/games?key=${apiKey}&ordering=-added&page_size=40`, pages: 10 },
+  ];
+  for (const q of queries) {
+    let page = 1;
+    while (page <= q.pages) {
+      try {
+        const url = q.url + `&page=${page}`;
+        const data = await rawgApiGet(url);
+        if (!data || !data.results) break;
+        for (const item of data.results) {
+          if (!item.name) continue;
+          const gid = `online-${item.id}`;
+          if (seen.has(gid)) continue;
+          seen.add(gid);
+          await db.ensureCatalogGame({
+            game_id: gid, title: item.name, platform: 'pc',
+            cover: item.background_image || '',
+            genre: (item.genres || []).map(g => g.name).join(', '),
+            year: item.released ? (parseInt(item.released.split('-')[0]) || 0) : 0,
+          });
+          total++;
+        }
+        if (!data.next) break;
+        page++;
+        await new Promise(r => setTimeout(r, 200));
+      } catch (e) { break; }
+    }
+  }
+  console.log(`[OnlineGames] ${total} jeux en ligne ajoutés`);
   return total;
 }
 
@@ -1103,7 +1156,7 @@ async function populateSteamFromAppList() {
     for (const genre of genres) {
       try {
       const d = await fetchSteamSpy('https://steamspy.com/api.php?request=genre&genre=' + genre);
-      const entries = buildEntries(spyToEntries(d, 500)).filter(e => { if (seenIds.has(e.game_id)) return false; seenIds.add(e.game_id); return true; });
+      const entries = buildEntries(spyToEntries(d, 1000)).filter(e => { if (seenIds.has(e.game_id)) return false; seenIds.add(e.game_id); return true; });
         const added = await upsertBatch(entries);
         totalAdded += added;
         console.log('[SteamAppList] Genre', decodeURIComponent(genre), ':', entries.length, 'jeux,', added, 'nouveaux (total', totalAdded, 'nouveaux)');
@@ -1124,6 +1177,47 @@ async function populateSteamFromAppList() {
     console.log(`[SteamAppList] ${totalAdded} jeux Steam ajoutés`);
   } catch (e) { console.error('[SteamAppList] Error:', e.message); }
   return totalAdded;
+}
+
+// ─── Cover Fallback ─────────────────────────────────────────
+async function fixMissingCovers() {
+  try {
+    const { data: noCover } = await db.supabaseAdmin
+      .from('catalog')
+      .select('game_id, title, platform')
+      .or('cover.is.null,cover.eq.');
+    if (!noCover || noCover.length === 0) return 0;
+    let fixed = 0;
+    for (const g of noCover.slice(0, 200)) {
+      try {
+        if (g.game_id.startsWith('steam-')) {
+          const appid = g.game_id.replace('steam-', '');
+          const cover = `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`;
+          await db.supabaseAdmin.from('catalog').update({ cover }).eq('game_id', g.game_id);
+          fixed++;
+        } else {
+          // Cherche l'appid Steam via SteamSpy search
+          const searchRes = await new Promise((resolve, reject) => {
+            const req = https.get(`https://steamspy.com/api.php?request=appdetails&appid=0&q=${encodeURIComponent(g.title)}`, { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
+              let b = ''; resp.on('data', c => b += c); resp.on('end', () => { try { resolve(JSON.parse(b)); } catch (e) { reject(e); } });
+            });
+            req.on('error', reject); req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')); });
+          });
+          if (searchRes && searchRes.name && searchRes.name.toLowerCase() === g.title.toLowerCase()) {
+            const appid = searchRes.appid;
+            if (appid) {
+              const cover = `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`;
+              await db.supabaseAdmin.from('catalog').update({ cover }).eq('game_id', g.game_id);
+              fixed++;
+            }
+          }
+        }
+        await new Promise(r => setTimeout(r, 300));
+      } catch (e) { /* skip */ }
+    }
+    if (fixed > 0) console.log(`[Covers] ${fixed} couvertures corrigées`);
+    return fixed;
+  } catch (e) { console.error('[Covers] Error:', e.message); return 0; }
 }
 
 // Peuple le catalogue au démarrage si vide
@@ -1164,6 +1258,14 @@ async function populateSteamFromAppList() {
   } else {
     console.log('[Catalog] TWITCH_CLIENT_ID/SECRET non configurés, skip IGDB');
   }
+  // Jeux en ligne/multi : tous les démarrages
+  const rawgKey = process.env.RAWG_API_KEY;
+  if (rawgKey) {
+    try {
+      const onlineCount = await populateOnlineGames(rawgKey);
+      if (onlineCount > 0) console.log(`[Catalog] ${onlineCount} jeux en ligne ajoutés`);
+    } catch (e) { console.error('[Catalog] Erreur online games:', e.message); }
+  }
   // Jeux cultes : toujours insérés (indépendant du seed)
   try {
     const { GAMES_CATALOG } = require('./seed');
@@ -1174,6 +1276,8 @@ async function populateSteamFromAppList() {
     if (missing.length > 0) { await db.batchUpsertCatalog(missing); }
     console.log(`[Catalog] ${missing.length} jeux cultes ajoutés (${GAMES_CATALOG.length - missing.length} déjà présents)`);
   } catch (e) { console.error('[Catalog] Erreur jeux cultes:', e.message); }
+  // Correction des couvertures manquantes
+  try { await fixMissingCovers(); } catch (e) { console.error('[Covers] Error:', e.message); }
   // Données de démonstration après le catalogue
   try {
     const { seedDemoData } = require('./seed');
@@ -1300,7 +1404,7 @@ async function populateCatalogFromIGDB(clientId, clientSecret) {
     let offset = 0;
     const limit = 200;
     let page = 0;
-    const maxPages = 3;
+    const maxPages = 5;
     let batch = [];
     while (page < maxPages) {
       try {

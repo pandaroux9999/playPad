@@ -337,12 +337,18 @@ function StarRating({ rating, size = 14, interactive = false, onChange }) {
 }
 
 function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown, small, boostCount, onBoost, boosted, boosterBtn, boosterActive, onBuy }) {
+  const [imgError, setImgError] = useState(!game?.cover);
   const status = game.status ? STATUS_CONFIG[game.status] : null;
   const inWishlist = wishlistIds?.has(game.game_id || game.id);
   const inTopThree = topThreeIds?.has(game.game_id || game.id);
   const gameId = game.game_id || game.id;
+  const initials = (game.title || '??').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase().slice(0, 2);
   return h('div', { onClick, className: "game-card relative rounded-2xl overflow-hidden", style: { aspectRatio: "3/4", background: "#1a1a2e" } },
-    h('img', { src: game.cover, alt: game.title, className: "absolute inset-0 w-full h-full object-cover", loading: "lazy" }),
+    imgError
+      ? h('div', { className: "absolute inset-0 flex items-center justify-center", style: { background: 'linear-gradient(135deg,#1a1a2e,#2d1b69)' } },
+          h('span', { className: "text-lg font-black opacity-30", style: { color: P1, fontFamily: "'Rajdhani', sans-serif" } }, initials)
+        )
+      : h('img', { src: game.cover, alt: game.title, className: "absolute inset-0 w-full h-full object-cover", loading: "lazy", onError: () => setImgError(true) }),
     h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent" }),
     status && game.status !== "not_started" && h('div', { className: "absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full", style: { background: status.color, boxShadow: `0 0 8px ${status.color}80` } }),
     game.hasReview && h('div', { className: "absolute top-2.5 left-2.5 w-5 h-5 rounded-full flex items-center justify-center", style: { background: GRAD } }, h(Edit3, { size: 10, className: "text-white" })),

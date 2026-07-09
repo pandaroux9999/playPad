@@ -295,7 +295,8 @@ async function deleteUserAccount(userId) {
 }
 
 async function savePublicReview(userId, gameId, rating, reviewText, gameTitle, gameCover) {
-  const { error } = await supabaseAdmin
+  console.log('[savePublicReview] Params:', { userId, gameId, rating, reviewTextLength: reviewText?.length, gameTitle });
+  const { data, error } = await supabaseAdmin
     .from('community_reviews')
     .upsert({
       user_id: userId,
@@ -304,8 +305,13 @@ async function savePublicReview(userId, gameId, rating, reviewText, gameTitle, g
       game_cover: gameCover || '',
       rating,
       review_text: reviewText,
-    }, { onConflict: 'user_id, game_id' });
-  if (error) throw new Error(error.message);
+    }, { onConflict: 'user_id, game_id' })
+    .select();
+  if (error) {
+    console.error('[savePublicReview] Supabase error:', error);
+    throw new Error(error.message);
+  }
+  console.log('[savePublicReview] Upsert result data:', data);
 }
 
 async function getGameReviews(gameId) {
@@ -325,12 +331,17 @@ async function getGameReviews(gameId) {
 }
 
 async function getAllPublicReviews() {
+  console.log('[getAllPublicReviews] Querying community_reviews...');
   const { data, error } = await supabaseAdmin
     .from('community_reviews')
     .select(`*, users(display_name, username, avatar_url)`)
     .order('created_at', { ascending: false })
     .limit(50);
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error('[getAllPublicReviews] Supabase error:', error);
+    throw new Error(error.message);
+  }
+  console.log('[getAllPublicReviews] Result count:', data?.length, 'rows:', JSON.stringify(data?.map(r => ({ id: r.id, user_id: r.user_id, game_id: r.game_id, rating: r.rating, review_text_length: r.review_text?.length }))));
   return (data || []).map(r => ({ ...r, reply_count: 0 }));
 }
 

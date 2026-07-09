@@ -1151,7 +1151,7 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
   const load = () => Promise.all([
     API.getFriends().then(d => setFriends(d.friends || [])).catch(() => {}),
     API.getPendingRequests().then(d => setRequests(d.requests || [])).catch(() => {}),
-    API.getReviewsFeed().then(d => setPublicReviews(d.reviews || [])).catch(() => {}),
+    API.getReviewsFeed().then(d => { console.log('[CommunityView] getReviewsFeed response:', d); setPublicReviews(d.reviews || []); }).catch(e => { console.error('[CommunityView] getReviewsFeed error:', e); }),
     API.getSuggestions().then(d => setSuggestions(d.suggestions || [])).catch(() => {}),
   ]).finally(() => setLoading(false));
   const loadNews = useCallback(() => {

@@ -298,13 +298,18 @@ app.post('/api/games/review', requireAuth, async (req, res) => {
   try {
     const { gameId, rating, reviewText, reviewPublic, gameTitle, gameCover } = req.body;
     const isPublic = reviewPublic !== false;
+    console.log('[Review] Incoming review:', { userId: req.session.userId, gameId, rating, reviewTextLength: reviewText?.length, isPublic, gameTitle });
     await db.updateGameRating(req.session.userId, gameId, rating || 0, reviewText || '', isPublic);
+    console.log('[Review] updateGameRating OK');
     if (isPublic) {
       await db.savePublicReview(req.session.userId, gameId, rating || 0, reviewText || '', gameTitle, gameCover);
+      console.log('[Review] savePublicReview OK');
     }
     res.json({ ok: true });
+    console.log('[Review] Response sent successfully');
   } catch (err) {
     console.error('[Review] Error:', err.message);
+    console.error('[Review] Stack:', err.stack);
     res.status(500).json({ error: 'Erreur interne' });
   }
 });

@@ -1121,7 +1121,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   );
 }
 
-function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotification }) {
+function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelectFriend, onSelectGame, onAddNotification }) {
   const [subTab, setSubTab] = useState("friends");
   const [publicReviews, setPublicReviews] = useState([]);
   const [friends, setFriends] = useState([]);
@@ -1175,6 +1175,7 @@ function CommunityView({ refreshKey, onSelectFriend, onSelectGame, onAddNotifica
       setDramaItems(d.drama || []);
     }).catch(() => {}).finally(() => setLoadingNews(false));
   }, []);
+  useEffect(() => { if (freshReview) { setPublicReviews(prev => [freshReview, ...prev.filter(r => r.game_id !== freshReview.game_id || r.user_id !== freshReview.user_id)]); onFreshReviewConsumed(); } }, [freshReview]);
   useEffect(() => { load(); }, [refreshKey]);
   useEffect(() => { loadNews(); const t = setInterval(loadNews, 120000); return () => clearInterval(t); }, []);
   useEffect(() => {
@@ -2542,6 +2543,7 @@ function App() {
   const [userBoostedSet, setUserBoostedSet] = useState(new Set());
   const [catalogRefreshKey, setCatalogRefreshKey] = useState(0);
   const [communityRefreshKey, setCommunityRefreshKey] = useState(0);
+  const [freshReview, setFreshReview] = useState(null);
   const refreshBooster = useCallback(async () => {
     try {
       const [bpData, topData] = await Promise.all([API.getBoosterPoints(), API.getTopBoosted()]);
@@ -2717,6 +2719,12 @@ function App() {
     console.log('[handleSaveReview] Calling API.saveReview with:', { gameId, rating, reviewText, reviewPublic, gameTitle, gameCover });
     const saveResult = await API.saveReview(gameId, rating, reviewText, reviewPublic, gameTitle, gameCover);
     console.log('[handleSaveReview] API.saveReview response:', saveResult);
+    setFreshReview({
+      id: Date.now(), user_id: userId, game_id: gameId, game_title: gameTitle, game_cover: gameCover || '',
+      rating, review_text: reviewText, created_at: new Date().toISOString(),
+      users: { display_name: user?.display_name, username: user?.username, avatar_url: user?.avatar_url },
+      thumbs_up: 0, thumbs_down: 0, my_vote: 0, reply_count: 0,
+    });
     setCommunityRefreshKey(k => k + 1);
     showToast("Critique sauvegard\u00e9e !");
     try {
@@ -2796,7 +2804,7 @@ function App() {
       h('div', { className: "flex-1 overflow-hidden" },
         h('div', { className: "h-full overflow-y-auto" },
           view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); }, wishlistIds, onToggleWishlist: handleToggleWishlist, topThreeIds, onToggleTopThree: handleToggleTopThree }),
-          view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
+          view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, freshReview, onFreshReviewConsumed: () => setFreshReview(null), onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
           view === "catalogue" && h(CatalogueView, { key: 'cat', refreshKey: catalogRefreshKey, onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
           view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast })

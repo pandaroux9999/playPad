@@ -669,29 +669,31 @@ let catalogCache = null;
 
 async function getCatalog() {
   if (catalogCache) return catalogCache;
-  // Pas de ORDER BY SQL (lent sur 96k lignes sans index) → tri local après
-  const { data, error } = await supabaseAdmin
-    .from('catalog')
-    .select('*')
-    .limit(100000);
-  if (error) throw new Error(error.message);
-  if (!data) return [];
-  data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-  catalogCache = data;
-  return data;
+  // Charge TOUTES les pages du catalogue (contourne la limite 1000 PostgREST)
+  let all = [];
+  const PAGE_SIZE = 1000;
+  let page = 0;
+  while (true) {
+    const { data, error } = await supabaseAdmin
+      .from('catalog')
+      .select('*')
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+    all = all.concat(data);
+    page++;
+    if (data.length < PAGE_SIZE) break;
+  }
+  all.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  catalogCache = all;
+  console.log(`[Catalog] Cache chargé: ${all.length} jeux (${page} pages)`);
+  return all;
 }
 
 async function getCatalogPage(page = 1, limit = 500) {
+  const all = await getCatalog();
   const offset = (page - 1) * limit;
-  // range() contourne la limite PostgREST de 1000 lignes
-  const { data, error } = await supabaseAdmin
-    .from('catalog')
-    .select('*')
-    .range(offset, offset + limit - 1);
-  if (error) throw new Error(error.message);
-  if (!data) return [];
-  data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-  return data;
+  return all.slice(offset, offset + limit);
 }
 
 function invalidateCatalogCache() {

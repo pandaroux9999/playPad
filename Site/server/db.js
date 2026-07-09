@@ -704,6 +704,21 @@ async function getCatalogPage(page = 1, limit = 500) {
   return all.slice(offset, offset + limit);
 }
 
+async function searchCatalog({ search, letter, page = 1, limit = 500 }) {
+  let query = supabaseAdmin.from('catalog').select('*', { count: 'exact' });
+  if (search && search.trim()) {
+    query = query.ilike('title', `%${search.trim()}%`);
+  } else if (letter && letter !== 'all') {
+    const l = letter.toLowerCase();
+    query = query.or(`title.ilike.${l}%,title.ilike.${l.toUpperCase()}%`);
+  }
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+  const { data, count, error } = await query.order('title').range(from, to);
+  if (error) throw new Error(error.message);
+  return { data: data || [], total: count || 0, page, limit };
+}
+
 function invalidateCatalogCache() {
   catalogCache = null;
 }

@@ -510,9 +510,14 @@ app.get('/api/games/ratings', async (req, res) => {
 
 app.get('/api/catalog', catalogLimiter, async (req, res) => {
   try {
-    const catalog = await db.getCatalog();
+    const { search, letter } = req.query;
     const page = parseInt(req.query.page) || 1;
-    const limit = Math.min(parseInt(req.query.limit) || 100000, 100000);
+    const limit = Math.min(parseInt(req.query.limit) || 60, 500);
+    if (search || (letter && letter !== 'all')) {
+      const result = await db.searchCatalog({ search, letter, page, limit });
+      return res.json({ catalog: result.data, total: result.total, page, limit });
+    }
+    const catalog = await db.getCatalog();
     const offset = (page - 1) * limit;
     const total = catalog.length;
     res.json({ catalog: catalog.slice(offset, offset + limit), total, page, limit });
@@ -2789,6 +2794,7 @@ app.listen(PORT, () => {
   console.log('[Server] RAWG_API_KEY:', process.env.RAWG_API_KEY ? 'defined' : 'NON DÉFINI — catalogue RAWG indisponible');
   console.log('[Server] TWITCH_CLIENT_ID:', process.env.TWITCH_CLIENT_ID ? 'defined' : 'NON DÉFINI — catalogue IGDB indisponible');
   console.log('[Server] PANDASCORE_API_KEY:', process.env.PANDASCORE_API_KEY ? 'defined' : 'NON DÉFINI — données e-sport limitées au RSS HLTV');
+  console.log('[Server] GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? 'defined' : 'NON DÉFINI — connexion Google indisponible');
   console.log('[Server] Epic Games : connexion par nom d\'utilisateur (sans API)');
   if (!process.env.PUBLIC_URL) {
     console.warn('⚠️  PUBLIC_URL manquant. Steam OpenID redirigera vers localhost au lieu de l\'URL publique.');

@@ -153,7 +153,7 @@ const API = {
   sendSuggestion: (toUserId, gameId, gameTitle, gameCover, message) => API.request('POST', '/api/suggestions', { toUserId, gameId, gameTitle, gameCover, message }),
   getSuggestions: () => API.request('GET', '/api/suggestions'),
   dismissSuggestion: (id) => API.request('DELETE', `/api/suggestions/${id}`),
-  getCatalog: (page, limit) => API.request('GET', '/api/catalog?' + new URLSearchParams({ page: page || 1, limit: limit || 500 }).toString()),
+  getCatalog: (page, limit) => API.request('GET', '/api/catalog?' + new URLSearchParams({ page: page || 1, limit: limit || 100000 }).toString()),
   deleteGame: (gameId) => API.request('DELETE', `/api/games/${gameId}`),
   disconnectPlatform: (platform) => API.request('DELETE', `/api/games/platform/${platform}`),
   heartbeat: () => API.request('POST', '/api/heartbeat'),
@@ -2794,12 +2794,6 @@ function App() {
   };
 
   const handleSaveReview = async (gameId, rating, reviewText, reviewPublic, gameTitle, gameCover) => {
-    const [gData] = await Promise.all([API.getGames()]);
-    let next = gData.games.map(n);
-    const found = next.find(g => g.game_id === gameId) || next.find(g => g.title === gameTitle);
-    if (!found) {
-      await API.syncGames([{ game_id: gameId, title: gameTitle, cover: gameCover || '', user_rating: 0, review_text: "", review_public: 1, has_review: 0, status: "not_started", playtime: 0 }]);
-    }
     console.log('[handleSaveReview] Calling API.saveReview with:', { gameId, rating, reviewText, reviewPublic, gameTitle, gameCover });
     const saveResult = await API.saveReview(gameId, rating, reviewText, reviewPublic, gameTitle, gameCover);
     console.log('[handleSaveReview] API.saveReview response:', saveResult);
@@ -2814,10 +2808,8 @@ function App() {
     try {
       const [g2] = await Promise.all([API.getGames()]);
       console.log('[handleSaveReview] Post-save getGames success, got', g2.games.length, 'games');
-      next = g2.games.map(n);
+      const next = g2.games.map(n);
       setGames(next);
-      const updated = next.find(g => g.game_id === gameId) || next.find(g => g.title === gameTitle);
-      if (updated) setSelectedGame(updated);
     } catch (e) { console.error('[handleSaveReview] Post-save refresh failed', e); }
   };
 

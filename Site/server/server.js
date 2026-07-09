@@ -1022,6 +1022,7 @@ async function fetchNewReleases() {
             cover: item.background_image || '',
             genre: (item.genres || []).map(g => g.name).join(', '),
             year: item.released ? parseInt(item.released.split('-')[0]) : 0,
+            release_date: item.released || '',
             description: item.description_raw || '',
             developer: '',
             publisher: '',
@@ -1057,6 +1058,7 @@ async function fetchNewReleases() {
         cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.id}/library_600x900.jpg`,
         genre: (item.genres || []).map(g => g.description || g.name || '').join(', '),
         year: item.release_date ? parseInt(item.release_date.date?.match(/\d{4}/)?.[0]) : 0,
+        release_date: item.release_date?.date || '',
         description: item.short_description || '',
         developer: (item.developers || []).join(', '),
         publisher: (item.publishers || []).join(', '),
@@ -2297,6 +2299,7 @@ async function fetchDramaFromRSS() {
 // ─── 3. FETCH : E-Sport via RSS ────────────────────────────
 const ESPORT_RSS_FEEDS = [
   { url: 'https://www.hltv.org/rss/news', name: 'HLTV', game: 'Counter-Strike 2' },
+  { url: 'https://www.jeuxactu.com/rss/news.rss', name: 'JeuxActu', game: 'Multi' },
 ];
 
 async function fetchEsportFromRSS() {
@@ -2332,6 +2335,87 @@ async function fetchEsportFromRSS() {
   return items.slice(0, 12);
 }
 
+// ─── 3b. FETCH : E-Sport via PandaScore API ────────────────
+const PANDASCORE_GAMES = [
+  { slug: 'csgo', name: 'Counter-Strike 2' },
+  { slug: 'lol', name: 'League of Legends' },
+  { slug: 'dota2', name: 'Dota 2' },
+  { slug: 'valorant', name: 'Valorant' },
+  { slug: 'overwatch', name: 'Overwatch 2' },
+  { slug: 'rocket-league', name: 'Rocket League' },
+  { slug: 'call-of-duty', name: 'Call of Duty' },
+  { slug: 'rainbow-six', name: 'Rainbow Six Siege' },
+];
+
+async function fetchEsportFromPandaScore() {
+  const key = process.env.PANDASCORE_API_KEY;
+  if (!key) return [];
+  const items = [];
+  const seen = new Set();
+  for (const g of PANDASCORE_GAMES) {
+    try {
+      const url = `https://api.pandascore.co/${g.slug}/matches?filter[status]=running&sort=-begin_at&per_page=5&token=${key}`;
+      const body = await httpGet(url);
+      const matches = JSON.parse(body);
+      for (const m of matches) {
+        const title = (m.opponents || []).map(o => o.opponent.name).join(' vs ') || m.name || 'Match à venir';
+        if (seen.has(title)) continue;
+        seen.add(title);
+        const teams = (m.opponents || []).map(o => ({
+          name: o.opponent.name,
+          logo: o.opponent.image_url || '',
+          players: [],
+        }));
+        items.push({
+          type: 'esport',
+          event: title,
+          game: g.name,
+          date: m.begin_at ? m.begin_at.split('T')[0] : '',
+          desc: `${m.league?.name || ''} — ${m.serie?.name || ''} — ${m.tournament?.name || ''}`,
+          officialUrl: `https://www.pandascore.co/${g.slug}/matches/${m.id}`,
+          sourceUrl: '',
+          sourceName: 'PandaScore',
+          details: `${m.league?.name || ''} — ${m.serie?.name || ''}\n${m.tournament?.name || ''}\nStatut: ${m.status || 'unknown'}`,
+          pubDate: m.begin_at || new Date().toISOString(),
+          matchId: m.id,
+          tournament: m.tournament?.name || '',
+          teams,
+          status: m.status || 'upcoming',
+          scores: (m.results || []).map(r => r.score),
+        });
+      }
+    } catch (e) {
+      console.error(`[News] PandaScore error ${g.slug}:`, e.message);
+    }
+  }
+  return items;
+}
+
+async function fetchEsportMatchRoster(matchId, game) {
+  const key = process.env.PANDASCORE_API_KEY;
+  if (!key) return null;
+  try {
+    const url = `https://api.pandascore.co/${game}/matches/${matchId}?token=${key}`;
+    const body = await httpGet(url);
+    const m = JSON.parse(body);
+    if (!m) return null;
+    return {
+      teams: (m.opponents || []).map(o => ({
+        name: o.opponent.name,
+        logo: o.opponent.image_url || '',
+        players: [],
+      })),
+      status: m.status,
+      scores: (m.results || []).map(r => r.score),
+      league: m.league?.name || '',
+      tournament: m.tournament?.name || '',
+    };
+  } catch (e) {
+    console.error('[News] PandaScore roster error:', e.message);
+    return null;
+  }
+}
+
 // ─── 4. REFRESH complet ────────────────────────────────────
 async function refreshAllNews() {
   console.log('[News] Rafraîchissement des actualités...');
@@ -2354,7 +2438,11 @@ async function refreshAllNews() {
     results.drama = drama.length;
   }
 
-  const esport = await fetchEsportFromRSS();
+  // Esport via RSS (HLTV)
+  const esportRss = await fetchEsportFromRSS();
+  // Esport via PandaScore (matches en direct/à venir)
+  const esportPs = await fetchEsportFromPandaScore();
+  const esport = [...esportPs, ...esportRss];
   if (esport.length > 0) {
     await db.addNewsItems('esport', esport);
     results.esport = esport.length;
@@ -2387,6 +2475,16 @@ function loadNewsFallback() {
     return { releases: [], esport: [], drama: [] };
   }
 }
+
+// Récupère les détails d'un match e-sport (roster, scores)
+app.get('/api/esport/match/:game/:matchId', async (req, res) => {
+  try {
+    const roster = await fetchEsportMatchRoster(req.params.matchId, req.params.game);
+    res.json({ match: roster });
+  } catch (err) {
+    res.json({ match: null });
+  }
+});
 
 app.get('/api/news', newsLimiter, async (req, res) => {
   try {
@@ -2690,6 +2788,7 @@ app.listen(PORT, () => {
   console.log('[Server] XBL_API_KEY:', process.env.XBL_API_KEY ? 'defined' : 'NON DÉFINI — Xbox import ne marchera pas');
   console.log('[Server] RAWG_API_KEY:', process.env.RAWG_API_KEY ? 'defined' : 'NON DÉFINI — catalogue RAWG indisponible');
   console.log('[Server] TWITCH_CLIENT_ID:', process.env.TWITCH_CLIENT_ID ? 'defined' : 'NON DÉFINI — catalogue IGDB indisponible');
+  console.log('[Server] PANDASCORE_API_KEY:', process.env.PANDASCORE_API_KEY ? 'defined' : 'NON DÉFINI — données e-sport limitées au RSS HLTV');
   console.log('[Server] Epic Games : connexion par nom d\'utilisateur (sans API)');
   if (!process.env.PUBLIC_URL) {
     console.warn('⚠️  PUBLIC_URL manquant. Steam OpenID redirigera vers localhost au lieu de l\'URL publique.');

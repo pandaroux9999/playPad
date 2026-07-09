@@ -178,6 +178,7 @@ const API = {
   toggleEsportFavorite: (event) => API.request('POST', '/api/esport/favorite/toggle', { event }),
   getEsportFavorites: () => API.request('GET', '/api/esport/favorites'),
   checkEsportFavorite: (title, game) => API.request('GET', `/api/esport/favorites/check?title=${encodeURIComponent(title)}&game=${encodeURIComponent(game||'')}`),
+  getEsportMatch: (game, matchId) => API.request('GET', `/api/esport/match/${game}/${matchId}`),
   getNotifPrefs: () => API.request('GET', '/api/account/notifications'),
   setNotifPrefs: (emailNotifications) => API.request('POST', '/api/account/notifications', { emailNotifications }),
   searchPlayers: (game) => API.request('GET', `/api/players/search?game=${encodeURIComponent(game)}`),
@@ -368,6 +369,7 @@ function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown
       h(PlatformBadge, { platform: game.platform, small }),
       h('p', { className: "text-white text-xs font-bold leading-tight mt-1.5 line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
       game.developer && h('p', { className: "text-[9px] text-muted-foreground/70 leading-tight mt-0.5 line-clamp-1" }, game.developer),
+      small && game.release_date && h('p', { className: "text-[8px] text-muted-foreground/50 leading-tight mt-0.5" }, (() => { try { return new Date(game.release_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }); } catch(e) { return game.release_date; } })()),
       h('div', { className: "mt-1.5 flex items-center justify-between" },
         h(StarRating, { rating: game.userRating, size: 9 }),
         boosterBtn && h('button', { onClick: (e) => { e.stopPropagation(); boosterBtn(); }, className: "px-1.5 py-0.5 rounded text-[8px] font-bold text-white flex items-center gap-0.5 transition-opacity hover:opacity-80", style: { background: GRAD } }, h(Zap, { size: 7 }), "Booster"),
@@ -1637,6 +1639,21 @@ function NewsDetailSheet({ item, onClose }) {
         h('h2', { className: "text-lg font-black text-foreground leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, title),
         // Game badge for esport
         isEsport && h('span', { className: "inline-block mt-2 px-2 py-0.5 rounded text-[9px] font-bold", style: { background: `${P1}20`, color: P1 } }, item.game),
+        // Teams for esport matches (PandaScore data)
+        isEsport && item.teams && item.teams.length > 0 && h('div', { className: "mt-4 space-y-2" },
+          h('p', { className: "text-[10px] font-bold uppercase tracking-wider text-muted-foreground" }, "Équipes"),
+          h('div', { className: "flex gap-3" },
+            item.teams.map((t, i) =>
+              h('div', { key: i, className: "flex-1 p-3 rounded-xl text-center", style: { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" } },
+                t.logo && h('img', { src: t.logo, alt: t.name, className: "w-10 h-10 object-contain mx-auto mb-1.5" }),
+                h('p', { className: "text-xs font-bold text-foreground" }, t.name),
+                item.scores && item.scores[i] !== undefined && h('p', { className: "text-lg font-black mt-1", style: { color: P1 } }, item.scores[i])
+              )
+            )
+          )
+        ),
+        // Tournament name
+        isEsport && item.tournament && h('p', { className: "text-[10px] text-muted-foreground mt-3" }, item.tournament),
         // Description
         h('p', { className: "text-xs text-foreground/80 mt-3 leading-relaxed" }, item.details || item.desc),
         // Links

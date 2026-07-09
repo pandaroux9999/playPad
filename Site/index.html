@@ -128,6 +128,8 @@ const API = {
   connectXbox: (gamertag) => API.request('POST', '/api/platform/xbox/connect', { gamertag }),
   xboxDiagnostic: (gamertag) => API.request('GET', '/api/platform/xbox/diagnostic?gamertag=' + encodeURIComponent(gamertag)),
   populateCatalog: () => API.request('POST', '/api/catalog/populate'),
+  getCatalogCount: () => API.request('GET', '/api/catalog/count'),
+  getCatalogImportStatus: () => API.request('GET', '/api/catalog/import-status'),
   setStatus: (gameId, status) => API.request('POST', '/api/games/status', { gameId, status }),
   saveReview: (gameId, rating, reviewText, reviewPublic, gameTitle, gameCover) => API.request('POST', '/api/games/review', { gameId, rating, reviewText, reviewPublic, gameTitle, gameCover }),
   getWishlist: () => API.request('GET', '/api/wishlist'),
@@ -2633,7 +2635,16 @@ function App() {
     }).then(([bpData, topData]) => {
       setBoosterPoints(bpData.points || 0);
       setBoostedGames(topData.top || []);
-      API.populateCatalog().then(() => { setCatalogRefreshKey(k => k + 1); }).catch(() => {});
+      API.populateCatalog().then(() => {
+        const poll = setInterval(() => {
+          API.getCatalogImportStatus().then(s => {
+            if (!s.importing) {
+              clearInterval(poll);
+              setCatalogRefreshKey(k => k + 1);
+            }
+          }).catch(() => { clearInterval(poll); setCatalogRefreshKey(k => k + 1); });
+        }, 3000);
+      }).catch(() => {});
     }).catch((err) => {
       console.log('[App] No session (expected if not logged in):', err?.message);
     }).finally(() => {

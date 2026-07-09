@@ -916,14 +916,23 @@ const CATALOG_PAGES = 50; // 50 pages × 40 jeux = 2000 jeux par plateforme
 let lastCatalogPopulate = 0;
 const CATALOG_COOLDOWN = 60000; // 1 min entre chaque peuplement
 
+let catalogImporting = false;
+let catalogImportEnd = 0;
+
+app.get('/api/catalog/import-status', async (req, res) => {
+  res.json({ importing: catalogImporting, endedAt: catalogImportEnd });
+});
+
 app.post('/api/catalog/populate', requireAuth, async (req, res) => {
   const now = Date.now();
+  if (catalogImporting) return res.json({ ok: true, pending: true, already: true });
   if (now - lastCatalogPopulate < CATALOG_COOLDOWN) {
     return res.json({ ok: true, count: 0, cooldown: true });
   }
   lastCatalogPopulate = now;
+  catalogImporting = true;
+  catalogImportEnd = 0;
   res.json({ ok: true, pending: true });
-  // Imports en arrière-plan pour éviter le timeout Render
   (async () => {
     try {
       const rawgKey = process.env.RAWG_API_KEY;
@@ -947,8 +956,21 @@ app.post('/api/catalog/populate', requireAuth, async (req, res) => {
       console.log(`[Catalog] Import terminé: ${total} RAWG, ${steamTotal} Steam, ${igdbTotal} IGDB`);
     } catch (err) {
       console.error('[CatalogPopulate] Error:', err.message);
+    } finally {
+      catalogImporting = false;
+      catalogImportEnd = Date.now();
+      db.invalidateCatalogCache();
     }
   })();
+});
+
+app.get('/api/catalog/count', async (req, res) => {
+  try {
+    const count = await db.getCatalogCount();
+    res.json({ count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 let lastDescriptionRefresh = 0;

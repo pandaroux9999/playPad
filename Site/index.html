@@ -884,10 +884,12 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const [sponsored, setSponsored] = useState([]);
   const [boostPoints, setBoostPoints] = useState(null);
   const [newReleases, setNewReleases] = useState([]);
-  const scrollRef = useRef(null);
+  const sentinelRef = useRef(null);
+  const loadLockRef = useRef(false);
   const LETTERS = ["all", "#", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('')];
 
   const loadCatalog = useCallback(async (page, append) => {
+    if (loadingCatalog) return;
     setLoadingCatalog(true);
     try {
       const d = await API.getCatalog(page, 60, search || undefined, activeLetter === 'all' ? undefined : activeLetter);
@@ -907,12 +909,18 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   useEffect(() => { API.getBoostPoints().then(d => setBoostPoints(d.points)).catch(() => {}); }, [refreshKey]);
   useEffect(() => { API.getNewReleases().then(d => setNewReleases(d.releases || [])).catch(() => {}); }, [refreshKey]);
 
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || loadingCatalog || catalog.length >= catalogTotal) return;
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 300) {
-      loadCatalog(catalogPage + 1, true);
-    }
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && !loadingCatalog && catalog.length < catalogTotal && !loadLockRef.current) {
+        loadLockRef.current = true;
+        loadCatalog(catalogPage + 1, true).finally(() => { loadLockRef.current = false; });
+      }
+    }, { rootMargin: '300px' });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [loadingCatalog, catalog.length, catalogTotal, catalogPage, loadCatalog]);
 
   const hasMore = catalog.length < catalogTotal;
@@ -938,7 +946,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       h('div', { className: "flex gap-1 px-4 mb-3 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
         LETTERS.map(l => h('button', { key: l, onClick: () => { setActiveLetter(l); setSearch(''); }, className: "flex-shrink-0 w-7 h-7 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all", style: activeLetter === l ? { background: GRAD, color: "#fff", boxShadow: "0 0 12px rgba(168,85,247,0.4)" } : { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, l === "all" ? "All" : l))
       ),
-    h('div', { ref: scrollRef, onScroll: handleScroll, className: "flex-1 overflow-y-auto px-4 pb-20", style: { scrollbarWidth: "none" } },
+    h('div', { className: "flex-1 overflow-y-auto px-4 pb-20", style: { scrollbarWidth: "none" } },
       !search && newReleases.length > 0 && activeLetter === 'all' && h('div', { className: "mb-4" },
         h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, h('span', { style: { color: P2 } }, "\uD83C\uDF89"), " Nouveaut\u00e9s"),
         h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
@@ -990,7 +998,6 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
             ),
             h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" },
               catalog.map(game => {
-                const hasBoosted = userBoostedSet?.has(game.game_id);
                 const boostCount = topBoosted.find(b => b.game_id === game.game_id)?.count || 0;
                 return h(GameCard, {
                   key: game.game_id,
@@ -1004,10 +1011,12 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                 });
               })
             ),
-            hasMore && h('div', { className: "flex justify-center py-4" },
-              loadingCatalog
-                ? h('div', { className: "w-5 h-5 border-2 rounded-full animate-spin", style: { borderColor: `${P1}30 ${P1}30 ${P1}30 transparent` } })
-                : h('button', { onClick: () => loadCatalog(catalogPage + 1, true), className: "px-4 py-2 rounded-xl text-xs font-bold", style: { background: `${P1}15`, color: P1 } }, "Charger plus")
+            h('div', { ref: sentinelRef, className: "flex justify-center py-4" },
+              hasMore
+                ? (loadingCatalog
+                    ? h('div', { className: "w-5 h-5 border-2 rounded-full animate-spin", style: { borderColor: `${P1}30 ${P1}30 ${P1}30 transparent` } })
+                    : h('button', { onClick: () => loadCatalog(catalogPage + 1, true), className: "px-4 py-2 rounded-xl text-xs font-bold", style: { background: `${P1}15`, color: P1 } }, "Charger plus (" + (catalogTotal - catalog.length) + " restants)"))
+                : !loadingCatalog && catalog.length > 0 && h('p', { className: "text-[10px] text-muted-foreground text-center" }, "Tous les jeux charg\u00e9s")
             )
           )
     )

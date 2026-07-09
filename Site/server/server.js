@@ -411,6 +411,7 @@ app.post('/api/reviews/:id/reply', requireAuth, async (req, res) => {
     const { text } = req.body;
     if (!text || !text.trim()) return res.status(400).json({ error: 'Texte requis' });
     const reply = await db.saveReviewReply(req.session.userId, parentId, text.trim());
+    if (!reply) return res.status(400).json({ error: 'Fonctionnalité temporairement indisponible' });
     res.json({ reply });
   } catch (err) {
     console.error('[ReviewReply] Error:', err.message);

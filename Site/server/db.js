@@ -363,23 +363,27 @@ async function getAllPublicReviews() {
 }
 
 async function saveReviewReply(userId, reviewId, text) {
-  const { data, error } = await supabaseAdmin
-    .from('review_replies')
-    .insert({ user_id: userId, review_id: reviewId, text })
-    .select('*, users(display_name, username, avatar_url)')
-    .single();
-  if (error) throw new Error(error.message);
-  return data;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('review_replies')
+      .insert({ user_id: userId, review_id: reviewId, text })
+      .select('*, users(display_name, username, avatar_url)')
+      .single();
+    if (error) { if (isMissingTable(error)) return null; throw new Error(error.message); }
+    return data;
+  } catch (e) { if (isMissingTable(e)) return null; throw e; }
 }
 
 async function getReviewReplies(reviewId) {
-  const { data, error } = await supabaseAdmin
-    .from('review_replies')
-    .select('*, users(display_name, username, avatar_url)')
-    .eq('review_id', reviewId)
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('review_replies')
+      .select('*, users(display_name, username, avatar_url)')
+      .eq('review_id', reviewId)
     .order('created_at', { ascending: true });
-  if (error) throw new Error(error.message);
-  return data || [];
+    if (error) { if (isMissingTable(error)) return []; throw new Error(error.message); }
+    return data || [];
+  } catch (e) { if (isMissingTable(e)) return []; throw e; }
 }
 
 async function getUserPublicReviews(userId) {

@@ -388,7 +388,23 @@ app.get('/api/games/reviews', requireAuth, async (req, res) => {
     const { gameId } = req.query;
     if (!gameId) return res.status(400).json({ error: 'gameId requis' });
     const reviews = await db.getGameReviews(gameId);
-    res.json({ reviews });
+    const ids = reviews.map(r => r.id);
+    let votes = {}, userVotes = {};
+    try {
+      const results = await Promise.all([
+        ids.length ? db.getReviewVotes(ids) : {},
+        db.getUserReviewVotes(req.session.userId),
+      ]);
+      votes = results[0];
+      userVotes = results[1];
+    } catch (e) {}
+    const enriched = reviews.map(r => ({
+      ...r,
+      thumbs_up: votes[r.id]?.up || 0,
+      thumbs_down: votes[r.id]?.down || 0,
+      my_vote: userVotes[r.id] || 0,
+    }));
+    res.json({ reviews: enriched });
   } catch (err) {
     console.error('[GameReviews] Error:', err.message);
     res.status(500).json({ error: 'Erreur interne' });

@@ -918,31 +918,38 @@ let lastCatalogPopulate = 0;
 const CATALOG_COOLDOWN = 60000; // 1 min entre chaque peuplement
 
 app.post('/api/catalog/populate', requireAuth, async (req, res) => {
-  try {
-    const now = Date.now();
-    if (now - lastCatalogPopulate < CATALOG_COOLDOWN) {
-      return res.json({ ok: true, count: 0, cooldown: true });
-    }
-    lastCatalogPopulate = now;
-    const rawgKey = process.env.RAWG_API_KEY;
-    const igdbId = process.env.TWITCH_CLIENT_ID;
-    const igdbSecret = process.env.TWITCH_CLIENT_SECRET;
-    const existingCount = await db.getCatalogCount();
-    let total = 0, steamTotal = 0, igdbTotal = 0;
-    if (existingCount < 500 && rawgKey) {
-      total = await populateCatalogFromRAWG(rawgKey);
-    }
-    steamTotal = await populateSteamFromAppList();
-    if (igdbId && igdbSecret) {
-      igdbTotal = await populateCatalogFromIGDB(igdbId, igdbSecret);
-    }
-    db.mergeCatalogDuplicatesByTitle().then(n => { if (n > 0) console.log(`[Catalog] ${n} doublons fusionnés`); }).catch(e => console.error('[Catalog] Merge error:', e.message));
-    refreshCatalogDescriptions().catch(() => {});
-    res.json({ ok: true, count: total, steamCount: steamTotal, igdbCount: igdbTotal });
-  } catch (err) {
-    console.error('[CatalogPopulate] Error:', err.message);
-    res.status(500).json({ error: 'Erreur interne' });
+  const now = Date.now();
+  if (now - lastCatalogPopulate < CATALOG_COOLDOWN) {
+    return res.json({ ok: true, count: 0, cooldown: true });
   }
+  lastCatalogPopulate = now;
+  res.json({ ok: true, pending: true });
+  // Imports en arrière-plan pour éviter le timeout Render
+  (async () => {
+    try {
+      const rawgKey = process.env.RAWG_API_KEY;
+      const igdbId = process.env.TWITCH_CLIENT_ID;
+      const igdbSecret = process.env.TWITCH_CLIENT_SECRET;
+      const existingCount = await db.getCatalogCount();
+      let total = 0, steamTotal = 0, igdbTotal = 0;
+      if (existingCount < 500 && rawgKey) {
+        total = await populateCatalogFromRAWG(rawgKey);
+      }
+      console.log('[Catalog] Démarrage import Steam...');
+      steamTotal = await populateSteamFromAppList();
+      if (igdbId && igdbSecret) {
+        console.log('[Catalog] Démarrage import IGDB...');
+        igdbTotal = await populateCatalogFromIGDB(igdbId, igdbSecret);
+      }
+      if (steamTotal > 0 || igdbTotal > 0) {
+        db.mergeCatalogDuplicatesByTitle().then(n => { if (n > 0) console.log(`[Catalog] ${n} doublons fusionnés`); }).catch(e => console.error('[Catalog] Merge error:', e.message));
+        refreshCatalogDescriptions().catch(() => {});
+      }
+      console.log(`[Catalog] Import terminé: ${total} RAWG, ${steamTotal} Steam, ${igdbTotal} IGDB`);
+    } catch (err) {
+      console.error('[CatalogPopulate] Error:', err.message);
+    }
+  })();
 });
 
 let lastDescriptionRefresh = 0;

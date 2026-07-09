@@ -222,6 +222,7 @@ const Upload = Icon(["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M17 8l-5-5-5 
 const Trash2 = Icon(["M3 6h18", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"]);
 const Mail = Icon(["M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z", "m22 6-10 7L2 6"]);
 const Monitor = Icon(["M20 3H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z", "M8 21h8", "M12 17v4"]);
+const Settings = Icon(["M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"]);
 const Sliders = Icon(["M4 21v-7", "M4 10V3", "M12 21v-9", "M12 8V3", "M20 21v-5", "M20 12V3", "M1 14h6", "M9 8h6", "M17 16h6"]);
 const MessageCircle = Icon(["M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"]);
 const ArrowLeft = Icon(["M19 12H5", "M12 19l-7-7 7-7"]);
@@ -1860,11 +1861,13 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   const [emailModal, setEmailModal] = useState(false);
   const [email, setEmail] = useState(user?.email || "");
   const [emailSaving, setEmailSaving] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [syncingPlatform, setSyncingPlatform] = useState(null);
   const [bridgeStatus, setBridgeStatus] = useState('unknown');
   const [emailNotifs, setEmailNotifs] = useState(false);
   const [notifLoading, setNotifLoading] = useState(true);
   const fileInputRef = useRef(null);
+  useEffect(() => { setEmail(user?.email || ''); }, [user?.email]);
   useEffect(() => { API.getNotifPrefs().then(d => { setEmailNotifs(d.emailNotifications); }).catch(() => {}).finally(() => setNotifLoading(false)); }, []);
   const completed  = games.filter(g => g.status === "completed").length;
   const playing    = games.filter(g => g.status === "playing").length;
@@ -1897,8 +1900,11 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
         h('div', { onClick: () => setAvatarModal(true), className: "w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black text-white flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden", style: { background: GRAD, boxShadow: "0 8px 24px rgba(139,92,246,0.35)" } },
           user?.avatar_url ? h('img', { src: user.avatar_url, alt: "", className: "w-full h-full object-cover" }) : initials
         ),
-        h('div', null,
-          h('h1', { className: "text-lg font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, user?.display_name || "Joueur"),
+        h('div', { className: "flex-1 min-w-0" },
+          h('div', { className: "flex items-center gap-2" },
+            h('h1', { className: "text-lg font-black text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, user?.display_name || "Joueur"),
+            h('button', { onClick: () => setSettingsOpen(true), className: "p-1.5 rounded-lg hover:opacity-80 transition-opacity flex-shrink-0", style: { background: "rgba(139,92,246,0.1)" } }, h(Settings, { size: 14, style: { color: P1 } }))
+          ),
           h('p', { className: "text-xs text-muted-foreground" }, `@${user?.username || "joueur"} \u00b7 PlayPad`),
           h('div', { className: "flex items-center gap-1.5 mt-1" }, h(Star, { size: 11, fill: "#f59e0b", stroke: "#f59e0b" }), h('span', { className: "text-xs font-bold text-amber-400" }, avgRating.toFixed(1)), h('span', { className: "text-xs text-muted-foreground" }, "note moyenne"))
         )
@@ -2022,30 +2028,52 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
         )
       )
     ),
-    h('div', { className: "px-4 mb-4 flex items-center gap-3" },
-      h('button', { onClick: () => { setEmail(user?.email || ''); setEmailModal(true); }, className: "text-[10px] font-medium flex items-center gap-1.5 hover:opacity-80 transition-opacity", style: { color: `${P1}aa` } }, h(Mail, { size: 11 }), user?.email ? "Changer l'email" : "Ajouter un email"),
-      h('button', { onClick: onDeleteAccount, className: "text-[10px] font-medium flex items-center gap-1.5 hover:opacity-80 transition-opacity", style: { color: "#ef444488" } }, h(Trash2, { size: 11 }), "Supprimer")
-    ),
-    h('div', { className: "px-4 mb-4 bg-card border border-border rounded-2xl p-3.5" },
-      h('div', { className: "flex items-center justify-between" },
-        h('div', { className: "flex items-center gap-2" },
-          h(Bell, { size: 13, style: { color: P1 } }),
-          h('span', { className: "text-[11px] font-bold text-foreground" }, "Notifications e-sport par email")
+    // ─── Settings modal ──────────────────────────────────────
+    settingsOpen && h('div', { className: "fixed inset-0 z-50 flex items-center justify-center" },
+      h('div', { className: "absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: () => setSettingsOpen(false) }),
+      h('div', { className: "relative bg-card border border-border rounded-2xl p-5 w-80", style: { zIndex: 1 } },
+        h('div', { className: "flex items-center gap-2 mb-4" },
+          h(Settings, { size: 16, style: { color: P1 } }),
+          h('p', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Param\u00e8tres")
         ),
-        h('button', {
-          onClick: async () => {
-            const newVal = !emailNotifs;
-            setEmailNotifs(newVal);
-            try { await API.setNotifPrefs(newVal); } catch (e) { setEmailNotifs(!newVal); }
+        // Email
+        h('div', { className: "flex items-center justify-between py-2.5 border-b border-border" },
+          h('div', { className: "flex items-center gap-2" },
+            h(Mail, { size: 13, style: { color: `${P1}aa` } }),
+            h('span', { className: "text-xs font-medium text-foreground" }, "Email")
+          ),
+          h('button', { onClick: () => { setSettingsOpen(false); setEmailModal(true); }, className: "text-[10px] font-bold", style: { color: P1 } }, email ? "Changer" : "Ajouter")
+        ),
+        // Notifications email
+        h('div', { className: "flex items-center justify-between py-2.5 border-b border-border" },
+          h('div', { className: "flex items-center gap-2" },
+            h(Bell, { size: 13, style: { color: `${P1}aa` } }),
+            h('span', { className: "text-xs font-medium text-foreground" }, "Notif. e-sport par email")
+          ),
+          h('button', {
+            onClick: async () => {
+              const newVal = !emailNotifs;
+              setEmailNotifs(newVal);
+              try { await API.setNotifPrefs(newVal); } catch (e) { setEmailNotifs(!newVal); }
+            },
+            disabled: notifLoading || !user?.email,
+            className: "w-9 h-[18px] rounded-full relative transition-colors flex-shrink-0",
+            style: { background: emailNotifs ? P1 : '#333', opacity: !user?.email ? 0.4 : 1 }
           },
-          disabled: notifLoading || !user?.email,
-          className: "w-10 h-5 rounded-full relative transition-colors",
-          style: { background: emailNotifs ? P1 : '#333', opacity: !user?.email ? 0.4 : 1 }
-        },
-          h('div', { className: "absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform", style: { transform: emailNotifs ? 'translateX(20px)' : 'translateX(2px)' } })
+            h('div', { className: "absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform", style: { transform: emailNotifs ? 'translateX(18px)' : 'translateX(2px)' } })
+          )
+        ),
+        // Nous contacter
+        h('a', { href: "mailto:contact@playpad.app", className: "flex items-center gap-2 py-2.5 text-xs font-medium text-foreground hover:opacity-80 border-b border-border" },
+          h(MessageCircle, { size: 13, style: { color: `${P1}aa` } }),
+          "Nous contacter"
+        ),
+        // Supprimer le compte
+        h('button', { onClick: () => { setSettingsOpen(false); onDeleteAccount(); }, className: "flex items-center gap-2 py-2.5 text-xs font-medium w-full text-left", style: { color: "#ef444488" } },
+          h(Trash2, { size: 13, style: { color: "#ef444488" } }),
+          "Supprimer mon compte"
         )
-      ),
-      !user?.email && h('p', { className: "text-[9px] text-muted-foreground mt-2" }, "Ajoute un email dans ton profil pour activer les notifications")
+      )
     ),
     h('div', { className: "px-4 mb-6 pb-20" },
       h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5" }, h(Heart, { size: 11, fill: "#ef4444", stroke: "#ef4444", strokeWidth: 2 }), "Liste de souhaits (", wishlistIds.size, ")"),
@@ -2115,10 +2143,14 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
   const handleSave = async () => {
     setSaving(true);
     try {
+      console.log('[ReviewSave] Sending review:', { gameId, draftRating, draftReview, draftPublic, title: game.title });
       await onSaveReview(gameId, draftRating, draftReview, draftPublic, game.title, game.cover);
+      console.log('[ReviewSave] onSaveReview completed successfully');
       setEditing(false);
       refreshCommunityReviews();
-    } catch (e) {}
+    } catch (e) {
+      console.error('[ReviewSave] Caught error in handleSave:', e);
+    }
     setSaving(false);
   };
 
@@ -2601,16 +2633,19 @@ function App() {
     if (!found) {
       await API.syncGames([{ game_id: gameId, title: gameTitle, cover: gameCover || '', user_rating: 0, review_text: "", review_public: 1, has_review: 0, status: "not_started", playtime: 0 }]);
     }
-    await API.saveReview(gameId, rating, reviewText, reviewPublic, gameTitle, gameCover);
+    console.log('[handleSaveReview] Calling API.saveReview with:', { gameId, rating, reviewText, reviewPublic, gameTitle, gameCover });
+    const saveResult = await API.saveReview(gameId, rating, reviewText, reviewPublic, gameTitle, gameCover);
+    console.log('[handleSaveReview] API.saveReview response:', saveResult);
     setCommunityRefreshKey(k => k + 1);
     showToast("Critique sauvegard\u00e9e !");
     try {
       const [g2] = await Promise.all([API.getGames()]);
+      console.log('[handleSaveReview] Post-save getGames success, got', g2.games.length, 'games');
       next = g2.games.map(n);
       setGames(next);
       const updated = next.find(g => g.game_id === gameId) || next.find(g => g.title === gameTitle);
       if (updated) setSelectedGame(updated);
-    } catch (e) { console.error('Post-save refresh failed', e); }
+    } catch (e) { console.error('[handleSaveReview] Post-save refresh failed', e); }
   };
 
   const handleLoginSuccess = (userData) => {

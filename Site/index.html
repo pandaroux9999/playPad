@@ -928,6 +928,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     if (e) e.stopPropagation();
     if (boostedGamesLocal.has(gameId)) { showToast?.('Tu as déjà boosté ce jeu'); return; }
     if (boostPoints <= 0) { showToast?.('Tu n\'as plus de points cette semaine'); return; }
+    if (!confirm('Booster "' + (catalog.find(g => g.game_id === gameId)?.title || 'ce jeu') + '" avec 1 point communautaire ?')) return;
     console.log('[Catalogue] Community boost on:', gameId, 'points left:', boostPoints);
     try {
       const result = await API.boostGame(gameId);
@@ -2134,7 +2135,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   );
 }
 
-function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, userId, ratings }) {
+function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, userId, ratings, boosterPoints, userBoostedSet, onBoostGame }) {
   const [buyGame, setBuyGame] = useState(null);
   const [buyOffers, setBuyOffers] = useState([]);
   const handleBuy = async (g) => {
@@ -2215,6 +2216,17 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
     onToggleTopThree?.(g);
   };
 
+  const handleBoostDetail = async (g) => {
+    const gId = g.game_id || g.id;
+    const hasBoosted = userBoostedSet?.has(gId);
+    if (hasBoosted) { alert('Tu as déjà boosté ce jeu'); return; }
+    if (!boosterPoints || boosterPoints <= 0) { alert('Tu n\'as plus de points booster'); return; }
+    if (!confirm('Utiliser 1 point booster pour mettre en avant "' + (g.title || 'ce jeu') + '" ?')) return;
+    try { await onBoostGame?.(gId); } catch (e) { alert('Erreur: ' + e.message); }
+  };
+
+  const hasBoostedGame = userBoostedSet?.has(gameId);
+
   const { panelRef, overlayRef, onTouchStart, onTouchMove, onTouchEnd } = useSheetSwipe(onClose);
   return h('div', { className: "fixed inset-0 z-50" },
     h('div', { ref: overlayRef, className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
@@ -2225,6 +2237,7 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
         h('button', { onClick: onClose, className: "sheet-close-btn absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center", style: { background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(X, { size: 16, className: "text-white" })),
         h('button', { onClick: () => onToggleWishlist?.(game), className: "absolute top-4 left-4 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110", style: { background: inWishlist ? "rgba(239,68,68,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Heart, { size: 14, fill: inWishlist ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
         h('button', { onClick: () => handleTopThree(game), className: "absolute top-4 left-14 w-8 h-8 rounded-full flex items-center justify-center", style: { background: inTopThree ? "rgba(245,158,11,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Crown, { size: 14, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
+        h('button', { onClick: () => handleBoostDetail(game), className: "absolute top-4 left-24 w-8 h-8 rounded-full flex items-center justify-center", style: { background: hasBoostedGame ? "rgba(147,51,234,0.85)" : (boosterPoints > 0 ? "rgba(147,51,234,0.5)" : "rgba(0,0,0,0.5)"), backdropFilter: "blur(8px)" } }, h(Zap, { size: 14, fill: hasBoostedGame ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
 
         h('div', { className: "absolute bottom-0 left-0 right-0 px-4 pb-3" },
           h('div', { className: "flex items-center gap-2 mb-1" }, h(PlatformBadge, { platforms: game.platforms || (game.platform ? [game.platform] : []) }), h('span', { className: "text-xs px-2 py-0.5 rounded-md font-bold", style: { background: (statusCfg || STATUS_CONFIG.not_started).color + "28", color: (statusCfg || STATUS_CONFIG.not_started).color } }, (statusCfg || STATUS_CONFIG.not_started).label),
@@ -2877,6 +2890,9 @@ function App() {
         onToggleTopThree: handleToggleTopThree,
         userId: user?.id,
         ratings,
+        boosterPoints,
+        userBoostedSet,
+        onBoostGame: handleBoostGame,
       }),
       selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => setSelectedFriend(null), isOnline, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, friendId: selectedFriend.id, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
       toast && h('div', { className: "toast", style: { background: GRAD } }, toast),

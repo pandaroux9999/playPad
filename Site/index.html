@@ -153,7 +153,7 @@ const API = {
   sendSuggestion: (toUserId, gameId, gameTitle, gameCover, message) => API.request('POST', '/api/suggestions', { toUserId, gameId, gameTitle, gameCover, message }),
   getSuggestions: () => API.request('GET', '/api/suggestions'),
   dismissSuggestion: (id) => API.request('DELETE', `/api/suggestions/${id}`),
-  getCatalog: () => API.request('GET', '/api/catalog'),
+  getCatalog: (page, limit) => API.request('GET', '/api/catalog?' + new URLSearchParams({ page: page || 1, limit: limit || 500 }).toString()),
   deleteGame: (gameId) => API.request('DELETE', `/api/games/${gameId}`),
   disconnectPlatform: (platform) => API.request('DELETE', `/api/games/platform/${platform}`),
   heartbeat: () => API.request('POST', '/api/heartbeat'),
@@ -888,15 +888,49 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     }
   }, [catalog]);
   useEffect(() => {
-    API.getCatalog().then(d => {
-      const cat = d.catalog || [];
-      setCatalog(cat.length > 0 ? cat : CATALOGUE);
-    }).catch(() => setCatalog(CATALOGUE));
+    let cancelled = false;
+    async function loadPages() {
+      let all = [];
+      let p = 1;
+      const LIMIT = 500;
+      let total = 0;
+      try {
+        const first = await API.getCatalog(p, LIMIT);
+        if (cancelled) return;
+        total = first.total;
+        const cat = first.catalog || [];
+        if (cat.length > 0) {
+          all = cat;
+          setCatalog(cat);
+          p++;
+        } else {
+          setCatalog(CATALOGUE);
+          return;
+        }
+      } catch (e) {
+        if (cancelled) return;
+        setCatalog(CATALOGUE);
+        return;
+      }
+      while (p * LIMIT < total) {
+        try {
+          const d = await API.getCatalog(p, LIMIT);
+          if (cancelled) return;
+          const chunk = d.catalog || [];
+          if (chunk.length === 0) break;
+          all = all.concat(chunk);
+          setCatalog([...all]);
+          p++;
+        } catch (e) { break; }
+      }
+    }
+    loadPages();
     API.getTopBoosted().then(d => {
       setTopBoosted(d.top || []);
       if ((d.top || []).length > 0) setShowBoostSection(true);
     }).catch(() => {});
     API.getBoostPoints().then(d => setBoostPoints(d.points)).catch(() => {});
+    return () => { cancelled = true; };
   }, [refreshKey]);
 
   const genres = useMemo(() => ["all", ...new Set(catalog.flatMap(g => (g.genre || '').split(',').map(s => s.trim()).filter(Boolean)))], [catalog]);

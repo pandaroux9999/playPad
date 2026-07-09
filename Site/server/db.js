@@ -694,6 +694,17 @@ async function getCatalog() {
   return data;
 }
 
+async function getCatalogPage(page = 1, limit = 500) {
+  const offset = (page - 1) * limit;
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .order('title')
+    .range(offset, offset + limit - 1);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
 function invalidateCatalogCache() {
   catalogCache = null;
 }
@@ -1315,6 +1326,7 @@ module.exports = {
   dedupeCatalog,
   mergeCatalogDuplicatesByTitle,
   getCatalog,
+  getCatalogPage,
   getCatalogCount,
   invalidateCatalogCache,
   updateGamePlatform,

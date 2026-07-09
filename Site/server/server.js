@@ -510,12 +510,11 @@ app.get('/api/games/ratings', async (req, res) => {
 
 app.get('/api/catalog', catalogLimiter, async (req, res) => {
   try {
-    const catalog = await db.getCatalog();
     const page = parseInt(req.query.page) || 1;
-    const limit = Math.min(parseInt(req.query.limit) || 100000, 100000);
-    const offset = (page - 1) * limit;
-    const total = catalog.length;
-    res.json({ catalog: catalog.slice(offset, offset + limit), total, page, limit });
+    const limit = Math.min(parseInt(req.query.limit) || 500, 5000);
+    const catalog = await db.getCatalogPage(page, limit);
+    const total = await db.getCatalogCount();
+    res.json({ catalog, total, page, limit });
   } catch (err) {
     res.status(500).json({ error: 'Erreur interne' });
   }

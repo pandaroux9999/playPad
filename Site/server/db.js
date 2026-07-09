@@ -669,7 +669,7 @@ let catalogCache = null;
 
 async function getCatalog() {
   if (catalogCache) return catalogCache;
-  // Charge le cache complet en arrière-plan (utilisé par d'autres fonctions)
+  // Charge le cache complet en arrière-plan
   rebuildCatalogCache();
   // En attendant, retourne les 1000 premiers (limite PostgREST par défaut)
   const { data, error } = await supabaseAdmin
@@ -679,8 +679,9 @@ async function getCatalog() {
   if (error) throw new Error(error.message);
   if (!data) return [];
   data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-  catalogCache = data;
-  return data;
+  // Ne pas écraser si rebuildCatalogCache a déjà mis le cache complet
+  if (!catalogCache) catalogCache = data;
+  return catalogCache;
 }
 
 async function rebuildCatalogCache() {

@@ -708,16 +708,10 @@ async function rebuildCatalogCache() {
 }
 
 async function getCatalogPage(page = 1, limit = 500) {
+  const all = await getCatalog(); // rapide : cache (1000 jeux min) ou limit(1000)
   const offset = (page - 1) * limit;
-  // Requête directe rapide (une seule page, pas de ORDER BY)
-  const { data, error } = await supabaseAdmin
-    .from('catalog')
-    .select('*')
-    .range(offset, offset + limit - 1);
-  if (error) throw new Error(error.message);
-  if (!data) return [];
-  data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-  return data;
+  if (offset >= all.length) return [];
+  return all.slice(offset, offset + limit);
 }
 
 function invalidateCatalogCache() {

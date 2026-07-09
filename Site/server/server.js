@@ -1005,12 +1005,12 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
   } catch (e) {}
 
   const yearRanges = [];
-  for (let y = 1980; y <= 2026; y += 2) {
+  for (let y = 1990; y <= 2026; y += 2) {
     const end = Math.min(y + 1, 2026);
-    yearRanges.push({ label: String(y), start: `${y}-01-01`, end: `${end}-12-31`, pages: 30 });
+    yearRanges.push({ label: String(y), start: `${y}-01-01`, end: `${end}-12-31`, pages: 50 });
   }
   // catch-all for games missing dates
-  yearRanges.push({ label: 'nodate', start: '1970-01-01', end: '2026-12-31', pages: 40 });
+  yearRanges.push({ label: 'nodate', start: '1970-01-01', end: '2026-12-31', pages: 100 });
 
   for (const plat of targets) {
     for (const range of yearRanges) {
@@ -1037,6 +1037,7 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
           }
           if (!data.next) break;
           page++;
+          await new Promise(r => setTimeout(r, 250));
         } catch (e) {
           console.error(`[RAWG] Error ${plat.prefix} ${range.label} page ${page}:`, e.message);
           break;
@@ -1058,18 +1059,12 @@ async function populateOnlineGames(apiKey) {
     for (const g of existing) seen.add(g.game_id);
   } catch (e) {}
   const queries = [
-    // Jeux multijoueur populaires (tag multiplayer + rating > 3)
-    { url: `https://api.rawg.io/api/games?key=${apiKey}&tags=multiplayer&ordering=-rating&page_size=40`, pages: 10 },
-    // Jeux MMO/online
-    { url: `https://api.rawg.io/api/games?key=${apiKey}&tags=mmo&ordering=-added&page_size=40`, pages: 8 },
-    // Battle royale
-    { url: `https://api.rawg.io/api/games?key=${apiKey}&tags=battle-royale&ordering=-added&page_size=40`, pages: 5 },
-    // Free to play les plus populaires
-    { url: `https://api.rawg.io/api/games?key=${apiKey}&tags=free-to-play&ordering=-rating&page_size=40`, pages: 10 },
-    // Meilleurs jeux跨-plateforme (Steam)
-    { url: `https://api.rawg.io/api/games?key=${apiKey}&stores=1&ordering=-metacritic&page_size=40`, pages: 15 },
-    // Nouveautés populaires
-    { url: `https://api.rawg.io/api/games?key=${apiKey}&ordering=-added&page_size=40`, pages: 10 },
+    { url: `https://api.rawg.io/api/games?key=${apiKey}&tags=multiplayer&ordering=-rating&page_size=40`, pages: 20 },
+    { url: `https://api.rawg.io/api/games?key=${apiKey}&tags=mmo&ordering=-added&page_size=40`, pages: 20 },
+    { url: `https://api.rawg.io/api/games?key=${apiKey}&tags=battle-royale&ordering=-added&page_size=40`, pages: 10 },
+    { url: `https://api.rawg.io/api/games?key=${apiKey}&tags=free-to-play&ordering=-rating&page_size=40`, pages: 20 },
+    { url: `https://api.rawg.io/api/games?key=${apiKey}&stores=1&ordering=-metacritic&page_size=40`, pages: 30 },
+    { url: `https://api.rawg.io/api/games?key=${apiKey}&ordering=-added&page_size=40`, pages: 20 },
   ];
   for (const q of queries) {
     let page = 1;
@@ -1157,7 +1152,7 @@ async function populateSteamFromAppList() {
     for (const genre of genres) {
       try {
       const d = await fetchSteamSpy('https://steamspy.com/api.php?request=genre&genre=' + genre);
-      const entries = buildEntries(spyToEntries(d, 1000)).filter(e => { if (seenIds.has(e.game_id)) return false; seenIds.add(e.game_id); return true; });
+      const entries = buildEntries(spyToEntries(d)).filter(e => { if (seenIds.has(e.game_id)) return false; seenIds.add(e.game_id); return true; });
         const added = await upsertBatch(entries);
         totalAdded += added;
         console.log('[SteamAppList] Genre', decodeURIComponent(genre), ':', entries.length, 'jeux,', added, 'nouveaux (total', totalAdded, 'nouveaux)');
@@ -1405,7 +1400,7 @@ async function populateCatalogFromIGDB(clientId, clientSecret) {
     let offset = 0;
     const limit = 200;
     let page = 0;
-    const maxPages = 5;
+    const maxPages = 10;
     let batch = [];
     while (page < maxPages) {
       try {

@@ -1400,7 +1400,7 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
                 h('input', { value: replyState.text, onChange: e => setReplyState(s => ({ ...s, text: e.target.value })), placeholder: "\u00c9cris une r\u00e9ponse...", className: "flex-1 bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-[9px] text-foreground placeholder-muted-foreground outline-none" }),
                 h('button', { onClick: async () => {
                   if (!replyState.text.trim()) return;
-                  try { await API.replyToReview(r.id, replyState.text.trim()); setReplyState({ reviewId: null, text: '' }); load(); } catch(e) {}
+                  try { await API.replyToReview(r.id, replyState.text.trim()); setReplies(prev => ({ ...prev, [r.id]: (prev[r.id] || []).concat([{ id: Date.now(), review_id: r.id, text: replyState.text.trim(), users: { display_name: "Vous" }, created_at: new Date().toISOString() }]) })); setReplyState({ reviewId: null, text: '' }); load(); } catch(e) {}
                 }, className: "px-2 py-1.5 rounded-lg text-[9px] font-bold text-white", style: { background: GRAD } }, "Envoyer")
               )
             )

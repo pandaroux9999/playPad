@@ -522,6 +522,20 @@ app.get('/api/catalog', catalogLimiter, async (req, res) => {
   }
 });
 
+app.get('/api/catalog/new-releases', async (req, res) => {
+  try {
+    const now = Date.now();
+    if (now - lastNewReleasesFetch > NEW_RELEASES_TTL || newReleasesCache.length === 0) {
+      newReleasesCache = await fetchNewReleases();
+      lastNewReleasesFetch = now;
+    }
+    res.json({ releases: newReleasesCache });
+  } catch (err) {
+    console.error('[NewReleases] Error:', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
 app.delete('/api/games', requireAuth, async (req, res) => {
   try {
     await db.deleteAllUserGames(req.session.userId);
@@ -956,6 +970,128 @@ app.post('/api/catalog/populate', requireAuth, async (req, res) => {
 let lastDescriptionRefresh = 0;
 const DESCRIPTION_REFRESH_COOLDOWN = 300000; // 5 min
 
+// ─── Nouveautés (new releases) ────────────────────────────
+let newReleasesCache = [];
+let lastNewReleasesFetch = 0;
+const NEW_RELEASES_TTL = 900000; // 15 min
+
+// Helper : appel Steam Store featured categories (gratuit, sans clé API)
+function steamStoreFeatured() {
+  return new Promise((resolve, reject) => {
+    https.get('https://store.steampowered.com/api/featuredcategories?l=french', { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
+      let d = '';
+      resp.on('data', c => d += c);
+      resp.on('end', () => {
+        try { resolve(JSON.parse(d)); }
+        catch (e) { reject(e); }
+      });
+    }).on('error', reject);
+  });
+}
+
+async function fetchNewReleases() {
+  const tStart = Date.now();
+  const rawgKey = process.env.RAWG_API_KEY;
+  let allGames = [];
+  const seenIds = new Set();
+
+  // ── Source 1 : RAWG (jeux récents toutes plateformes) ──
+  if (rawgKey) {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const startDate = threeMonthsAgo.toISOString().split('T')[0];
+    const endDate = new Date().toISOString().split('T')[0];
+    const tRawg = Date.now();
+    console.log(`[NewReleases] RAWG : jeux sortis entre ${startDate} et ${endDate}`);
+    for (let page = 1; page <= 10; page++) {
+      const url = `https://api.rawg.io/api/games?key=${rawgKey}&dates=${startDate},${endDate}&ordering=-released&page=${page}&page_size=40`;
+      try {
+        const tPage = Date.now();
+        const data = await rawgApiGet(url);
+        if (!data || !data.results) break;
+        for (const item of data.results) {
+          if (!item.name || seenIds.has(item.id)) continue;
+          seenIds.add(item.id);
+          const stores = item.stores || [];
+          const steamStore = stores.find(s => s.store?.id === 1);
+          const steamId = steamStore?.url?.match(/\/app\/(\d+)/)?.[1];
+          const game = {
+            game_id: steamId ? `steam-${steamId}` : `rawg-${item.id}`,
+            title: item.name,
+            platform: steamId ? 'steam' : 'pc',
+            cover: item.background_image || '',
+            genre: (item.genres || []).map(g => g.name).join(', '),
+            year: item.released ? parseInt(item.released.split('-')[0]) : 0,
+            description: item.description_raw || '',
+            developer: '',
+            publisher: '',
+          };
+          if (steamId) game.cover = `https://cdn.cloudflare.steamstatic.com/steam/apps/${steamId}/library_600x900.jpg`;
+          await db.ensureCatalogGame(game).catch(() => {});
+          allGames.push(game);
+        }
+        if (!data.next) break;
+        console.log(`[NewReleases] RAWG page ${page} : ${data.results.length} jeux, ${Date.now() - tPage}ms`);
+        await new Promise(r => setTimeout(r, 200));
+      } catch (e) {
+        console.error(`[NewReleases] RAWG page ${page} :`, e.message);
+        break;
+      }
+    }
+    console.log(`[NewReleases] RAWG terminé : ${allGames.length} jeux en ${Date.now() - tRawg}ms`);
+  }
+
+  // ── Source 2 : Steam Store (nouveautés officielles Steam) ──
+  const tSteam = Date.now();
+  try {
+    const featured = await steamStoreFeatured();
+    const steamItems = featured?.new_releases?.items || [];
+    console.log(`[NewReleases] Steam Store : ${steamItems.length} nouveautés en ${Date.now() - tSteam}ms`);
+    for (const item of steamItems) {
+      if (!item.name || seenIds.has('steam-' + item.id)) continue;
+      seenIds.add('steam-' + item.id);
+      const game = {
+        game_id: `steam-${item.id}`,
+        title: item.name,
+        platform: 'steam',
+        cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.id}/library_600x900.jpg`,
+        genre: (item.genres || []).map(g => g.description || g.name || '').join(', '),
+        year: item.release_date ? parseInt(item.release_date.date?.match(/\d{4}/)?.[0]) : 0,
+        description: item.short_description || '',
+        developer: (item.developers || []).join(', '),
+        publisher: (item.publishers || []).join(', '),
+      };
+      await db.ensureCatalogGame(game).catch(() => {});
+      allGames.push(game);
+    }
+  } catch (e) {
+    console.error('[NewReleases] Steam Store :', e.message);
+  }
+
+  // ── Source 3 : détails Steam pour les jeux sans description ──
+  const tDesc = Date.now();
+  const noDesc = allGames.filter(g => !g.description && g.game_id.startsWith('steam-'));
+  for (const game of noDesc.slice(0, 20)) {
+    try {
+      const appid = game.game_id.replace('steam-', '');
+      const d = await steamStoreGet(appid);
+      if (d?.data) {
+        game.description = d.data.short_description || d.data.about_the_game || '';
+        game.developer = (d.data.developers || []).join(', ');
+        game.publisher = (d.data.publishers || []).join(', ');
+        if (!game.genre && d.data.genres) game.genre = d.data.genres.map(g => g.description).join(', ');
+        await db.ensureCatalogGame(game).catch(() => {});
+      }
+    } catch (e) { /* ignore */ }
+    await new Promise(r => setTimeout(r, 100));
+  }
+  if (noDesc.length > 0) console.log(`[NewReleases] Descriptions : ${Math.min(noDesc.length, 20)} jeux enrichis en ${Date.now() - tDesc}ms`);
+
+  const totalMs = Date.now() - tStart;
+  console.log(`[NewReleases] Terminé : ${allGames.length} jeux récents (RAWG + Steam Store) en ${totalMs}ms`);
+  return allGames;
+}
+
 async function refreshCatalogDescriptions() {
   const now = Date.now();
   if (now - lastDescriptionRefresh < DESCRIPTION_REFRESH_COOLDOWN) return;
@@ -1251,6 +1387,11 @@ async function fixMissingCovers() {
   }
   // Démarre le rafraîchissement périodique des actualités
   startNewsRefresh();
+  // Premier chargement des nouveautés + refresh toutes les heures
+  fetchNewReleases().then(r => { newReleasesCache = r; lastNewReleasesFetch = Date.now(); console.log(`[NewReleases] ${r.length} jeux chargés au démarrage`); }).catch(e => console.error('[NewReleases] Erreur démarrage:', e.message));
+  setInterval(() => {
+    fetchNewReleases().then(r => { newReleasesCache = r; lastNewReleasesFetch = Date.now(); }).catch(e => console.error('[NewReleases] Erreur refresh:', e.message));
+  }, NEW_RELEASES_TTL);
   console.log('[Startup] Prêt');
 })();
 

@@ -171,6 +171,7 @@ const API = {
   getBoostStatus: (gameId) => API.request('GET', `/api/booster/status/${gameId}`),
   connectEpic: (epicUsername) => API.request('POST', '/api/platform/epic/connect', { epicUsername }),
   getNews: () => API.request('GET', '/api/news'),
+  getNewReleases: () => API.request('GET', '/api/catalog/new-releases'),
   replyToReview: (reviewId, text) => API.request('POST', `/api/reviews/${reviewId}/reply`, { text }),
   getReviewReplies: (reviewId) => API.request('GET', `/api/reviews/${reviewId}/replies`),
   toggleEsportFavorite: (event) => API.request('POST', '/api/esport/favorite/toggle', { event }),
@@ -880,6 +881,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const [showBoostSection, setShowBoostSection] = useState(false);
   const [showBoosterGames, setShowBoosterGames] = useState(true);
   const [sponsored, setSponsored] = useState([]);
+  const [newReleases, setNewReleases] = useState([]);
   useEffect(() => {
     if (catalog.length > 0 && sponsored.length === 0) {
       const shuffled = [...catalog].sort(() => Math.random() - 0.5);
@@ -896,6 +898,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       if ((d.top || []).length > 0) setShowBoostSection(true);
     }).catch(() => {});
     API.getBoostPoints().then(d => setBoostPoints(d.points)).catch(() => {});
+    API.getNewReleases().then(d => setNewReleases(d.releases || [])).catch(() => {});
   }, [refreshKey]);
 
   const genres = useMemo(() => ["all", ...new Set(catalog.flatMap(g => (g.genre || '').split(',').map(s => s.trim()).filter(Boolean)))], [catalog]);
@@ -913,11 +916,6 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   ), [catalog, activePlatform, activeGenre, search, filterRatingMin, filterRatingMax, filterYearMin, filterYearMax, filterDeveloper, filterAge]);
   const hasActiveFilters = activePlatform !== "all" || activeGenre !== "all" || filterRatingMin > 0 || filterRatingMax < 5 || filterYearMin || filterYearMax || filterDeveloper || filterAge > 0;
   const clearFilters = () => { setActivePlatform("all"); setActiveGenre("all"); setFilterRatingMin(0); setFilterRatingMax(5); setFilterYearMin(""); setFilterYearMax(""); setFilterDeveloper(""); setFilterAge(0); };
-  const currentYear = new Date().getFullYear();
-  const newReleases = useMemo(() => {
-    if (search) return [];
-    return catalog.filter(g => g.year && g.year >= currentYear - 1);
-  }, [catalog, search, currentYear]);
   const topRated = useMemo(() => {
     if (search) return [];
     return [...catalog].filter(g => (ratings?.[g.game_id] || 0) >= 4).sort((a, b) => (ratings?.[b.game_id] || 0) - (ratings?.[a.game_id] || 0)).slice(0, 20);
@@ -1062,7 +1060,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
           ))
         )
       ),
-      newReleases.length > 0 && h('div', { className: "mb-4" },
+      !search && newReleases.length > 0 && h('div', { className: "mb-4" },
         h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, h('span', { style: { color: P2 } }, "\uD83C\uDF89"), " Nouveaut\u00e9s"),
         h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
           newReleases.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },

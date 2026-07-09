@@ -187,7 +187,17 @@ const SUGGESTION_MESSAGES = [
 async function seedDemoData() {
   console.log('[Seed] Vérification des données de démonstration...');
   const userCount = await db.getUserCount().catch(() => 0);
-  if (userCount >= 3) { console.log('[Seed] Données utilisateurs déjà présentes, skip'); return; }
+  if (userCount >= 3) { 
+    console.log('[Seed] Données utilisateurs déjà présentes, skip création utilisateurs');
+    // Même si les utilisateurs existent, on recrée les boosts de la semaine
+    const { data: users } = await db.supabaseAdmin.from('users').select('id').limit(10);
+    const existingUserIds = (users || []).map(u => u.id);
+    if (existingUserIds.length > 0) {
+      await seedBoosts(existingUserIds);
+      console.log('[Seed] ✅ Boost communautaires rafraîchis');
+    }
+    return; 
+  }
 
   console.log('[Seed] Création des utilisateurs de démonstration...');
   const userIds = [];
@@ -264,7 +274,16 @@ async function seedDemoData() {
     });
   }
 
-  console.log('[Seed] Ajout des boosts communautaires (jeux aléatoires du catalogue)...');
+  await seedBoosts(userIds);
+
+  console.log('[Seed] ✅ Données de démonstration prêtes !');
+  console.log('[Seed] 💡 Comptes démo : alex92 / Alex1234 | sarah_g / Sarah1234 | max_rpg / Max1234 | lea_gg / Lea1234 | tom_pvp / Tom1234');
+}
+
+async function seedBoosts(userIds) {
+  console.log('[Seed] Ajout des boosts communautaires (jeux alÃ©atoires du catalogue)...');
+  // Nettoie les anciens boosts (> 7 jours) pour garder la table propre
+  await db.supabaseAdmin.from('boosts').delete().lt('created_at', new Date(Date.now() - 7 * 86400000).toISOString()).catch(() => {});
   let catalogGames = [];
   try {
     const { data } = await db.supabaseAdmin.from('catalog').select('game_id').limit(5000);
@@ -289,9 +308,6 @@ async function seedDemoData() {
       count++;
     }
   }
-
-  console.log('[Seed] ✅ Données de démonstration prêtes !');
-  console.log('[Seed] 💡 Comptes démo : alex92 / Alex1234 | sarah_g / Sarah1234 | max_rpg / Max1234 | lea_gg / Lea1234 | tom_pvp / Tom1234');
 }
 
 module.exports = { seedDemoData, GAMES_CATALOG };

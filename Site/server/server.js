@@ -22,11 +22,8 @@ if (!SESSION_SECRET || SESSION_SECRET.length < 16) {
   process.exit(1);
 }
 
-// Sécurité : headers HTTP (CSP, HSTS, X-Frame-Options, etc.)
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false,
-}));
+// Sécurité : headers HTTP (CSP, HSTS, X-Frame-Options, etc.) - désactivé car bloque Brave sur réseau scolaire
+// app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 
 // Sécurité : rate limiting global (200 req / 15 min par IP)
 const globalLimiter = rateLimit({

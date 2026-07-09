@@ -672,7 +672,6 @@ async function getCatalog() {
   const { data, error } = await supabaseAdmin
     .from('catalog')
     .select('*')
-    .order('title')
     .limit(100000);
   if (error) throw new Error(error.message);
   if (!data) return [];

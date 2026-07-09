@@ -296,31 +296,36 @@ async function deleteUserAccount(userId) {
 
 async function savePublicReview(userId, gameId, rating, reviewText, gameTitle, gameCover) {
   console.log('[savePublicReview] Params:', { userId, gameId, rating, reviewTextLength: reviewText?.length, gameTitle });
+  const buildPayload = (withExtra) => ({
+    user_id: userId,
+    game_id: gameId,
+    rating,
+    review_text: reviewText,
+    ...(withExtra ? { game_title: gameTitle || '', game_cover: gameCover || '' } : {}),
+  });
   // Try upsert first (requires UNIQUE(user_id, game_id) constraint)
-  const { data, error } = await supabaseAdmin
+  let { data, error } = await supabaseAdmin
     .from('community_reviews')
-    .upsert({
-      user_id: userId,
-      game_id: gameId,
-      game_title: gameTitle || '',
-      game_cover: gameCover || '',
-      rating,
-      review_text: reviewText,
-    }, { onConflict: 'user_id, game_id' });
+    .upsert(buildPayload(true), { onConflict: 'user_id, game_id' });
+  if (error && error.message && error.message.includes('game_cover')) {
+    console.log('[savePublicReview] game_cover column missing, retrying without it');
+    ({ data, error } = await supabaseAdmin
+      .from('community_reviews')
+      .upsert(buildPayload(false), { onConflict: 'user_id, game_id' }));
+  }
   if (error) {
     console.log('[savePublicReview] Upsert failed, trying insert/update fallback:', error.message);
     // Fallback: delete existing then insert (for tables without the UNIQUE constraint)
     await supabaseAdmin.from('community_reviews').delete().eq('user_id', userId).eq('game_id', gameId);
-    const { error: e2 } = await supabaseAdmin
+    let { error: e2 } = await supabaseAdmin
       .from('community_reviews')
-      .insert({
-        user_id: userId,
-        game_id: gameId,
-        game_title: gameTitle || '',
-        game_cover: gameCover || '',
-        rating,
-        review_text: reviewText,
-      });
+      .insert(buildPayload(true));
+    if (e2 && e2.message && e2.message.includes('game_cover')) {
+      console.log('[savePublicReview] Fallback without extra columns');
+      ({ error: e2 } = await supabaseAdmin
+        .from('community_reviews')
+        .insert(buildPayload(false)));
+    }
     if (e2) {
       console.error('[savePublicReview] Fallback also failed:', e2);
       throw new Error(e2.message);
@@ -926,7 +931,39 @@ async function getGameBoostCount(gameId) {
   return count || 0;
 }
 
-async function boostGame(userId, gameId) {
+// Boost communautaire (3 points/semaine, table boosts)
+async function communityBoostGame(userId, gameId) {
+  // Vérifie les points restants de la semaine
+  let bp = await getBoostPoints(userId);
+  const now = new Date();
+  const year = now.getFullYear();
+  const jan1 = new Date(year, 0, 1);
+  const week = Math.ceil((((now - jan1) / 86400000) + jan1.getDay() + 1) / 7);
+  if (bp.last_boost_week < week) {
+    bp = { boost_points: 3, last_boost_week: week };
+    await supabaseAdmin.from('users').update({ boost_points: 3, last_boost_week: week }).eq('id', userId);
+  }
+  if (bp.boost_points < 1) throw new Error('Tu n\'as plus de boost cette semaine');
+
+  const { data: existing } = await supabaseAdmin
+    .from('boosts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('game_id', gameId)
+    .maybeSingle();
+  if (existing) throw new Error('Tu as déjà boosté ce jeu');
+
+  const { error } = await supabaseAdmin
+    .from('boosts')
+    .insert({ user_id: userId, game_id: gameId });
+  if (error) throw new Error(error.message);
+
+  await supabaseAdmin.from('users').update({ boost_points: bp.boost_points - 1 }).eq('id', userId);
+  return { remaining: bp.boost_points - 1 };
+}
+
+// Booster individuel (1 point, table game_boosts)
+async function boosterBoostGame(userId, gameId) {
   const weekStart = getWeekStart();
   const pointsData = await getBoosterPoints(userId);
   if (pointsData.points < 1) throw new Error('Pas assez de points booster');
@@ -951,7 +988,7 @@ async function boostGame(userId, gameId) {
     .update({ points: pointsData.points - 1 })
     .eq('user_id', userId);
 
-  return true;
+  return { remaining: pointsData.points - 1 };
 }
 
 async function getTopBoostedGames() {
@@ -1336,11 +1373,12 @@ module.exports = {
   getConversations,
   getBoostPoints,
   resetWeeklyBoostPoints,
-  boostGame,
+  communityBoostGame,
   getTopBoosted,
   getGameBoostCount,
   getBoosterPoints,
   claimFirstLoginPoints,
+  boosterBoostGame,
   getTopBoostedGames,
   getUserBoostStatus,
   voteReview,

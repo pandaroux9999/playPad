@@ -168,6 +168,7 @@ const API = {
   getBoostCount: (gameId) => API.request('GET', `/api/boost/count/${gameId}`),
   getGamePrices: (gameId) => API.request('GET', `/api/game-prices/${gameId}`),
   getBoosterPoints: () => API.request('GET', '/api/booster/points'),
+  boosterGame: (gameId) => API.request('POST', '/api/booster/boost', { gameId }),
   getBoostStatus: (gameId) => API.request('GET', `/api/booster/status/${gameId}`),
   connectEpic: (epicUsername) => API.request('POST', '/api/platform/epic/connect', { epicUsername }),
   getNews: () => API.request('GET', '/api/news'),
@@ -891,9 +892,11 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   useEffect(() => {
     API.getCatalog().then(d => {
       const cat = d.catalog || [];
+      console.log('[Catalogue] Catalog loaded:', cat.length, 'games');
       setCatalog(cat.length > 0 ? cat : CATALOGUE);
     }).catch(() => setCatalog(CATALOGUE));
     API.getTopBoosted().then(d => {
+      console.log('[Catalogue] Top boosted:', d.top?.length || 0, 'games');
       setTopBoosted(d.top || []);
       if ((d.top || []).length > 0) setShowBoostSection(true);
     }).catch(() => {});
@@ -925,14 +928,16 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     if (e) e.stopPropagation();
     if (boostedGamesLocal.has(gameId)) { showToast?.('Tu as déjà boosté ce jeu'); return; }
     if (boostPoints <= 0) { showToast?.('Tu n\'as plus de points cette semaine'); return; }
+    console.log('[Catalogue] Community boost on:', gameId, 'points left:', boostPoints);
     try {
-      await API.boostGame(gameId);
+      const result = await API.boostGame(gameId);
+      console.log('[Catalogue] Boost success, remaining:', result.remaining);
       setBoostPoints(prev => Math.max(0, (prev || 0) - 1));
       setBoostedGamesLocal(prev => new Set(prev).add(gameId));
       setShowBoostSection(true);
       showToast?.('Jeu boosté ! +1 point communautaire');
       API.getTopBoosted().then(d => setTopBoosted(d.top || [])).catch(() => {});
-    } catch (err) { showToast?.(err.message); }
+    } catch (err) { console.error('[Catalogue] Boost error:', err.message); showToast?.(err.message); }
   };
 
     return h('div', { className: "flex flex-col h-full view-enter" },
@@ -2593,9 +2598,10 @@ function App() {
   const refreshBooster = useCallback(async () => {
     try {
       const [bpData, topData] = await Promise.all([API.getBoosterPoints(), API.getTopBoosted()]);
+      console.log('[App] Booster points:', bpData, 'Top boosted:', topData.top?.length);
       setBoosterPoints(bpData.points || 0);
       setBoostedGames(topData.top || []);
-    } catch (e) {}
+    } catch (e) { console.error('[App] refreshBooster error:', e.message); }
   }, []);
   useEffect(() => {
     if (boostedGames.length > 0) {
@@ -2736,12 +2742,15 @@ function App() {
 
   const handleBoostGame = async (gameId) => {
     try {
-      await API.boostGame(gameId);
+      console.log('[Booster] Boost Game:', gameId);
+      await API.boosterGame(gameId);
+      console.log('[Booster] Success, decrementing points');
       setBoosterPoints(prev => Math.max(0, prev - 1));
       setUserBoostedSet(prev => new Set(prev).add(gameId));
       refreshBooster();
       showToast("Jeu boost\u00e9 !");
     } catch (e) {
+      console.error('[Booster] Error:', e.message);
       showToast("Erreur: " + (e.message || ""));
     }
   };

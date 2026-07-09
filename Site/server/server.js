@@ -2091,8 +2091,9 @@ app.post('/api/booster/boost', requireAuth, async (req, res) => {
   try {
     const { gameId } = req.body;
     if (!gameId) return res.status(400).json({ error: 'gameId requis' });
-    await db.boostGame(req.session.userId, gameId);
-    res.json({ ok: true });
+    const result = await db.boosterBoostGame(req.session.userId, gameId);
+    console.log('[BoosterBoost] User', req.session.userId, 'used booster on', gameId, 'remaining:', result.remaining);
+    res.json({ ok: true, remaining: result.remaining });
   } catch (err) {
     console.error('[BoosterBoost] Error:', err.message);
     res.status(400).json({ error: err.message });
@@ -2161,8 +2162,8 @@ app.post('/api/boost', requireAuth, async (req, res) => {
   try {
     const { gameId } = req.body;
     if (!gameId) return res.status(400).json({ error: 'gameId requis' });
-    const result = await db.boostGame(req.session.userId, gameId);
-    console.log('[Boost] User', req.session.userId, 'boosted', gameId);
+    const result = await db.communityBoostGame(req.session.userId, gameId);
+    console.log('[Boost] User', req.session.userId, 'boosted', gameId, 'remaining:', result.remaining);
     res.json({ ok: true, remaining: result.remaining });
   } catch (err) {
     console.error('[Boost] Error:', err.message);

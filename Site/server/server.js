@@ -2515,6 +2515,79 @@ app.post('/api/contact', requireAuth, async (req, res) => {
   }
 });
 
+// ─── AI CHATBOT (Ollama) ─────────────────────────────────────
+app.post('/api/chat', requireAuth, async (req, res) => {
+  try {
+    const { message, history } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message requis' });
+
+    const systemPrompt = `Tu es l'assistant de PlayPad, une application de gestion de bibliothèque de jeux vidéo.
+
+Voici les onglets disponibles dans l'application :
+- library : Bibliothèque personnelle de jeux (statut, recherche, filtre par plateforme)
+- community : Communauté (feed d'activité des amis, suggestions)
+- reviews : Critiques (feed des reviews publiques avec vote)
+- catalogue : Catalogue partagé de tous les jeux (recherche, pagination, boost)
+- profile : Profil utilisateur (stats, top 3, paramètres, logout)
+
+Fonctionnalités :
+- Ajouter/supprimer des jeux, changer statut (playing, completed, backlog, dropped)
+- Noter (1-5) et écrire des reviews (publiques/privées)
+- Wishlist (liste de souhaits)
+- Top 3 (3 jeux favoris épinglés)
+- Boost (3 points/semaine pour mettre un jeu en avant)
+- Amis (demandes, acceptation, bibliothèque partagée)
+- Messagerie privée
+- Import Steam, Xbox, Epic, Playnite
+- eSport (favoris, notifications email)
+- News (actualités jeu vidéo)
+
+Sites externes : Steam Store (https://store.steampowered.com), RAWG (https://rawg.io), IGDB (https://www.igdb.com), IsThereAnyDeal (https://isthereanydeal.com), Humble Bundle (https://www.humblebundle.com)
+
+Réponds de façon concise et utile en français. Quand c'est pertinent, termine ta réponse par un tableau JSON d'actions suggérées au format : [{"label":"Texte du bouton","type":"view","value":"library"},{"label":"Ouvrir Steam","type":"url","value":"https://..."}]`;
+
+    const msgs = [{ role: "system", content: systemPrompt }];
+    if (Array.isArray(history)) msgs.push(...history.slice(-20));
+    msgs.push({ role: "user", content: message });
+
+    const body = JSON.stringify({ model: 'llama3.1:8b', messages: msgs, stream: false });
+    const http = require('http');
+    const opts = {
+      hostname: 'localhost', port: 11434, path: '/api/chat',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    };
+
+    const ollamaReq = http.request(opts, (resp) => {
+      let data = '';
+      resp.on('data', c => data += c);
+      resp.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          const text = parsed.message?.content || '';
+          const actionsMatch = text.match(/\[[\s\S]*?\]\s*$/);
+          let actions = [];
+          let cleanText = text;
+          if (actionsMatch) {
+            try { actions = JSON.parse(actionsMatch[0]); } catch (e) {}
+            cleanText = text.slice(0, actionsMatch.index).trim();
+          }
+          res.json({ text: cleanText, actions });
+        } catch (e) {
+          res.json({ text: data.slice(0, 500), actions: [] });
+        }
+      });
+    });
+    ollamaReq.on('error', () => {
+      res.status(503).json({ error: 'Ollama indisponible', text: "L'assistant est hors ligne. Vérifie qu'Ollama est lancé." });
+    });
+    ollamaReq.write(body);
+    ollamaReq.end();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── EMAIL NOTIFICATION SYSTEM ──────────────────────────────
 const nodemailer = require('nodemailer');
 

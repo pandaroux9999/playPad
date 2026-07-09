@@ -29,7 +29,7 @@ const cspDirectives = {
   styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.tailwindcss.com"],
   fontSrc: ["'self'", "https://fonts.gstatic.com"],
   imgSrc: ["'self'", "data:", "https://cdn.cloudflare.steamstatic.com", "https://steamcdn-a.akamaihd.net", "https://media.rawg.io", "https://images.igdb.com"],
-  connectSrc: ["'self'", "http://localhost:3456"],
+  connectSrc: ["'self'"],
   frameSrc: ["'self'", "https://accounts.google.com"],
   objectSrc: ["'none'"],
 };

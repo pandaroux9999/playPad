@@ -626,6 +626,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   };
 
   useEffect(() => {
+    if (!bridgeUrl || bridgeUrl === 'http://localhost:3456') { setBridgeOnline(false); return; }
     fetch(bridgeAuth(bridgeUrl + '/health'), { signal: AbortSignal.timeout(3000) })
       .then(r => setBridgeOnline(r.ok))
       .catch(() => setBridgeOnline(false));
@@ -1911,8 +1912,9 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   const connectedCount = platformStats.filter(p => p.connected).length;
 
   useEffect(() => {
-    const bridgeUrl = localStorage.getItem('playnite_bridge_url') || 'http://localhost:3456';
-    fetch(bridgeUrl + '/health', { signal: AbortSignal.timeout(3000) })
+    const u = localStorage.getItem('playnite_bridge_url');
+    if (!u) { setBridgeStatus('offline'); return; }
+    fetch(u + '/health', { signal: AbortSignal.timeout(3000) })
       .then(r => { setBridgeStatus(r.ok ? 'online' : 'offline'); })
       .catch(() => setBridgeStatus('offline'));
   }, []);

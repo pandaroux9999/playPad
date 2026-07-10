@@ -1293,25 +1293,21 @@ async function searchStreamers(game, twitchClientId, twitchClientSecret) {
 // ─── NEWS ─────────────────────────────────────────────────
 async function addNewsItems(category, items) {
   if (!items || items.length === 0) return;
-  // Récupère les titres existants (non archivés) pour éviter les doublons
+  // Récupère les titres existants pour éviter les doublons
   const { data: existing } = await supabaseAdmin
     .from('news_cache')
     .select('item_data')
-    .eq('category', category)
-    .eq('archived', false);
+    .eq('category', category);
   const existingTitles = new Set((existing || []).map(r => r.item_data?.title || r.item_data?.event || ''));
   const newItems = items.filter(item => {
     const key = item.title || item.event || '';
     return key && !existingTitles.has(key);
   });
   if (newItems.length === 0) return;
-  // Archive les anciens (ignore si colonne absente)
-  try { await supabaseAdmin.from('news_cache').update({ archived: true }).eq('category', category); } catch (e) {}
   // Insère les nouveaux items
   const rows = newItems.map((item, i) => ({
     category,
     item_data: item,
-    archived: false,
     sort_key: i,
   }));
   const { error: insErr } = await supabaseAdmin

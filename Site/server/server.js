@@ -2616,8 +2616,14 @@ async function fetchIGDBReleases(clientId, clientSecret) {
 
 // ─── 2. FETCH : Drama/Actu via RSS ────────────────────────
 const DRAMA_RSS_FEEDS = [
-  { url: 'https://www.jeuxvideo.com/rss/rss.xml', name: 'JeuxVideo.com' },
   { url: 'https://www.gamekult.com/feed/actualites.xml', name: 'Gamekult' },
+  { url: 'https://www.eurogamer.net/feed', name: 'Eurogamer' },
+];
+
+const NON_GAMING_KEYWORDS = [
+  'film', 'cinéma', 'cinema', 'série', 'serie', 'netflix', 'disney+', 'amazon prime',
+  'oscar', 'césar', 'cesar', 'acteur', 'actrice', 'réalisateur', 'realisateur',
+  'bande-annonce', 'movie', 'tv show', 'episode', 'box-office',
 ];
 
 async function fetchDramaFromRSS() {
@@ -2628,6 +2634,8 @@ async function fetchDramaFromRSS() {
       const parsed = parseRSS(xml);
       for (const p of parsed.slice(0, 5)) {
         const lower = (p.title + ' ' + p.desc).toLowerCase();
+        // Filtre les articles non-jeu vidéo (cinéma, séries, etc.)
+        if (NON_GAMING_KEYWORDS.some(kw => lower.includes(kw))) continue;
         const tag = lower.includes('licencie') || lower.includes('greve') || lower.includes('controvers') || lower.includes('polemique') || lower.includes('drama')
           ? 'Drama' : 'Actu';
         items.push({

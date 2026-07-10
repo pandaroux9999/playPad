@@ -69,9 +69,9 @@
       "sourceName": "VLR.gg",
       "details": "Le Valorant Champions est le tournoi le plus prestigieux de la scène Valorant. Les meilleures équipes du monde s'affrontent pour le titre de champion du monde et un prize pool de plusieurs millions de dollars.",
       "teams": [
-        { "id": 1, "name": "Sentinels", "logo": "", "players": [] },
-        { "id": 2, "name": "FNATIC", "logo": "", "players": [] },
-        { "id": 3, "name": "LOUD", "logo": "", "players": [] }
+        { "id": 1, "name": "Sentinels", "logo": "https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/valorant/sentinels/sentinels-logo.png", "players": [] },
+        { "id": 2, "name": "FNATIC", "logo": "https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/valorant/fnatic/fnatic-logo.png", "players": [] },
+        { "id": 3, "name": "LOUD", "logo": "https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/valorant/loud/loud-logo.png", "players": [] }
       ]
     },
     {
@@ -86,9 +86,9 @@
       "sourceName": "Liquipedia",
       "details": "The International est le championnat du monde de Dota 2, organisé par Valve. Réputé pour ses prize pools records grâce au financement participatif via le Battle Pass.",
       "teams": [
-        { "id": 4, "name": "Team Spirit", "logo": "", "players": [] },
-        { "id": 5, "name": "OG", "logo": "", "players": [] },
-        { "id": 6, "name": "Team Liquid", "logo": "", "players": [] }
+        { "id": 4, "name": "Team Spirit", "logo": "https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/dota-2/team-spirit/team-spirit-logo.png", "players": [] },
+        { "id": 5, "name": "OG", "logo": "https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/dota-2/og/og-logo.png", "players": [] },
+        { "id": 6, "name": "Team Liquid", "logo": "https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/dota-2/team-liquid/team-liquid-logo.png", "players": [] }
       ]
     },
     {
@@ -103,9 +103,9 @@
       "sourceName": "LoL Esports",
       "details": "Les Worlds de League of Legends rassemblent les meilleures équipes des quatre coins du monde. Un mois de compétition intense pour soulever la Summoner's Cup.",
       "teams": [
-        { "id": 7, "name": "T1", "logo": "", "players": [] },
-        { "id": 8, "name": "Gen.G", "logo": "", "players": [] },
-        { "id": 9, "name": "G2 Esports", "logo": "", "players": [] }
+        { "id": 7, "name": "T1", "logo": "https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/league-of-legends/t1/t1-logo.png", "players": [] },
+        { "id": 8, "name": "Gen.G", "logo": "https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/league-of-legends/gen.g/gen.g-logo.png", "players": [] },
+        { "id": 9, "name": "G2 Esports", "logo": "https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/league-of-legends/g2-esports/g2-esports-logo.png", "players": [] }
       ]
     },
     {
@@ -120,9 +120,9 @@
       "sourceName": "HLTV",
       "details": "Le Major Counter-Strike 2 est le tournoi le plus important de la scène CS. Les 24 meilleures équipes du monde s'affrontent dans un tournoi à élimination directe pour le titre de champion Major.",
       "teams": [
-        { "id": 10, "name": "NaVi", "logo": "", "players": [] },
-        { "id": 11, "name": "FaZe Clan", "logo": "", "players": [] },
-        { "id": 12, "name": "Team Vitality", "logo": "", "players": [] }
+        { "id": 10, "name": "NaVi", "logo": "https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/csgo/navi/navi-logo.png", "players": [] },
+        { "id": 11, "name": "FaZe Clan", "logo": "https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/csgo/faze-clan/faze-clan-logo.png", "players": [] },
+        { "id": 12, "name": "Team Vitality", "logo": "https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/csgo/team-vitality/team-vitality-logo.png", "players": [] }
       ]
     }
   ],

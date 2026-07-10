@@ -805,6 +805,49 @@ async function setEpicUsername(userId, epicUsername) {
   if (error) throw new Error(error.message);
 }
 
+async function setPsnNpsso(userId, npsso) {
+  const { error } = await supabaseAdmin
+    .from('users')
+    .update({ psn_npsso: npsso })
+    .eq('id', userId);
+  if (error) throw new Error(error.message);
+}
+
+async function setPsnTokens(userId, accessToken, refreshToken, expiresAt) {
+  const { error } = await supabaseAdmin
+    .from('users')
+    .update({
+      psn_access_token: accessToken,
+      psn_refresh_token: refreshToken,
+      psn_token_expires_at: expiresAt,
+    })
+    .eq('id', userId);
+  if (error) throw new Error(error.message);
+}
+
+async function getPsnTokens(userId) {
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select('psn_npsso, psn_access_token, psn_refresh_token, psn_token_expires_at')
+    .eq('id', userId)
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+async function clearPsnTokens(userId) {
+  const { error } = await supabaseAdmin
+    .from('users')
+    .update({
+      psn_npsso: '',
+      psn_access_token: '',
+      psn_refresh_token: '',
+      psn_token_expires_at: null,
+    })
+    .eq('id', userId);
+  if (error) throw new Error(error.message);
+}
+
 async function sendMessage(senderId, receiverId, message) {
   const { data, error } = await supabaseAdmin
     .from('messages')
@@ -1501,6 +1544,11 @@ module.exports = {
   updateLastSeen,
   setSteamId,
   setXboxGamertag,
+  setEpicUsername,
+  setPsnNpsso,
+  setPsnTokens,
+  getPsnTokens,
+  clearPsnTokens,
   sendMessage,
   getMessages,
   markMessagesRead,

@@ -10,6 +10,13 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const db = require('./db');
 const SupabaseSessionStore = require('./session-store');
+const {
+  exchangeNpssoForAccessCode,
+  exchangeAccessCodeForAuthTokens,
+  exchangeRefreshTokenForAuthTokens,
+  getPurchasedGames,
+  getUserPlayedGames,
+} = require('psn-api');
 
 const app = express();
 app.disable('x-powered-by');
@@ -876,6 +883,124 @@ async function enrichGameFromSteam(game) {
     }
   } catch (e) { /* Steam Store non disponible, garder les données d'origine */ }
   return game;
+}
+
+// ─── PSN (PlayStation Network) — helpers ──
+
+// Obtient un access token PSN valide (refresh automatique)
+async function getPsnAuth(userId) {
+  const tokens = await db.getPsnTokens(userId);
+
+  // Access token encore valide ?
+  if (tokens.psn_access_token && tokens.psn_token_expires_at) {
+    const expiresAt = new Date(tokens.psn_token_expires_at);
+    if (expiresAt > new Date(Date.now() + 60000)) {
+      return { accessToken: tokens.psn_access_token };
+    }
+  }
+
+  // Sinon, refresh le token
+  if (tokens.psn_refresh_token) {
+    try {
+      const refreshed = await exchangeRefreshTokenForAuthTokens(tokens.psn_refresh_token);
+      const expiresAt = new Date(Date.now() + (refreshed.expires_in || 3600) * 1000);
+      await db.setPsnTokens(userId, refreshed.accessToken, refreshed.refreshToken, expiresAt);
+      return { accessToken: refreshed.accessToken };
+    } catch (e) {
+      console.error('[PSN] Refresh token failed:', e.message);
+    }
+  }
+
+  // Sinon, échanger le NPSSO
+  if (tokens.psn_npsso) {
+    const accessCode = await exchangeNpssoForAccessCode(tokens.psn_npsso);
+    const auth = await exchangeAccessCodeForAuthTokens(accessCode);
+    const expiresAt = new Date(Date.now() + (auth.expires_in || 3600) * 1000);
+    await db.setPsnTokens(userId, auth.accessToken, auth.refreshToken, expiresAt);
+    return { accessToken: auth.accessToken };
+  }
+
+  return null;
+}
+
+// Récupère les jeux PSN (achetés + joués avec playtime)
+async function fetchPsnGames(userId) {
+  const auth = await getPsnAuth(userId);
+  if (!auth) throw new Error('Non authentifié PSN');
+
+  const games = [];
+
+  // 1. Jeux achetés (PS4 + PS5)
+  try {
+    const purchased = await getPurchasedGames(auth, {
+      platform: ['ps4', 'ps5'],
+      size: 200,
+      sortBy: 'ACTIVE_DATE',
+      sortDirection: 'desc',
+    });
+    const purchasedGames = purchased?.data?.purchasedTitlesRetrieve?.games || [];
+    for (const g of purchasedGames) {
+      const platform = g.platform === 'PS5' ? 'ps5' : 'ps4';
+      games.push({
+        game_id: 'psn-' + (g.titleId || g.contentId || ''),
+        title: g.name || 'Unknown',
+        platform,
+        playtime: 0,
+        cover: g.image_url || g.imageUrl || '',
+        genre: '', year: 0,
+        status: 'not_started',
+        user_rating: 0, review_text: '', review_public: true, has_review: 0,
+      });
+    }
+    console.log('[PSN] getPurchasedGames OK —', purchasedGames.length, 'jeux achetés');
+  } catch (e) {
+    console.error('[PSN] getPurchasedGames error:', e.message);
+  }
+
+  // 2. Jeux joués (avec playtime)
+  try {
+    const played = await getUserPlayedGames(auth, 'me', {
+      categories: 'ps4_game,ps5_native_game',
+      limit: 200,
+    });
+    const playedGames = played?.titles || [];
+    for (const g of playedGames) {
+      const platform = g.category === 'ps5_native_game' ? 'ps5' : 'ps4';
+      // Parser playDuration "PT228H56M33S" → minutes
+      let playtime = 0;
+      if (g.playDuration) {
+        const match = g.playDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+        if (match) {
+          playtime = (parseInt(match[1] || 0) * 60) + parseInt(match[2] || 0);
+        }
+      }
+      const gameId = 'psn-' + (g.titleId || '');
+      const cover = g.concept?.media?.images?.[0]?.url || g.imageUrl || '';
+      // Mettre à jour si déjà présent (ajouter playtime)
+      const existing = games.find(x => x.game_id === gameId);
+      if (existing) {
+        existing.playtime = playtime;
+        existing.status = playtime > 0 ? 'playing' : 'not_started';
+        if (cover && !existing.cover) existing.cover = cover;
+      } else {
+        games.push({
+          game_id: gameId,
+          title: g.name || 'Unknown',
+          platform,
+          playtime,
+          cover,
+          genre: '', year: 0,
+          status: playtime > 0 ? 'playing' : 'not_started',
+          user_rating: 0, review_text: '', review_public: true, has_review: 0,
+        });
+      }
+    }
+    console.log('[PSN] getUserPlayedGames OK —', playedGames.length, 'jeux joués');
+  } catch (e) {
+    console.error('[PSN] getUserPlayedGames error:', e.message);
+  }
+
+  return games;
 }
 
 // Route manuelle alternative (si OpenID ne marche pas)
@@ -2373,7 +2498,10 @@ function parseRSS(xml) {
     const block = match[1];
     const get = (tag) => {
       const m = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i').exec(block);
-      return m ? m[1].trim() : '';
+      let val = m ? m[1].trim() : '';
+      val = val.replace(/<!\[CDATA\[/g, '').replace(/\]\]>/g, '');
+      val = val.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+      return val;
     };
     const title = get('title');
     const desc = get('description').replace(/<[^>]*>/g, '').trim();
@@ -2671,8 +2799,8 @@ async function refreshAllNews(force) {
 
 function startNewsRefresh() {
   if (newsRefreshTimer) clearInterval(newsRefreshTimer);
-  // Premier refresh immédiat
-  refreshAllNews().catch(e => console.error('[News] Erreur premier refresh:', e.message));
+  // Premier refresh immédiat (force=true pour ignorer le cache et récupérer les données PandaScore)
+  refreshAllNews(true).catch(e => console.error('[News] Erreur premier refresh:', e.message));
   // Puis toutes les 30 min
   newsRefreshTimer = setInterval(() => {
     refreshAllNews().catch(e => console.error('[News] Erreur refresh périodique:', e.message));

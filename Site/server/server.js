@@ -3302,20 +3302,21 @@ app.post('/api/contact', requireAuth, contactLimiter, async (req, res) => {
     if (!message) return res.status(400).json({ error: 'Message requis' });
     const sanitizedMsg = stripHtml(message);
     const sanitizedEmail = email ? stripHtml(email) : '';
-    const transporter = createMailTransporter();
-    if (transporter) {
-      await transporter.sendMail({
-        from: `"PlayPad Contact" <${process.env.SMTP_USER}>`,
-        to: process.env.SMTP_USER,
-        subject: `[PlayPad] Message de ${sanitizedEmail || 'utilisateur #' + req.session.userId}`,
-        html: `<p><b>De :</b> ${sanitizedEmail || 'inconnu'}</p><p><b>Message :</b></p><p>${sanitizedMsg}</p>`,
-      });
-    }
-    // Stocker en DB même si l'email échoue
+    // Stocker en DB immédiatement
     const { error } = await db.supabaseAdmin
       .from('contact_messages')
       .insert({ user_id: req.session.userId, email: email || '', message });
     if (error) console.error('[Contact] DB error:', error.message);
+    // Email en arrière-plan (ne pas bloquer la réponse)
+    const transporter = createMailTransporter();
+    if (transporter) {
+      transporter.sendMail({
+        from: `"PlayPad Contact" <${process.env.SMTP_USER}>`,
+        to: process.env.SMTP_USER,
+        subject: `[PlayPad] Message de ${sanitizedEmail || 'utilisateur #' + req.session.userId}`,
+        html: `<p><b>De :</b> ${sanitizedEmail || 'inconnu'}</p><p><b>Message :</b></p><p>${sanitizedMsg}</p>`,
+      }).catch(e => console.error('[Contact] Email error:', e.message));
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error('[Contact]', err.message);

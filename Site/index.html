@@ -254,6 +254,7 @@ const MessageCircle = Icon(["M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4
 const ArrowLeft = Icon(["M19 12H5", "M12 19l-7-7 7-7"]);
 const Info = Icon(["M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z", "M12 16v-4", "M12 8h.01"]);
 const ExternalLink = Icon(["M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6", "M15 3h6v6", "M10 14 21 3"]);
+const Play = Icon(["M5 3l14 9-14 9V3z"]);
 const ShoppingCart = Icon(["M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z", "M3 6h18", "M16 10a4 4 0 0 1-8 0"]);
 const Tag = Icon(["M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z", "M7 7h.01"]);
 const Calendar = Icon(["M8 2v4", "M16 2v4", "M3 10h18", "M21 14V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7", "M15 18a3 3 0 1 0 6 0 3 3 0 1 0-6 0", "M19 21l2 2"]);
@@ -610,7 +611,7 @@ const PLATFORM_SYNC_DATA = [
   { platform: "xbox",     gameCount: 0,  lastSync: "\u2014" },
 ];
 
-function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast, user, onAddNotification, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree }) {
+function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast, user, onAddNotification, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, setView }) {
   const genres = useMemo(() => ["all", ...new Set(games.map(g => g.genre).filter(Boolean))], [games]);
   const [showFilters, setShowFilters] = useState(false);
   const [filterGenre, setFilterGenre] = useState("all");
@@ -800,7 +801,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
           const onConnect = platform === "steam"
             ? () => { window.location.href = "/api/auth/steam"; }
             : isPsn
-              ? () => { showToast('Connecte PSN depuis ton profil → onglet Profil'); }
+              ? () => { setView?.('profile'); }
               : async () => {
               const label = isXbox ? 'Gamertag Xbox' : isEpic ? 'nom d\'utilisateur Epic' : 'identifiant';
               const current = isXbox ? user?.xbox_gamertag : isEpic ? user?.epic_username : '';
@@ -2368,15 +2369,6 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
             h('div', { className: "absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform", style: { transform: emailNotifs ? 'translateX(18px)' : 'translateX(2px)' } })
           )
         ),
-        // Types de notifications disponibles
-        h('div', { className: "py-2.5 border-b border-border" },
-          h('p', { className: "text-[10px] font-medium text-muted-foreground mb-2 flex items-center gap-1" }, h(Bell, { size: 10 }), "Types de notifications disponibles :"),
-          h('div', { className: "flex flex-wrap gap-1.5" },
-            [['message','Priv\u00e9'],['friend','Ami en ligne'],['sync','Synchronisation'],['esport','E-sport'],['review','Critique'],['suggestion','Suggestion']].map(([k,l]) =>
-              h('span', { key: k, className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: 'rgba(255,255,255,0.06)', color: '#8888aa' } }, l)
-            )
-          )
-        ),
         // Nous contacter
         h('button', { onClick: () => { setContactOpen(true); }, className: "flex items-center gap-2 py-2.5 text-xs font-medium text-foreground hover:opacity-80 border-b border-border w-full text-left" },
           h(MessageCircle, { size: 13, style: { color: `${P1}aa` } }),
@@ -3274,7 +3266,7 @@ function App() {
     h('div', { className: "app-content relative flex flex-col h-screen bg-background mx-auto" },
       h('div', { className: "flex-1 overflow-hidden" },
         h('div', { className: "h-full overflow-y-auto" },
-          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); }, wishlistIds, onToggleWishlist: handleToggleWishlist, topThreeIds, onToggleTopThree: handleToggleTopThree }),
+          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); }, wishlistIds, onToggleWishlist: handleToggleWishlist, topThreeIds, onToggleTopThree: handleToggleTopThree, setView }),
           view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, freshReview, onFreshReviewConsumed: () => setFreshReview(null), onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
           view === "catalogue" && h(CatalogueView, { key: 'cat', refreshKey: catalogRefreshKey, onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),

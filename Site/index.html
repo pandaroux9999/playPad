@@ -607,8 +607,6 @@ const NOTIFICATIONS = [];
 const PLATFORM_SYNC_DATA = [
   { platform: "ps5",      gameCount: 12, lastSync: "il y a 5 min" },
   { platform: "steam",    gameCount: 34, lastSync: "il y a 15 min" },
-  { platform: "epic",     gameCount: 8,  lastSync: "il y a 2h" },
-  { platform: "nintendo", gameCount: 0,  lastSync: "\u2014" },
   { platform: "xbox",     gameCount: 0,  lastSync: "\u2014" },
 ];
 
@@ -640,8 +638,8 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSync, setShowSync] = useState(false);
   const [syncing, setSyncing] = useState(null);
-  const [connected, setConnected] = useState({ ps5: !!(user?.psn_npsso), steam: !!(user?.steam_id), epic: !!(user?.epic_username), nintendo: false, xbox: !!(user?.xbox_gamertag) });
-  useEffect(() => { setConnected({ ps5: !!(user?.psn_npsso), steam: !!(user?.steam_id), epic: !!(user?.epic_username), nintendo: false, xbox: !!(user?.xbox_gamertag) }); }, [user?.psn_npsso, user?.steam_id, user?.epic_username, user?.xbox_gamertag]);
+  const [connected, setConnected] = useState({ ps5: !!(user?.psn_npsso), steam: !!(user?.steam_id), xbox: !!(user?.xbox_gamertag) });
+  useEffect(() => { setConnected({ ps5: !!(user?.psn_npsso), steam: !!(user?.steam_id), xbox: !!(user?.xbox_gamertag) }); }, [user?.psn_npsso, user?.steam_id, user?.xbox_gamertag]);
   const connectedCount = Object.values(connected).filter(Boolean).length;
   const unread = notifications.filter(n => !n.read).length;
   const [buyGame, setBuyGame] = useState(null);
@@ -796,32 +794,31 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
         ),
           h('div', { className: "space-y-1.5" }, PLATFORM_SYNC_DATA.map(({ platform, gameCount, lastSync }) => {
           const cfg = PLATFORM_CONFIG[platform];
-           const isConnected = connected[platform];
+            const isConnected = connected[platform];
           const isXbox = platform === "xbox";
-          const isEpic = platform === "epic";
           const isPsn = platform === "ps5";
           const onConnect = platform === "steam"
             ? () => { window.location.href = "/api/auth/steam"; }
             : isPsn
               ? () => { setPsnInput(''); setShowPsnModal(true); }
-              : async () => {
-              const label = isXbox ? 'Gamertag Xbox' : isEpic ? 'nom d\'utilisateur Epic' : 'identifiant';
-              const current = isXbox ? user?.xbox_gamertag : isEpic ? user?.epic_username : '';
-              const g = prompt(`Entrez votre ${label} :`, current || '');
-              if (g) {
-                try {
-                  if (isXbox) { const r = await API.connectXbox(g); if (r.warning) showToast(r.warning); if (r.count === 0 && !r.warning?.includes('XBL_API_KEY')) { showToast('Aucun jeu trouvé pour ce Gamertag'); return; } }
-                  if (isEpic) { const r = await API.connectEpic(g); if (r.warning) showToast(r.warning); }
-                  setConnected(c => ({ ...c, [platform]: true })); onSyncComplete?.();
-                  showToast(`${cfg.name} ${isConnected ? 're-synchronisé' : 'connecté'}${(isXbox || isEpic) && g === current ? ' · re-sync' : ''}`);
-                } catch (err) { showToast('Erreur ' + cfg.name + ' : ' + (err.message || 'inconnue')); }
+              : isXbox
+                ? async () => {
+                const current = user?.xbox_gamertag || '';
+                const g = prompt(`Entrez votre Gamertag Xbox :`, current);
+                if (g) {
+                  try {
+                    const r = await API.connectXbox(g); if (r.warning) showToast(r.warning); if (r.count === 0 && !r.warning?.includes('XBL_API_KEY')) { showToast('Aucun jeu trouvé pour ce Gamertag'); return; }
+                    setConnected(c => ({ ...c, [platform]: true })); onSyncComplete?.();
+                    showToast(`${cfg.name} ${isConnected ? 're-synchronisé' : 'connecté'}${g === current ? ' · re-sync' : ''}`);
+                  } catch (err) { showToast('Erreur ' + cfg.name + ' : ' + (err.message || 'inconnue')); }
+                }
               }
-            };
-          return h('div', { key: platform, className: "flex items-center gap-2.5 py-1.5" + ((isXbox || isEpic) ? " cursor-pointer hover:opacity-80 transition-opacity" : ""), onClick: (isXbox || isEpic) ? onConnect : undefined },
+              : undefined;
+          return h('div', { key: platform, className: "flex items-center gap-2.5 py-1.5" + (isXbox ? " cursor-pointer hover:opacity-80 transition-opacity" : ""), onClick: isXbox ? onConnect : undefined },
             h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0", style: { background: cfg.color + "20" } }, h(PlatformLogo, { platform, size: 16 })),
             h('div', { className: "flex-1 min-w-0" },
               h('div', { className: "flex items-center gap-1.5" }, h('span', { className: "text-[11px] font-bold text-foreground" }, cfg.name), h('div', { className: "w-1 h-1 rounded-full", style: { background: isConnected ? "#4ade80" : "#ef444450", boxShadow: isConnected ? "0 0 4px #4ade8080" : "none" } })),
-              h('p', { className: "text-[9px] text-muted-foreground" }, isConnected ? (isXbox ? (user?.xbox_gamertag || '') + ' · ' : isEpic ? (user?.epic_username || '') + ' · ' : isPsn ? 'PSN · ' : '') + `${gameCount} jeux · ${lastSync}` : "Non connecté")
+              h('p', { className: "text-[9px] text-muted-foreground" }, isConnected ? (isXbox ? (user?.xbox_gamertag || '') + ' · ' : isPsn ? 'PSN · ' : '') + `${gameCount} jeux · ${lastSync}` : "Non connecté")
             ),
             h('div', { className: "flex items-center gap-1" },
               isConnected
@@ -833,9 +830,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
                     : null,
                   isXbox && user?.xbox_gamertag
                     ? h('button', { onClick: async (e) => { e.stopPropagation(); setSyncing('xbox'); try { const r = await API.connectXbox(user.xbox_gamertag); if (r.diagnostic) showToast('Diagnostic: ' + r.diagnostic); if (r.warning) showToast(r.warning); showToast(`${r.count} jeux Xbox synchronisés`); onSyncComplete?.(); } catch (err) { showToast('Erreur Xbox: ' + (err.message || 'inconnue')); } finally { setSyncing(null); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, syncing === 'xbox' ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
-                    : (isEpic && user?.epic_username
-                      ? h('button', { onClick: async (e) => { e.stopPropagation(); try { const r = await API.connectEpic(user.epic_username); if (r.warning) showToast(r.warning); setConnected(c => ({ ...c, [platform]: true })); showToast(`${r.count} jeux Epic ajoutés au catalogue`); } catch (err) { showToast('Erreur Epic: ' + (err.message || 'inconnue')); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, h(RefreshCw, { size: 10, style: { color: P1 } }))
-                      : (isPsn && connected.ps5
+                    : (isPsn && connected.ps5
                         ? h('button', { onClick: async (e) => { e.stopPropagation(); setSyncing('psn'); try { const r = await API.resyncPsn(); if (r.ok) { showToast(r.count + ' jeux PSN synchronis\u00e9s'); } else { const msg = (r.logs || []).filter(l => l.toLowerCase().startsWith('erreur') || l.toLowerCase().startsWith('echec') || l.toLowerCase().startsWith('solution')).join(' \u2022 '); showToast(msg || r.error || 'Erreur PSN inconnue'); if (r.hint?.includes('expir')) showToast('Token expiré → va dans Profil pour reconnecter PSN'); } onSyncComplete?.(); } catch (err) { showToast('Erreur PSN: ' + (err.message || 'inconnue')); } finally { setSyncing(null); } }, className: "p-1.5 rounded-lg inline-flex items-center justify-center", style: { background: `${P1}15`, width: 24, height: 24 } }, syncing === 'psn' ? h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }) : h(RefreshCw, { size: 10, style: { color: P1 } }))
                         : null
                       )
@@ -1233,8 +1228,20 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
   useEffect(() => { load(); }, [refreshKey]);
   useEffect(() => {
     load();
+    const prev = {};
     const t = setInterval(() => {
-      API.getFriends().then(d => setFriends(d.friends || [])).catch(() => {});
+      API.getFriends().then(d => {
+        const list = d.friends || [];
+        list.forEach(f => {
+          const wasOnline = prev[f.id];
+          const nowOnline = isOnline(f.last_seen);
+          if (wasOnline === false && nowOnline === true) {
+            showToast(`${f.pseudo || f.username} est en ligne`);
+          }
+          prev[f.id] = nowOnline;
+        });
+        setFriends(list);
+      }).catch(() => {});
     }, 30000);
     return () => clearInterval(t);
   }, []);
@@ -2161,10 +2168,10 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   const ratingDist = [5,4,3,2,1].map(r => ({ score: r, count: games.filter(g => g.userRating === r).length }));
   const maxCount   = Math.max(...ratingDist.map(r => r.count), 1);
   const initials = (user?.display_name || "??").charAt(0).toUpperCase() + ((user?.display_name || "?")[1] || "").toUpperCase();
-  const platformStats = ["steam","xbox","epic","gog","nintendo","ps5"].map(p => ({
+  const platformStats = ["steam","xbox","ps5"].map(p => ({
     id: p, name: PLATFORM_CONFIG[p]?.name || p, color: PLATFORM_CONFIG[p]?.color || "#888",
     count: games.filter(g => (g.platforms || [g.platform]).filter(Boolean).includes(p)).length,
-    connected: profileConnected?.[p] ?? (p === "steam" ? !!user?.steam_id : p === "xbox" ? !!user?.xbox_gamertag : p === "epic" ? !!user?.epic_username : p === "ps5" ? !!user?.psn_npsso : false),
+    connected: profileConnected?.[p] ?? (p === "steam" ? !!user?.steam_id : p === "xbox" ? !!user?.xbox_gamertag : p === "ps5" ? !!user?.psn_npsso : false),
   }));
   const connectedCount = platformStats.filter(p => p.connected).length;
 
@@ -2338,7 +2345,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
       h('div', { className: "h-1.5 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full", style: { width: `${games.length === 0 ? 100 : (count / games.length) * 100}%`, background: STATUS_CONFIG[key].color } }))
     )))),
     h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Distribution des notes"), h('div', { className: "bg-card border border-border rounded-2xl p-4" }, ratingDist.map(({ score, count }) => h('div', { key: score, className: "flex items-center gap-2 mb-1.5 last:mb-0" }, h('div', { className: "flex gap-px w-14 flex-shrink-0" }, Array.from({ length: score }).map((_, i) => h(Star, { key: i, size: 9, fill: "#f59e0b", stroke: "#f59e0b" }))), h('div', { className: "flex-1 h-2 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full bg-amber-500", style: { width: `${(count / maxCount) * 100}%` } })), h('span', { className: "text-xs text-muted-foreground w-4 text-right font-mono" }, count))))),
-    h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Par plateforme"), h('div', { className: "bg-card border border-border rounded-2xl p-4 flex flex-wrap gap-4" }, ["ps5","steam","epic","nintendo","xbox"].map(p => h('div', { key: p, className: "flex items-center gap-2" }, h(PlatformLogo, { platform: p, size: 16 }), h('span', { className: "text-xs font-bold text-foreground" }, PLATFORM_CONFIG[p].label), h('span', { className: "text-xs font-black font-mono", style: { color: p === "steam" ? "#c2dbf0" : PLATFORM_CONFIG[p].color } }, games.filter(g => (g.platforms || [g.platform]).filter(Boolean).includes(p)).length))))),
+    h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Par plateforme"), h('div', { className: "bg-card border border-border rounded-2xl p-4 flex flex-wrap gap-4" }, ["ps5","steam","xbox"].map(p => h('div', { key: p, className: "flex items-center gap-2" }, h(PlatformLogo, { platform: p, size: 16 }), h('span', { className: "text-xs font-bold text-foreground" }, PLATFORM_CONFIG[p].label), h('span', { className: "text-xs font-black font-mono", style: { color: p === "steam" ? "#c2dbf0" : PLATFORM_CONFIG[p].color } }, games.filter(g => (g.platforms || [g.platform]).filter(Boolean).includes(p)).length))))),
     games.length > 0 && h('div', { className: "px-4 mb-4" },
       h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Genres"),
       h('div', { className: "bg-card border border-border rounded-2xl p-4 flex flex-wrap gap-2" },
@@ -2365,7 +2372,6 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
                   let r;
                   if (p.id === 'steam') r = await API.resyncSteam();
                   else if (p.id === 'xbox' && user?.xbox_gamertag) r = await API.connectXbox(user.xbox_gamertag);
-                  else if (p.id === 'epic' && user?.epic_username) { r = await API.connectEpic(user.epic_username); if (r.warning) showToast(r.warning); }
                   else if (p.id === 'ps5') r = await API.resyncPsn();
                   if (r?.ok) showToast(`${r.count} jeux ${p.name} synchronis\u00e9s`);
                   else if (r?.error) {
@@ -2382,15 +2388,13 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
               ? h('a', { href: "/api/auth/steam", className: "px-2.5 py-1 text-[9px] font-bold rounded-md text-white whitespace-nowrap", style: { background: GRAD } }, "Connecter")
               : p.id === 'ps5'
                 ? h('button', { onClick: () => { setPsnInput(''); setShowPsnModal(true); }, className: "px-2.5 py-1 text-[9px] font-bold rounded-md text-white whitespace-nowrap", style: { background: GRAD } }, "Connecter")
-                : p.id === 'epic' || p.id === 'xbox'
+                : p.id === 'xbox'
                 ? h('button', { onClick: async () => {
-                    const label = p.id === 'xbox' ? 'Gamertag Xbox' : 'nom d\'utilisateur Epic';
-                    const current = p.id === 'xbox' ? user?.xbox_gamertag : user?.epic_username;
-                    const g = prompt(`Entrez votre ${label} :`, current || '');
+                    const current = user?.xbox_gamertag || '';
+                    const g = prompt(`Entrez votre Gamertag Xbox :`, current);
                     if (!g) return;
                     try {
-                      if (p.id === 'xbox') { const r = await API.connectXbox(g); if (r.warning) showToast(r.warning); }
-                      else { const r = await API.connectEpic(g); if (r.warning) showToast(r.warning); }
+                      const r = await API.connectXbox(g); if (r.warning) showToast(r.warning);
                       showToast(`${p.name} connecté`);
                       onSyncComplete?.();
                     } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); }

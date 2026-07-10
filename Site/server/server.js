@@ -2204,7 +2204,7 @@ app.get('/api/boost/count/:gameId', async (req, res) => {
 
 // ─── NEWS : Actualités temps réel ──────────────────────────
 // Sources : IGDB (releases), RSS feeds (drama/actu), Pandascore/Liquipedia (esport)
-const NEWS_REFRESH_INTERVAL = 30 * 60 * 1000; // 30 min
+const NEWS_REFRESH_INTERVAL = 6 * 60 * 60 * 1000; // 6h
 let newsRefreshTimer = null;
 
 // Helper HTTP GET (texte)
@@ -2462,9 +2462,21 @@ async function fetchTeamPlayers(game, teamId) {
 }
 
 // ─── 4. REFRESH complet ────────────────────────────────────
-async function refreshAllNews() {
+async function refreshAllNews(force) {
   console.log('[News] Rafraîchissement des actualités...');
   const results = { releases: 0, esport: 0, drama: 0 };
+
+  // Vérifie l'âge du cache — si < 6h, on skip sauf force=true
+  if (!force) {
+    const cacheAge = await db.getNewsCacheAge().catch(() => null);
+    if (cacheAge) {
+      const hoursOld = (Date.now() - cacheAge.getTime()) / 3600000;
+      if (hoursOld < 6) {
+        console.log(`[News] Cache encore frais (${hoursOld.toFixed(1)}h), skip refresh`);
+        return results;
+      }
+    }
+  }
 
   const igdbId = process.env.TWITCH_CLIENT_ID;
   const igdbSecret = process.env.TWITCH_CLIENT_SECRET;
@@ -2558,7 +2570,7 @@ app.get('/api/news', newsLimiter, async (req, res) => {
 
 app.post('/api/admin/refresh-news', requireAuth, async (req, res) => {
   try {
-    const results = await refreshAllNews();
+    const results = await refreshAllNews(true);
     res.json({ success: true, ...results });
   } catch (err) {
     res.status(500).json({ error: err.message });

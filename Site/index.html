@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PlayPad</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -2041,11 +2042,6 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   const [syncingPlatform, setSyncingPlatform] = useState(null);
   const [profileConnected, setProfileConnected] = useState(null);
   const [bridgeStatus, setBridgeStatus] = useState('unknown');
-  const [showPsnModal, setShowPsnModal] = useState(false);
-  const [psnInput, setPsnInput] = useState('');
-  const [psnSaving, setPsnSaving] = useState(false);
-  const [psnLogs, setPsnLogs] = useState([]);
-  const [psnResult, setPsnResult] = useState(null);
   const [emailNotifs, setEmailNotifs] = useState(false);
   const [notifLoading, setNotifLoading] = useState(true);
   const fileInputRef = useRef(null);

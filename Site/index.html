@@ -2519,7 +2519,6 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
   const [downloadCount, setDownloadCount] = useState(0);
   const [trailerVideoId, setTrailerVideoId] = useState(null);
   const [trailerLoading, setTrailerLoading] = useState(false);
-  const [showTrailer, setShowTrailer] = useState(false);
   const [buyGame, setBuyGame] = useState(null);
   const [buyOffers, setBuyOffers] = useState([]);
   useEffect(() => { API.getDownloadCounts().then(d => setDownloadCount(d.counts?.[game.game_id || game.id] || 0)).catch(() => {}); }, [game.game_id]);
@@ -2676,14 +2675,8 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
               h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5" }, h(Info, { size: 10 }), "D\u00e9tails"),
               h('button', { onClick: () => handleBuy(game), className: "text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 hover:opacity-80", style: { color: "#22c55e" } }, h(ShoppingCart, { size: 10 }), "Achat"),
               !trailerLoading && trailerVideoId
-                ? h('button', { onClick: () => setShowTrailer(!showTrailer), className: "text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 hover:opacity-80", style: { color: "#ef4444" } }, h(Play, { size: 10 }), showTrailer ? "Masquer" : "Bande-annonce")
+                ? h('a', { href: `https://www.youtube.com/watch?v=${trailerVideoId}`, target: "_blank", className: "text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 hover:opacity-80", style: { color: "#ef4444" } }, h(Play, { size: 10 }), "Bande-annonce")
                 : !trailerLoading && h('a', { href: `https://www.youtube.com/results?search_query=${encodeURIComponent(game.name + ' trailer')}`, target: "_blank", className: "text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 hover:opacity-80", style: { color: "#ef4444" } }, h(Play, { size: 10 }), "Bande-annonce")
-            ),
-            showTrailer && trailerVideoId && h('div', { className: "mb-3" },
-              h('div', { className: "rounded-xl overflow-hidden", style: { aspectRatio: "16/9", background: "#000" } },
-                h('iframe', { src: `https://www.youtube-nocookie.com/embed/${trailerVideoId}?autoplay=1&rel=0`, className: "w-full h-full", allow: "autoplay; encrypted-media", allowFullScreen: true, style: { border: 0 } })
-              ),
-              h('a', { href: `https://www.youtube.com/watch?v=${trailerVideoId}`, target: "_blank", className: "mt-1.5 text-[9px] font-bold flex items-center gap-1 hover:opacity-80", style: { color: "#ef4444" } }, h(Play, { size: 9 }), "Regarder la vid\u00e9o sur YouTube")
             ),
             gameDetails?.description && h('p', { className: "text-[11px] text-foreground/70 leading-relaxed mb-3" }, gameDetails.description),
             h('div', { className: "grid grid-cols-2 gap-2 text-[10px]" },

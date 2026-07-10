@@ -1588,41 +1588,6 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
                 )
               )),
               playerResults.length > 5 && h('button', { className: "w-full mt-1 p-2 rounded-xl text-[9px] font-bold text-center transition-colors", style: { background: "rgba(255,255,255,0.03)", color: "#8888aa" } }, "Voir les ", playerResults.length, " résultats"),
-              // Streamers section under esport too
-              h('div', { className: "mt-4" },
-                h('div', { className: "flex items-center gap-2 mb-3" },
-                  h(Monitor, { size: 14, style: { color: "#9146ff" } }),
-                  h('h3', { className: "text-xs font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Streamers en direct"),
-                ),
-                h('div', { className: "flex gap-2 mb-3" },
-                  h('input', {
-                    value: playerSearchGame,
-                    onChange: e => setPlayerSearchGame(e.target.value),
-                    onKeyDown: e => { if (e.key === 'Enter') { setStreamerSearching(true); API.searchStreamers(playerSearchGame).then(d => setStreamerResults(d.streamers || [])).catch(() => {}).finally(() => setStreamerSearching(false)); } },
-                    placeholder: "Cherche un jeu...",
-                    className: "flex-1 bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none"
-                  }),
-                  h('button', {
-                    onClick: () => { setStreamerSearching(true); API.searchStreamers(playerSearchGame).then(d => setStreamerResults(d.streamers || [])).catch(() => {}).finally(() => setStreamerSearching(false)); },
-                    disabled: streamerSearching || !playerSearchGame.trim(),
-                    className: "px-3 py-2.5 rounded-xl text-xs font-bold text-white flex-shrink-0", style: { background: GRAD }
-                  }, streamerSearching ? h(Loader, { size: 12, className: "animate-spin" }) : h(Search, { size: 12 }))
-                ),
-                streamerResults.length === 0 && playerSearchGame && !streamerSearching && h('p', { className: "text-[10px] text-muted-foreground text-center py-3" }, "Aucun streamer trouvé pour ce jeu"),
-                h('div', { className: "space-y-1.5" }, streamerResults.slice(0, 5).map(s =>
-                  h('a', { key: s.id, href: `https://twitch.tv/${s.login}`, target: "_blank", rel: "noopener noreferrer", className: "flex items-center gap-2.5 p-2.5 rounded-xl transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.03)" } },
-                    h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black text-white flex-shrink-0 overflow-hidden", style: { background: "#9146ff" } },
-                      s.thumbnailUrl ? h('img', { src: s.thumbnailUrl.replace('{width}x{height}', '70x70'), alt: "", className: "w-full h-full object-cover", onError: e => e.target.style.display = 'none' }) : h(Monitor, { size: 12 })
-                    ),
-                    h('div', { className: "flex-1 min-w-0" },
-                      h('p', { className: "text-xs font-bold text-foreground" }, s.displayName),
-                      h('p', { className: "text-[8px] text-muted-foreground" }, s.gameName || 'Jeu inconnu')
-                    ),
-                    s.isLive && h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold animate-pulse", style: { background: "rgba(239,68,68,0.2)", color: "#ef4444" } }, "LIVE"),
-                    h(ExternalLink, { size: 10, className: "text-muted-foreground flex-shrink-0" })
-                  )
-                ))
-              )
             )
           );
         })()

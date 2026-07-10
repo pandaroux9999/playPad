@@ -2785,7 +2785,7 @@ async function fetchEsportFromPandaScore() {
       gameSlug,
       date: m.begin_at ? m.begin_at.split('T')[0] : '',
       desc: `${m.league?.name || ''} — ${m.serie?.name || ''} — ${m.tournament?.name || ''}`,
-      officialUrl: `https://www.pandascore.co/${gameSlug}/matches/${m.id}`,
+      officialUrl: '',
       sourceUrl: '',
       sourceName: 'PandaScore',
       details: `${m.league?.name || ''} — ${m.serie?.name || ''}\n${m.tournament?.name || ''}\nStatut: ${m.status || 'unknown'}`,
@@ -2839,25 +2839,30 @@ async function fetchEsportMatchRoster(matchId, game) {
 async function fetchTeamPlayers(game, teamId) {
   const key = process.env.PANDASCORE_API_KEY;
   if (!key) return [];
-  try {
-    const url = `https://api.pandascore.co/${game}/players?filter[team_id]=${teamId}&per_page=10&token=${key}`;
-    const body = await httpGet(url);
-    const players = JSON.parse(body);
-    if (!Array.isArray(players)) return [];
-    return players.map(p => ({
-      id: p.id,
-      name: p.name,
-      firstName: p.first_name || '',
-      lastName: p.last_name || '',
-      imageUrl: p.image_url || '',
-      role: p.role || '',
-      nationality: p.nationality || '',
-      slug: p.slug || '',
-    }));
-  } catch (e) {
-    console.error(`[News] PandaScore players error team ${teamId}:`, e.message);
-    return [];
+  // Essaie d'abord l'API par jeu, puis fallback API globale
+  const urls = [
+    `https://api.pandascore.co/${game}/players?filter[team_id]=${teamId}&per_page=10&token=${key}`,
+    `https://api.pandascore.co/players?filter[team_id]=${teamId}&per_page=10&token=${key}`,
+  ];
+  for (const url of urls) {
+    try {
+      const body = await httpGet(url);
+      const players = JSON.parse(body);
+      if (Array.isArray(players) && players.length > 0) {
+        return players.map(p => ({
+          id: p.id,
+          name: p.name,
+          firstName: p.first_name || '',
+          lastName: p.last_name || '',
+          imageUrl: p.image_url || '',
+          role: p.role || '',
+          nationality: p.nationality || '',
+          slug: p.slug || '',
+        }));
+      }
+    } catch (e) { /* try next */ }
   }
+  return [];
 }
 
 // ─── 4. REFRESH complet ────────────────────────────────────

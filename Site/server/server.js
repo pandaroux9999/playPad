@@ -1119,6 +1119,81 @@ app.post('/api/platform/epic/connect', requireAuth, async (req, res) => {
   }
 });
 
+// ─── PlayStation Network (PSN) — connexion + import des jeux ──
+
+app.post('/api/platform/psn/connect', requireAuth, async (req, res) => {
+  const { npsso } = req.body;
+  if (!npsso || npsso.length < 60) {
+    return res.status(400).json({ error: 'NPSSO invalide (64 caractères requis). Va sur ca.account.sony.com/api/v1/ssocookie pour le récupérer.' });
+  }
+  try {
+    const accessCode = await exchangeNpssoForAccessCode(npsso);
+    const auth = await exchangeAccessCodeForAuthTokens(accessCode);
+    const expiresAt = new Date(Date.now() + (auth.expires_in || 3600) * 1000);
+
+    await db.setPsnNpsso(req.session.userId, npsso);
+    await db.setPsnTokens(req.session.userId, auth.accessToken, auth.refreshToken, expiresAt);
+
+    const games = await fetchPsnGames(req.session.userId);
+    for (const game of games) {
+      await db.upsertGame(req.session.userId, game);
+      await db.ensureCatalogGame(game);
+    }
+
+    console.log('[PSNConnect] OK —', games.length, 'jeux importés');
+    res.json({ ok: true, count: games.length });
+  } catch (err) {
+    console.error('[PSNConnect] Error:', err.message);
+    res.status(500).json({ error: 'Échec de connexion PSN — vérifie ton NPSSO' });
+  }
+});
+
+app.post('/api/platform/psn/resync', requireAuth, async (req, res) => {
+  try {
+    const tokens = await db.getPsnTokens(req.session.userId);
+    if (!tokens.psn_npsso) {
+      return res.status(400).json({ error: 'Aucun compte PSN connecté' });
+    }
+    const games = await fetchPsnGames(req.session.userId);
+    if (games.length === 0) {
+      return res.status(400).json({ error: 'Aucun jeu trouvé — vérifie les paramètres de confidentialité PSN (profil public requis).' });
+    }
+    for (const game of games) {
+      await db.upsertGame(req.session.userId, game);
+      await db.ensureCatalogGame(game);
+    }
+    console.log('[PSNResync] OK —', games.length, 'jeux resynchronisés');
+    res.json({ ok: true, count: games.length });
+  } catch (err) {
+    console.error('[PSNResync] Error:', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
+app.post('/api/platform/psn/disconnect', requireAuth, async (req, res) => {
+  try {
+    await db.clearPsnTokens(req.session.userId);
+    await db.deletePlatformGames(req.session.userId, 'ps4');
+    await db.deletePlatformGames(req.session.userId, 'ps5');
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[PSNDisconnect] Error:', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
+app.get('/api/platform/psn/status', requireAuth, async (req, res) => {
+  try {
+    const tokens = await db.getPsnTokens(req.session.userId);
+    res.json({
+      connected: !!tokens.psn_npsso,
+      tokenValid: tokens.psn_token_expires_at ? new Date(tokens.psn_token_expires_at) > new Date() : false,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
 // Catalogue — importe les jeux populaires depuis RAWG API dans le catalogue global
 // (utilise RAWG platform IDs: 4=PC, 7=Nintendo Switch, 187=PS5, 186=Xbox Series, 1=Xbox One, 18=PS4)
 const CATALOG_PLATFORMS = [
@@ -3242,6 +3317,7 @@ app.listen(PORT, () => {
   console.log('[Server] PANDASCORE_API_KEY:', process.env.PANDASCORE_API_KEY ? 'defined' : 'NON DÉFINI — données e-sport limitées au RSS HLTV');
   console.log('[Server] GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? 'defined' : 'NON DÉFINI — connexion Google indisponible');
   console.log('[Server] Epic Games : connexion par nom d\'utilisateur (sans API)');
+  console.log('[Server] PlayStation : connexion par NPSSO (pas de clé API requise)');
   if (!process.env.PUBLIC_URL) {
     console.warn('⚠️  PUBLIC_URL manquant. Steam OpenID redirigera vers localhost au lieu de l\'URL publique.');
     console.warn('    Ajoute PUBLIC_URL=https://ton-app.render.com dans les env vars Render.');

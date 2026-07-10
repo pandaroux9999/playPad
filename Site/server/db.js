@@ -705,16 +705,19 @@ async function getCatalogPage(page = 1, limit = 500) {
 }
 
 async function searchCatalog({ search, letter, page = 1, limit = 500 }) {
-  const offset = (page - 1) * limit;
-  let query = supabaseAdmin.from('catalog').select('*', { count: 'exact' });
+  const all = await getCatalog();
+  let filtered = all;
   if (search && search.trim()) {
-    query = query.ilike('title', `%${search.trim()}%`);
+    const s = search.trim().toLowerCase();
+    filtered = all.filter(g => (g.title || '').toLowerCase().includes(s));
   } else if (letter && letter !== 'all' && letter !== '#') {
-    query = query.ilike('title', `${letter}%`);
+    const l = letter.toLowerCase();
+    filtered = all.filter(g => (g.title || '').toLowerCase().startsWith(l));
   }
-  const { data, count, error } = await query.order('title').limit(limit).offset(offset);
-  if (error) throw new Error('[searchCatalog] ' + error.message);
-  return { data: data || [], total: count || 0, page, limit };
+  const total = filtered.length;
+  const offset = (page - 1) * limit;
+  const data = filtered.slice(offset, offset + limit);
+  return { data, total, page, limit };
 }
 
 function invalidateCatalogCache() {

@@ -2653,7 +2653,6 @@ async function fetchDramaFromRSS() {
 // ─── 3. FETCH : E-Sport via RSS ────────────────────────────
 const ESPORT_RSS_FEEDS = [
   { url: 'https://www.hltv.org/rss/news', name: 'HLTV', game: 'Counter-Strike 2' },
-  { url: 'https://www.jeuxactu.com/rss/news.rss', name: 'JeuxActu', game: 'Multi' },
 ];
 
 async function fetchEsportFromRSS() {
@@ -2844,12 +2843,10 @@ async function refreshAllNews(force) {
     results.drama = drama.length;
   }
 
-  // Esport via RSS (HLTV)
-  const esportRss = await fetchEsportFromRSS();
   // Esport via PandaScore (matches en direct/à venir)
   const esportPs = await fetchEsportFromPandaScore();
-  let esport = [...esportPs, ...esportRss];
-  // Fallback statique si aucune source e-sport n'a fonctionné
+  let esport = [...esportPs];
+  // Si PandaScore n'a rien renvoyé, on utilise les données statiques (avec logos et équipes)
   if (esport.length === 0) {
     try {
       const fallback = JSON.parse(require('fs').readFileSync(path.join(__dirname, 'data', 'news.json'), 'utf-8'));
@@ -2859,6 +2856,16 @@ async function refreshAllNews(force) {
       }
     } catch (e) {
       console.error('[News] Fallback e-sport error:', e.message);
+    }
+  }
+  // On complète avec les articles RSS HLTV (sans remplacer les données structurées)
+  const esportRss = await fetchEsportFromRSS();
+  if (esportRss.length > 0) {
+    const rssTitles = new Set(esport.map(e => e.event || e.title));
+    for (const rss of esportRss) {
+      if (!rssTitles.has(rss.event || rss.title)) {
+        esport.push(rss);
+      }
     }
   }
   if (esport.length > 0) {
@@ -2918,8 +2925,8 @@ app.get('/api/news', newsLimiter, async (req, res) => {
     const data = await db.getNewsFromCache();
     const hasData = (data.releases?.length || 0) + (data.esport?.length || 0) + (data.drama?.length || 0) > 0;
     if (hasData) {
-      // Si l'e-sport est vide dans le cache mais que le fallback en a, on complète
-      if (!data.esport || data.esport.length === 0) {
+      // Si l'e-sport est vide ou ne contient que des articles RSS (pas de vraies équipes), on utilise le fallback
+      if (!data.esport || data.esport.length === 0 || !data.esport.some(e => e.teams || e.gameSlug)) {
         const fallback = loadNewsFallback();
         if (fallback.esport && fallback.esport.length > 0) {
           data.esport = fallback.esport;

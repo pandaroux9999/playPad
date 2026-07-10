@@ -1091,6 +1091,7 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
   const [loading, setLoading] = useState(true);
   const [esportFavorites, setEsportFavorites] = useState(new Set());
   const [esportGameFilter, setEsportGameFilter] = useState('');
+  const [esportSearch, setEsportSearch] = useState('');
   const [favLoading, setFavLoading] = useState(false);
   const [newsSubTab, setNewsSubTab] = useState("sorties");
   const [playerSearchGame, setPlayerSearchGame] = useState('');
@@ -1413,9 +1414,20 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
       newsSubTab === "esport" && h('div', null,
         (() => {
           const allItems = esportEvents.filter(r => !r._archived);
-          // Unique games
+          // Apply search filter
+          const q = esportSearch.toLowerCase().trim();
+          const searched = q
+            ? allItems.filter(i =>
+                (i.game || '').toLowerCase().includes(q) ||
+                (i.league || '').toLowerCase().includes(q) ||
+                (i.tournament || '').toLowerCase().includes(q) ||
+                (i.event || '').toLowerCase().includes(q) ||
+                (i.teams || []).some(t => (t.name || '').toLowerCase().includes(q))
+              )
+            : allItems;
+          const filtered = esportGameFilter ? searched.filter(i => i.game === esportGameFilter) : searched;
+          // Unique games for filter pills
           const games = [...new Set(allItems.map(i => i.game).filter(Boolean))].sort();
-          const filtered = esportGameFilter ? allItems.filter(i => i.game === esportGameFilter) : allItems;
           // Group by League > Tournament
           const groups = {};
           filtered.forEach(i => {
@@ -1427,6 +1439,8 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
           });
           const sortedLeagues = Object.keys(groups).sort();
           const hasFilter = games.length > 1;
+          // Show game filter pills when no search; else hide them
+          const showPills = hasFilter && !q;
           const matchCard = (item, idx) => {
             const favKey = (item.event || item.title || '') + '::' + (item.game || '');
             const isFav = esportFavorites.has(favKey);
@@ -1463,12 +1477,28 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
             );
           };
           return h('div', null,
-            // Favorites count + Game filter row
+            // Favorites count
             h('div', { className: "flex items-center gap-2 mb-3" },
               h(Trophy, { size: 14, style: { color: "#fbbf24" } }),
               h('span', { className: "text-[10px] text-muted-foreground" }, esportFavorites.size, " favoris")
             ),
-            hasFilter && h('div', { className: "flex gap-1.5 mb-3 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
+            // Search bar
+            h('div', { className: "relative mb-3" },
+              h('input', {
+                value: esportSearch,
+                onChange: e => setEsportSearch(e.target.value),
+                placeholder: "Rechercher un jeu, une ligue, un tournoi, une équipe...",
+                className: "w-full bg-secondary/60 border border-border rounded-xl pl-8 pr-8 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none"
+              }),
+              h(Search, { size: 13, className: "absolute left-2.5 top-1/2 -translate-y-1/2", style: { color: "#8888aa" } }),
+              esportSearch && h('button', {
+                onClick: () => { setEsportSearch(''); setEsportGameFilter(''); },
+                className: "absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold",
+                style: { color: "#8888aa" }
+              }, "✕")
+            ),
+            // Game filter pills (only when no search)
+            showPills && h('div', { className: "flex gap-1.5 mb-3 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
               h('button', {
                 onClick: () => setEsportGameFilter(''),
                 className: "px-2.5 py-1.5 rounded-lg text-[8px] font-bold whitespace-nowrap transition-all flex-shrink-0",

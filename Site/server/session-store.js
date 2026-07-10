@@ -10,16 +10,16 @@ class SupabaseSessionStore extends session.Store {
     supabaseAdmin.from('sessions').select('session_data').eq('sid', sid).maybeSingle()
       .then(({ data, error }) => {
         if (error) {
-          const mem = memoryStore.get(sid);
-          return cb(null, mem || null);
+          console.warn('[SessionStore] Supabase error, fallback mémoire:', error.message);
+          return cb(null, memoryStore.get(sid) || null);
         }
         if (!data) return cb(null, null);
         try { cb(null, JSON.parse(data.session_data)); }
         catch (e) { cb(e); }
       })
-      .catch(() => {
-        const mem = memoryStore.get(sid);
-        cb(null, mem || null);
+      .catch((err) => {
+        console.warn('[SessionStore] Supabase exception, fallback mémoire:', err.message);
+        cb(null, memoryStore.get(sid) || null);
       });
   }
 

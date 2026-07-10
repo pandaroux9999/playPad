@@ -1408,8 +1408,8 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
               const favKey = (item.event || item.title || '') + '::' + (item.game || '');
               const isFav = esportFavorites.has(favKey);
               const isLive = item.status === 'running' || item.status === 'live';
-              return h('div', { key: i, className: "flex items-center gap-2 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] mb-2", style: { background: isLive ? "rgba(34,197,94,0.06)" : "rgba(251,191,36,0.06)", border: isLive ? "1px solid rgba(34,197,94,0.2)" : "1px solid rgba(251,191,36,0.1)" } },
-                h('div', { onClick: () => setSelectedNews(item), className: "flex items-center gap-2 flex-1 min-w-0" },
+              return h('div', { key: i, onClick: () => setSelectedNews(item), className: "flex items-center gap-2 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] mb-2", style: { background: isLive ? "rgba(34,197,94,0.06)" : "rgba(251,191,36,0.06)", border: isLive ? "1px solid rgba(34,197,94,0.2)" : "1px solid rgba(251,191,36,0.1)" } },
+                h('div', { className: "flex items-center gap-2 flex-1 min-w-0" },
                   // Team logos if available
                   item.teams && item.teams.length > 0
                     ? h('div', { className: "flex -space-x-2 flex-shrink-0" },

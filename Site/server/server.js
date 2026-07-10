@@ -4,6 +4,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const https = require('https');
+const crypto = require('crypto');
 const querystring = require('querystring');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -22,8 +23,23 @@ if (!SESSION_SECRET || SESSION_SECRET.length < 16) {
   process.exit(1);
 }
 
-// Sécurité : headers HTTP (CSP, HSTS, X-Frame-Options, etc.) - désactivé car bloque Brave sur réseau scolaire
-// app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+// Sécurité : headers HTTP (CSP, HSTS, X-Frame-Options, etc.)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdnjs.cloudflare.com", "https://unpkg.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "https:", "data:"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      connectSrc: ["'self'"],
+      frameSrc: ["'self'", "https://accounts.google.com", "https://steamcommunity.com"],
+      manifestSrc: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
 // Sécurité : rate limiting global (200 req / 15 min par IP)
 const globalLimiter = rateLimit({
@@ -47,10 +63,13 @@ const authLimiter = rateLimit({
 // Rate limiting : catalogue et recherche (évite le crawling intensif)
 const catalogLimiter = rateLimit({ windowMs: 60000, max: 30, message: { error: 'Trop de requêtes catalogue' } });
 const searchLimiter = rateLimit({ windowMs: 60000, max: 20, message: { error: 'Trop de recherches' } });
+const contactLimiter = rateLimit({ windowMs: 60000, max: 3, message: { error: 'Trop de messages de contact' } });
+const messageLimiter = rateLimit({ windowMs: 60000, max: 20, message: { error: 'Trop de messages' } });
+const generalLimiter = rateLimit({ windowMs: 60000, max: 30, message: { error: 'Trop de requêtes' } });
 
 const corsOrigin = process.env.PUBLIC_URL || 'http://localhost:3000';
 app.use(cors({ origin: corsOrigin, credentials: true }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
 
 app.set('trust proxy', 1);
 const sessionStore = new SupabaseSessionStore();
@@ -69,11 +88,20 @@ app.use(session({
 
 app.use(express.static(path.join(__dirname, '..')));
 
-// CSRF protection : exiger X-Requested-With sur toute requête qui modifie l'état
+// CSRF protection : vérifie X-Requested-With + Origin/Referer
 app.use((req, res, next) => {
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
     if (req.headers['x-requested-with'] !== 'XMLHttpRequest') {
       return res.status(403).json({ error: 'Requête cross-site refusée' });
+    }
+    const origin = req.headers['origin'];
+    const referer = req.headers['referer'];
+    const allowedOrigin = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
+    if (origin && !origin.startsWith(allowedOrigin)) {
+      return res.status(403).json({ error: 'Origine refusée' });
+    }
+    if (!origin && referer && !referer.startsWith(allowedOrigin)) {
+      return res.status(403).json({ error: 'Referer refusé' });
     }
   }
   next();
@@ -99,6 +127,31 @@ function validatePassword(password) {
 // Validation du format d'email
 function validateEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// Sanitization anti-XSS : échappe les caractères HTML
+function stripHtml(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[<>&"']/g, function(c) {
+    return {'<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#x27;'}[c];
+  });
+}
+
+// Validation d'URL
+function isValidUrl(str) {
+  if (typeof str !== 'string' || !str) return false;
+  try { const u = new URL(str); return u.protocol === 'http:' || u.protocol === 'https:'; }
+  catch { return false; }
+}
+
+// Vérifie la signature d'un id_token Google via l'endpoint tokeninfo de Google
+async function verifyGoogleIdToken(idToken) {
+  const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
+  const data = await res.json();
+  if (data.error) throw new Error('Token Google invalide');
+  if (data.aud !== process.env.GOOGLE_CLIENT_ID) throw new Error('Client ID mismatch');
+  if (!data.email) throw new Error('Email manquant dans le token');
+  return data;
 }
 
 app.post('/api/register', authLimiter, async (req, res) => {
@@ -235,15 +288,23 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
 app.get('/api/auth/google', (req, res) => {
   if (!GOOGLE_CLIENT_ID) return res.status(501).json({ error: 'Google OAuth non configuré' });
-  const redirectUri = `${PUBLIC_URL}/api/auth/google/callback`;
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20profile%20email&access_type=offline`;
-  res.redirect(url);
+  const state = crypto.randomBytes(16).toString('hex');
+  req.session.googleOAuthState = state;
+  req.session.save(() => {
+    const redirectUri = `${PUBLIC_URL}/api/auth/google/callback`;
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20profile%20email&access_type=offline&state=${state}`;
+    res.redirect(url);
+  });
 });
 
 app.get('/api/auth/google/callback', async (req, res) => {
   try {
-    const { code } = req.query;
+    const { code, state } = req.query;
     if (!code) return res.status(400).send('Code manquant');
+    if (!state || state !== req.session.googleOAuthState) {
+      return res.status(403).send('État CSRF invalide');
+    }
+    delete req.session.googleOAuthState;
     const redirectUri = `${PUBLIC_URL}/api/auth/google/callback`;
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -255,7 +316,8 @@ app.get('/api/auth/google/callback', async (req, res) => {
     });
     const tokenData = await tokenRes.json();
     if (!tokenData.id_token) return res.status(400).send('Token invalide');
-    const payload = JSON.parse(Buffer.from(tokenData.id_token.split('.')[1], 'base64').toString());
+    // Vérification complète de la signature via l'API Google
+    const payload = await verifyGoogleIdToken(tokenData.id_token);
     const googleEmail = payload.email;
     const googleName = payload.name || googleEmail.split('@')[0];
     let user = await db.getUserByEmail(googleEmail);
@@ -263,7 +325,9 @@ app.get('/api/auth/google/callback', async (req, res) => {
       const username = 'google_' + payload.sub.slice(0, 8);
       const hashed = await bcrypt.hash(payload.sub + process.env.SESSION_SECRET, 10);
       const userId = await db.createUser(username, googleName, hashed, googleEmail);
-      await db.updateAvatar(userId, payload.picture || '');
+      if (payload.picture && isValidUrl(payload.picture)) {
+        await db.updateAvatar(userId, payload.picture);
+      }
       user = await db.getUserById(userId);
     }
     req.session.userId = user.id;
@@ -330,12 +394,15 @@ app.post('/api/games/status', requireAuth, async (req, res) => {
 app.post('/api/games/review', requireAuth, async (req, res) => {
   try {
     const { gameId, rating, reviewText, reviewPublic, gameTitle, gameCover } = req.body;
+    const sanitizedReview = stripHtml(reviewText || '');
+    const sanitizedTitle = stripHtml(gameTitle || '');
+    const sanitizedCover = gameCover && isValidUrl(gameCover) ? gameCover : '';
     const isPublic = reviewPublic !== false;
-    console.log('[Review] Incoming review:', { userId: req.session.userId, gameId, rating, reviewTextLength: reviewText?.length, isPublic, gameTitle });
-    await db.updateGameRating(req.session.userId, gameId, rating || 0, reviewText || '', isPublic);
+    console.log('[Review] Incoming review:', { userId: req.session.userId, gameId, rating, reviewTextLength: sanitizedReview.length, isPublic, gameTitle: sanitizedTitle });
+    await db.updateGameRating(req.session.userId, gameId, rating || 0, sanitizedReview, isPublic);
     console.log('[Review] updateGameRating OK');
     if (isPublic) {
-      await db.savePublicReview(req.session.userId, gameId, rating || 0, reviewText || '', gameTitle, gameCover);
+      await db.savePublicReview(req.session.userId, gameId, rating || 0, sanitizedReview, sanitizedTitle, sanitizedCover);
       console.log('[Review] savePublicReview OK');
     }
     res.json({ ok: true });
@@ -343,7 +410,7 @@ app.post('/api/games/review', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[Review] Error:', err.message);
     console.error('[Review] Stack:', err.stack);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -397,7 +464,7 @@ app.post('/api/reviews/:id/reply', requireAuth, async (req, res) => {
     const parentId = parseInt(req.params.id);
     const { text } = req.body;
     if (!text || !text.trim()) return res.status(400).json({ error: 'Texte requis' });
-    const reply = await db.saveReviewReply(req.session.userId, parentId, text.trim());
+    const reply = await db.saveReviewReply(req.session.userId, parentId, stripHtml(text.trim()));
     if (!reply) return res.status(400).json({ error: 'Fonctionnalité temporairement indisponible' });
     res.json({ reply });
   } catch (err) {
@@ -1810,7 +1877,8 @@ app.get('/api/friends/status/:id', requireAuth, async (req, res) => {
 app.post('/api/account/avatar', requireAuth, async (req, res) => {
   try {
     const { avatarUrl } = req.body;
-    await db.updateAvatar(req.session.userId, avatarUrl || '');
+    const sanitizedUrl = avatarUrl && isValidUrl(avatarUrl) ? avatarUrl : '';
+    await db.updateAvatar(req.session.userId, sanitizedUrl);
     res.json({ ok: true });
   } catch (err) {
     console.error('[Avatar] Error:', err.message);
@@ -1859,9 +1927,11 @@ app.get('/api/users/:id/profile', requireAuth, async (req, res) => {
 app.post('/api/suggestions', requireAuth, async (req, res) => {
   try {
     const { toUserId, gameId, gameTitle, gameCover, message } = req.body;
-    await db.sendGameSuggestion(req.session.userId, toUserId, gameId, gameTitle, gameCover, message);
-    // Also send as chat message
-    await db.sendMessage(req.session.userId, toUserId, '🎮 Je te propose "' + gameTitle + '"' + (message ? ' : ' + message : ''));
+    const sTitle = stripHtml(gameTitle || '');
+    const sMsg = stripHtml(message || '');
+    const sCover = gameCover && isValidUrl(gameCover) ? gameCover : '';
+    await db.sendGameSuggestion(req.session.userId, toUserId, gameId, sTitle, sCover, sMsg);
+    await db.sendMessage(req.session.userId, toUserId, 'Je te propose "' + sTitle + '"' + (sMsg ? ' : ' + sMsg : ''));
     res.json({ ok: true });
   } catch (err) {
     console.error('[Suggestion] Error:', err.message);
@@ -1890,11 +1960,11 @@ app.delete('/api/suggestions/:id', requireAuth, async (req, res) => {
 });
 
 // Messages — chat entre amis
-app.post('/api/messages/send', requireAuth, async (req, res) => {
+app.post('/api/messages/send', requireAuth, messageLimiter, async (req, res) => {
   try {
     const { receiverId, message } = req.body;
     if (!receiverId || !message) return res.status(400).json({ error: 'Destinataire et message requis' });
-    const msg = await db.sendMessage(req.session.userId, receiverId, message);
+    const msg = await db.sendMessage(req.session.userId, receiverId, stripHtml(message));
     res.json({ message: msg });
   } catch (err) {
     console.error('[MessageSend] Error:', err.message);
@@ -1945,7 +2015,7 @@ app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
 });
 
 // Détails enrichis d'un jeu (Steam Store API) — sans clé API, gratuit
-app.get('/api/game-details/:gameId', requireAuth, async (req, res) => {
+app.get('/api/game-details/:gameId', requireAuth, generalLimiter, async (req, res) => {
   try {
     const gameId = req.params.gameId;
     // Try to get cached description from catalog
@@ -2029,7 +2099,7 @@ const CHEAPSHARK_STORES = {
   36: { name: 'Fanatical', domain: 'fanatical.com', platform: 'pc' },
 };
 
-app.get('/api/game-prices/:gameId', async (req, res) => {
+app.get('/api/game-prices/:gameId', generalLimiter, async (req, res) => {
   try {
     const { gameId } = req.params;
     const rawgKey = process.env.RAWG_API_KEY;
@@ -2163,7 +2233,7 @@ app.post('/api/booster/boost', requireAuth, async (req, res) => {
     res.json({ ok: true, remaining: result.remaining });
   } catch (err) {
     console.error('[BoosterBoost] Error:', err.message);
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Action impossible' });
   }
 });
 
@@ -2234,7 +2304,7 @@ app.post('/api/boost', requireAuth, async (req, res) => {
     res.json({ ok: true, remaining: result.remaining });
   } catch (err) {
     console.error('[Boost] Error:', err.message);
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Action impossible' });
   }
 });
 
@@ -2630,10 +2700,11 @@ app.get('/api/news', newsLimiter, async (req, res) => {
 
 app.post('/api/admin/refresh-news', requireAuth, async (req, res) => {
   try {
-    const results = await refreshAllNews(true);
+    const results = await refreshAllNews();
     res.json({ success: true, ...results });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Admin] Refresh news error:', err.message);
+    res.status(500).json({ error: 'Erreur lors du rafraîchissement' });
   }
 });
 
@@ -2645,7 +2716,8 @@ app.post('/api/esport/favorite/toggle', requireAuth, async (req, res) => {
     const result = await db.toggleEsportFavorite(req.session.userId, event);
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[EsportFavorite]', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -2665,7 +2737,8 @@ app.get('/api/esport/favorites/check', requireAuth, async (req, res) => {
     const favorited = await db.isEsportFavorite(req.session.userId, title, game);
     res.json({ favorited });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[EsportCheck]', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -2675,7 +2748,8 @@ app.get('/api/account/notifications', requireAuth, async (req, res) => {
     const prefs = await db.getNotificationPrefs(req.session.userId);
     res.json(prefs);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[NotifPrefs]', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -2685,7 +2759,8 @@ app.post('/api/account/notifications', requireAuth, async (req, res) => {
     await db.setNotificationPrefs(req.session.userId, { emailNotifications });
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[NotifPrefs]', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -2697,7 +2772,8 @@ app.get('/api/players/search', requireAuth, async (req, res) => {
     const players = await db.searchPlayersByGame(game, req.session.userId);
     res.json({ players });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[PlayerSearch]', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -2711,22 +2787,25 @@ app.get('/api/streamers/search', requireAuth, async (req, res) => {
     const streamers = await db.searchStreamers(game, twitchId, twitchSecret);
     res.json({ streamers });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[StreamerSearch]', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
 // ─── CONTACT FORM ───────────────────────────────────────────
-app.post('/api/contact', requireAuth, async (req, res) => {
+app.post('/api/contact', requireAuth, contactLimiter, async (req, res) => {
   try {
     const { message, email } = req.body;
     if (!message) return res.status(400).json({ error: 'Message requis' });
+    const sanitizedMsg = stripHtml(message);
+    const sanitizedEmail = email ? stripHtml(email) : '';
     const transporter = createMailTransporter();
     if (transporter) {
       await transporter.sendMail({
         from: `"PlayPad Contact" <${process.env.SMTP_USER}>`,
         to: process.env.SMTP_USER,
-        subject: `[PlayPad] Message de ${email || 'utilisateur #' + req.session.userId}`,
-        html: `<p><b>De :</b> ${email || 'inconnu'}</p><p><b>Message :</b></p><p>${message}</p>`,
+        subject: `[PlayPad] Message de ${sanitizedEmail || 'utilisateur #' + req.session.userId}`,
+        html: `<p><b>De :</b> ${sanitizedEmail || 'inconnu'}</p><p><b>Message :</b></p><p>${sanitizedMsg}</p>`,
       });
     }
     // Stocker en DB même si l'email échoue
@@ -2736,7 +2815,8 @@ app.post('/api/contact', requireAuth, async (req, res) => {
     if (error) console.error('[Contact] DB error:', error.message);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Contact]', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
@@ -2832,7 +2912,8 @@ Réponds de façon concise et utile en français. Quand c'est pertinent, termine
     ollamaReq.write(body);
     ollamaReq.end();
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Chat]', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 

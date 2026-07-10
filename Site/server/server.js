@@ -1123,50 +1123,110 @@ app.post('/api/platform/epic/connect', requireAuth, async (req, res) => {
 
 app.post('/api/platform/psn/connect', requireAuth, async (req, res) => {
   const { npsso } = req.body;
+  const logs = [];
+  const log = (msg) => { logs.push(msg); console.log('[PSNConnect]', msg); };
+  const logErr = (msg) => { logs.push(msg); console.error('[PSNConnect]', msg); };
+
   if (!npsso || npsso.length < 60) {
-    return res.status(400).json({ error: 'NPSSO invalide (64 caractères requis). Va sur ca.account.sony.com/api/v1/ssocookie pour le récupérer.' });
+    return res.status(400).json({ error: 'NPSSO invalide — 64 caractères requis.', logs: [...logs, 'NPSSO trop court (' + (npsso?.length || 0) + ' caractères)'] });
   }
+  log('NPSSO reçu (' + npsso.length + ' caractères)');
+
   try {
-    const accessCode = await exchangeNpssoForAccessCode(npsso);
-    const auth = await exchangeAccessCodeForAuthTokens(accessCode);
-    const expiresAt = new Date(Date.now() + (auth.expires_in || 3600) * 1000);
+    log('Étape 1/4 : Échange du NPSSO contre un code d\'accès...');
+    let accessCode;
+    try {
+      accessCode = await exchangeNpssoForAccessCode(npsso);
+      log('Code d\'accès obtenu (' + (accessCode?.length || 0) + ' caractères)');
+    } catch (e) {
+      logErr('Échec étape 1 : NPSSO invalide ou expiré — ' + e.message);
+      logErr('Solution : Reconnecte-toi sur playstation.com, puis va sur ca.account.sony.com/api/v1/ssocookie pour récupérer un nouveau NPSSO.');
+      return res.status(400).json({ error: 'NPSSO invalide ou expiré.', logs, hint: 'Reconnecte-toi sur playstation.com puis récupère un nouveau NPSSO.' });
+    }
 
+    log('Étape 2/4 : Obtention du token d\'accès PSN...');
+    let auth;
+    try {
+      auth = await exchangeAccessCodeForAuthTokens(accessCode);
+      log('Token d\'accès obtenu (expire dans ' + Math.round((auth.expires_in || 3600) / 60) + ' min)');
+    } catch (e) {
+      logErr('Échec étape 2 : Impossible d\'obtenir le token — ' + e.message);
+      logErr('Solution : Le NPSSO a peut-être expiré. Récupère un nouveau sur ca.account.sony.com/api/v1/ssocookie.');
+      return res.status(400).json({ error: 'Impossible d\'obtenir le token PSN.', logs, hint: 'Le NPSSO a peut-être expiré — récupère un nouveau.' });
+    }
+
+    log('Étape 3/4 : Sauvegarde des identifiants...');
     await db.setPsnNpsso(req.session.userId, npsso);
+    const expiresAt = new Date(Date.now() + (auth.expires_in || 3600) * 1000);
     await db.setPsnTokens(req.session.userId, auth.accessToken, auth.refreshToken, expiresAt);
+    log('Identifiants sauvegardés');
 
-    const games = await fetchPsnGames(req.session.userId);
+    log('Étape 4/4 : Récupération de ta bibliothèque PSN...');
+    let games;
+    try {
+      games = await fetchPsnGames(req.session.userId);
+    } catch (e) {
+      logErr('Échec étape 4 : ' + e.message);
+      logErr('Solution : Vérifie que ton profil PSN est public (Paramètres > Confidentialité > Profil > Cases cochées).');
+      return res.status(400).json({ error: 'Impossible de récupérer les jeux PSN.', logs, hint: 'Vérifie tes paramètres de confidentialité PSN — profil public requis.' });
+    }
+    log(games.length + ' jeux trouvés');
+
+    if (games.length === 0) {
+      logErr('Aucun jeu trouvé — profil probablement privé.');
+      logErr('Solution : Va sur psn.com > Paramètres > Confidentialité > coche "Afficher les informations dans les recherche" et "Afficher la liste de jeux".');
+      return res.status(400).json({ error: 'Aucun jeu trouvé.', logs, hint: 'Rends ton profil PSN public dans tes paramètres de confidentialité.' });
+    }
+
     for (const game of games) {
       await db.upsertGame(req.session.userId, game);
       await db.ensureCatalogGame(game);
     }
+    log(games.length + ' jeux importés dans ta bibliothèque PlayPad');
 
-    console.log('[PSNConnect] OK —', games.length, 'jeux importés');
-    res.json({ ok: true, count: games.length });
+    res.json({ ok: true, count: games.length, logs });
   } catch (err) {
-    console.error('[PSNConnect] Error:', err.message);
-    res.status(500).json({ error: 'Échec de connexion PSN — vérifie ton NPSSO' });
+    logErr('Erreur inattendue : ' + err.message);
+    res.status(500).json({ error: 'Erreur interne du serveur PSN.', logs, hint: 'Réessaie dans quelques minutes. Si le problème persiste, vérifie ton NPSSO.' });
   }
 });
 
 app.post('/api/platform/psn/resync', requireAuth, async (req, res) => {
+  const logs = [];
+  const log = (msg) => { logs.push(msg); console.log('[PSNResync]', msg); };
+  const logErr = (msg) => { logs.push(msg); console.error('[PSNResync]', msg); };
+
   try {
     const tokens = await db.getPsnTokens(req.session.userId);
     if (!tokens.psn_npsso) {
-      return res.status(400).json({ error: 'Aucun compte PSN connecté' });
+      return res.status(400).json({ error: 'Aucun compte PSN connecté', logs: ['Aucun NPSSO sauvegardé pour ce compte'] });
     }
-    const games = await fetchPsnGames(req.session.userId);
+    log('NPSSO trouvé — rafraîchissement du token...');
+
+    let games;
+    try {
+      games = await fetchPsnGames(req.session.userId);
+    } catch (e) {
+      logErr('Erreur récupération jeux : ' + e.message);
+      logErr('Le token PSN a peut-être expiré. Réconnecte-toi à PSN depuis ton profil.');
+      return res.status(400).json({ error: 'Token PSN expiré — reconnexion requise.', logs, hint: 'Ton token PSN a expiré. Reconnecte-toi depuis le bouton PSN dans ton profil.' });
+    }
+
     if (games.length === 0) {
-      return res.status(400).json({ error: 'Aucun jeu trouvé — vérifie les paramètres de confidentialité PSN (profil public requis).' });
+      logErr('Aucun jeu trouvé — profil probablement privé');
+      return res.status(400).json({ error: 'Aucun jeu trouvé', logs, hint: 'Rends ton profil PSN public.' });
     }
+    log(games.length + ' jeux récupérés — import en cours...');
+
     for (const game of games) {
       await db.upsertGame(req.session.userId, game);
       await db.ensureCatalogGame(game);
     }
-    console.log('[PSNResync] OK —', games.length, 'jeux resynchronisés');
-    res.json({ ok: true, count: games.length });
+    log(games.length + ' jeux synchronisés');
+    res.json({ ok: true, count: games.length, logs });
   } catch (err) {
-    console.error('[PSNResync] Error:', err.message);
-    res.status(500).json({ error: 'Erreur interne' });
+    logErr('Erreur inattendue : ' + err.message);
+    res.status(500).json({ error: 'Erreur interne', logs });
   }
 });
 
@@ -2564,6 +2624,28 @@ function httpGet(url) {
   });
 }
 
+// Helper HTTP POST (JSON body, réponse JSON)
+function httpPostJson(url, jsonBody) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(jsonBody);
+    const u = new URL(url);
+    const opts = {
+      hostname: u.hostname, port: 443, path: u.pathname + u.search,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    };
+    const req = https.request(opts, (resp) => {
+      let data = '';
+      resp.on('data', c => data += c);
+      resp.on('end', () => { try { resolve(JSON.parse(data)); } catch(e) { resolve(null); } });
+    });
+    req.on('error', reject);
+    req.setTimeout(8000, () => { req.destroy(); reject(new Error('timeout')); });
+    req.write(body);
+    req.end();
+  });
+}
+
 // ─── RSS Parser simple (sans dépendance) ──────────────────
 function parseRSS(xml) {
   const items = [];
@@ -2615,6 +2697,21 @@ async function fetchIGDBReleases(clientId, clientSecret) {
 }
 
 // ─── 2. FETCH : Drama/Actu via RSS ────────────────────────
+// Cache de traduction pour ne pas re-traduire les mêmes textes
+const translationCache = new Map();
+async function translateText(text, targetLang = 'fr') {
+  if (!text || text.length < 3) return text;
+  const cacheKey = text.slice(0, 100) + '::' + targetLang;
+  if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
+  try {
+    const data = await httpPostJson('https://libretranslate.com/translate', { q: text, source: 'en', target: targetLang, format: 'text' });
+    const translated = (data && data.translatedText) || text;
+    translationCache.set(cacheKey, translated);
+    if (translationCache.size > 500) { const k = translationCache.keys().next().value; translationCache.delete(k); }
+    return translated;
+  } catch (e) { return text; }
+}
+
 const DRAMA_RSS_FEEDS = [
   { url: 'https://www.eurogamer.net/feed', name: 'Eurogamer' },
   { url: 'https://www.pcgamer.com/rss/all/', name: 'PC Gamer' },
@@ -2638,15 +2735,20 @@ async function fetchDramaFromRSS() {
         if (NON_GAMING_KEYWORDS.some(kw => lower.includes(kw))) continue;
         const tag = lower.includes('licencie') || lower.includes('greve') || lower.includes('controvers') || lower.includes('polemique') || lower.includes('drama')
           ? 'Drama' : 'Actu';
+        // Traduction automatique EN -> FR
+        const [titleFr, descFr] = await Promise.all([
+          translateText(p.title),
+          translateText(p.desc.slice(0, 500)),
+        ]);
         items.push({
           type: 'drama',
-          title: p.title,
-          desc: p.desc.slice(0, 150),
+          title: titleFr || p.title,
+          desc: (descFr || p.desc).slice(0, 150),
           tag,
           officialUrl: p.link,
           sourceUrl: p.link,
           sourceName: feed.name,
-          details: p.desc.slice(0, 500),
+          details: (descFr || p.desc).slice(0, 500),
           pubDate: p.pubDate,
         });
       }
@@ -3029,6 +3131,17 @@ app.get('/api/esport/games', async (req, res) => {
     res.json({ games });
   } catch (err) {
     res.json({ games: [] });
+  }
+});
+
+app.post('/api/translate', async (req, res) => {
+  try {
+    const text = (req.body.text || '').slice(0, 2000);
+    if (!text) return res.json({ translated: '' });
+    const translated = await translateText(text);
+    res.json({ translated });
+  } catch (err) {
+    res.json({ translated: '' });
   }
 });
 

@@ -208,7 +208,7 @@ async function seedDemoData() {
     const id = await db.createUser(u.username, u.display_name, hashed, u.email);
     if (u.avatar_url) await db.supabaseAdmin.from('users').update({ avatar_url: u.avatar_url }).eq('id', id);
     // Booster point initial
-    await db.supabaseAdmin.from('booster_points').upsert({ user_id: id, points: 3, claimed_first_login: true }, { onConflict: 'user_id' }).catch(() => {});
+    try { await db.supabaseAdmin.from('booster_points').upsert({ user_id: id, points: 3, claimed_first_login: true }, { onConflict: 'user_id' }); } catch (e) {}
     userIds.push(id);
     console.log('[Seed] Utilisateur créé:', u.username, 'id:', id);
   }
@@ -224,24 +224,24 @@ async function seedDemoData() {
       const hasReview = rating >= 4 && Math.random() > 0.5;
       const reviewText = hasReview ? pick(REVIEW_TEXTS) : '';
       const age = AGE_RATINGS[g.game_id] || 0;
-      await db.supabaseAdmin.from('games').upsert({
+      try { await db.supabaseAdmin.from('games').upsert({
         user_id: userId, game_id: g.game_id, title: g.title, platform: g.platform,
         cover: g.cover, genre: g.genre, year: g.year, status, playtime,
         user_rating: rating, review_text: reviewText, review_public: hasReview, has_review: hasReview,
         age_rating: age,
-      }, { onConflict: 'user_id, game_id' }).catch(() => {});
+      }, { onConflict: 'user_id, game_id' }); } catch (e) {}
       // Ensure in catalog
-      await db.supabaseAdmin.from('catalog').upsert({ ...g, age_rating: age }, { onConflict: 'game_id', ignoreDuplicates: true }).catch(() => {});
+      try { await db.supabaseAdmin.from('catalog').upsert({ ...g, age_rating: age }, { onConflict: 'game_id', ignoreDuplicates: true }); } catch (e) {}
     }
     // Wishlist
     const wishGames = shuffle(GAMES_CATALOG).slice(0, 3);
     for (const g of wishGames) {
-      await db.supabaseAdmin.from('wishlist').upsert({ user_id: userId, game_id: g.game_id }, { onConflict: 'user_id, game_id' }).catch(() => {});
+      try { await db.supabaseAdmin.from('wishlist').upsert({ user_id: userId, game_id: g.game_id }, { onConflict: 'user_id, game_id' }); } catch (e) {}
     }
     // Top 3
     const topGames = userGames.filter(g => g.year >= 2020).slice(0, 3);
     for (let i = 0; i < topGames.length; i++) {
-      await db.supabaseAdmin.from('top_three').upsert({ user_id: userId, game_id: topGames[i].game_id, position: i + 1 }, { onConflict: 'user_id, position' }).catch(() => {});
+      try { await db.supabaseAdmin.from('top_three').upsert({ user_id: userId, game_id: topGames[i].game_id, position: i + 1 }, { onConflict: 'user_id, position' }); } catch (e) {}
     }
     console.log('[Seed]', userGames.length, 'jeux + wishlist + top 3 pour userId', userId);
   }
@@ -250,18 +250,18 @@ async function seedDemoData() {
   for (const g of shuffle(GAMES_CATALOG).slice(0, 15)) {
     for (const userId of shuffle(userIds).slice(0, 2 + Math.floor(Math.random() * 3))) {
       const rating = 3 + Math.floor(Math.random() * 3);
-      await db.supabaseAdmin.from('community_reviews').insert({
+      try { await db.supabaseAdmin.from('community_reviews').insert({
         user_id: userId, game_id: g.game_id, game_title: g.title, game_cover: g.cover, rating,
         review_text: rating >= 4 ? pick(REVIEW_TEXTS) : 'Pas mal.',
-      }).catch(() => {});
+      }); } catch (e) {}
     }
   }
 
   console.log('[Seed] Ajout des relations d\'amitié...');
   const friendPairs = [[0,1],[0,2],[1,3],[2,4],[3,4],[1,2]];
   for (const [i, j] of friendPairs) {
-    await db.supabaseAdmin.from('friends').upsert({ user_id: userIds[i], friend_id: userIds[j], status: 'accepted' }, { onConflict: 'user_id, friend_id' }).catch(() => {});
-    await db.supabaseAdmin.from('friends').upsert({ user_id: userIds[j], friend_id: userIds[i], status: 'accepted' }, { onConflict: 'user_id, friend_id' }).catch(() => {});
+    try { await db.supabaseAdmin.from('friends').upsert({ user_id: userIds[i], friend_id: userIds[j], status: 'accepted' }, { onConflict: 'user_id, friend_id' }); } catch (e) {}
+    try { await db.supabaseAdmin.from('friends').upsert({ user_id: userIds[j], friend_id: userIds[i], status: 'accepted' }, { onConflict: 'user_id, friend_id' }); } catch (e) {}
   }
 
   console.log('[Seed] Ajout des suggestions de jeux...');
@@ -285,7 +285,7 @@ async function seedBoosts(userIds) {
   // Vérifie/crée la table boosts si absente
   try { await db.supabaseAdmin.rpc('exec_sql', { query: `CREATE TABLE IF NOT EXISTS boosts (id SERIAL PRIMARY KEY, user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE, game_id TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(user_id, game_id));` }); } catch (e) {}
   // Nettoie les anciens boosts (> 7 jours) pour garder la table propre
-  await db.supabaseAdmin.from('boosts').delete().lt('created_at', new Date(Date.now() - 7 * 86400000).toISOString()).catch(() => {});
+  try { await db.supabaseAdmin.from('boosts').delete().lt('created_at', new Date(Date.now() - 7 * 86400000).toISOString()); } catch (e) {}
   let catalogGames = [];
   try {
     const { data } = await db.supabaseAdmin.from('catalog').select('game_id').limit(5000);

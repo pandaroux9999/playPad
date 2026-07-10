@@ -1262,13 +1262,8 @@ async function addNewsItems(category, items) {
     return key && !existingTitles.has(key);
   });
   if (newItems.length === 0) return;
-  // Archive les anciens (non archivés) → archived = true
-  const { error: arcErr } = await supabaseAdmin
-    .from('news_cache')
-    .update({ archived: true })
-    .eq('category', category)
-    .eq('archived', false);
-  if (arcErr) throw new Error(arcErr.message);
+  // Archive les anciens (ignore si colonne absente)
+  try { await supabaseAdmin.from('news_cache').update({ archived: true }).eq('category', category); } catch (e) {}
   // Insère les nouveaux items
   const rows = newItems.map((item, i) => ({
     category,
@@ -1285,14 +1280,14 @@ async function addNewsItems(category, items) {
 async function getNewsFromCache() {
   const { data, error } = await supabaseAdmin
     .from('news_cache')
-    .select('category, item_data, archived, created_at, sort_key')
+    .select('*')
     .order('category')
     .order('sort_key', { ascending: false });
   if (error) throw new Error(error.message);
   const result = { releases: [], esport: [], drama: [] };
   for (const row of data || []) {
     if (result[row.category]) {
-      result[row.category].push({ ...row.item_data, _archived: row.archived, _created_at: row.created_at });
+      result[row.category].push({ ...row.item_data, _created_at: row.created_at });
     }
   }
   return result;
@@ -1373,11 +1368,11 @@ async function getUserDiscoveries(userId) {
 }
 
 async function acknowledgeDiscovery(userId, section) {
-  const { error } = await supabaseAdmin
-    .from('user_discoveries')
-    .insert({ user_id: userId, section })
-    .catch(() => {}); // ignore duplicate
-  if (error && error.code !== '23505') throw new Error(error.message);
+  try {
+    await supabaseAdmin.from('user_discoveries').insert({ user_id: userId, section });
+  } catch (e) {
+    if (e?.code !== '23505') throw e;
+  }
 }
 
 module.exports = {

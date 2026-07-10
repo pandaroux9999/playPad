@@ -381,7 +381,7 @@ app.post('/api/reviews/:id/vote', requireAuth, async (req, res) => {
     const { vote } = req.body;
     if (![1, -1, 0].includes(vote)) return res.status(400).json({ error: 'Vote invalide' });
     if (vote === 0) {
-      await db.supabaseAdmin.from('review_votes').delete().eq('user_id', req.session.userId).eq('review_id', reviewId).catch(() => {});
+      try { await db.supabaseAdmin.from('review_votes').delete().eq('user_id', req.session.userId).eq('review_id', reviewId); } catch (e) {}
     } else {
       await db.voteReview(req.session.userId, reviewId, vote);
     }

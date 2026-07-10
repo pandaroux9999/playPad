@@ -638,7 +638,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const [psnInput, setPsnInput] = useState('');
   const [psnSaving, setPsnSaving] = useState(false);
   const [psnLogs, setPsnLogs] = useState([]);
-  const [psnResult, setPsnResult] = useState(null); // null | 'ok' | 'error'
+  const [psnResult, setPsnResult] = useState(null);
   const [connected, setConnected] = useState({ ps5: !!(user?.psn_npsso), steam: !!(user?.steam_id), epic: !!(user?.epic_username), nintendo: false, xbox: !!(user?.xbox_gamertag) });
   const connectedCount = Object.values(connected).filter(Boolean).length;
   const unread = notifications.filter(n => !n.read).length;
@@ -2912,6 +2912,11 @@ function App() {
   const [userBoostedSet, setUserBoostedSet] = useState(new Set());
   const [catalogRefreshKey, setCatalogRefreshKey] = useState(0);
   const [communityRefreshKey, setCommunityRefreshKey] = useState(0);
+  const [showPsnModal, setShowPsnModal] = useState(false);
+  const [psnInput, setPsnInput] = useState('');
+  const [psnSaving, setPsnSaving] = useState(false);
+  const [psnLogs, setPsnLogs] = useState([]);
+  const [psnResult, setPsnResult] = useState(null);
   const [freshReview, setFreshReview] = useState(null);
   const [discoveries, setDiscoveries] = useState([]);
   const discoveryTimerRef = useRef(null);

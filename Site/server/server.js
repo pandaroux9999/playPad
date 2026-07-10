@@ -2867,6 +2867,8 @@ async function refreshAllNews(force) {
     }
   }
   if (esport.length > 0) {
+    // Vide les anciennes données e-sport avant d'insérer les nouvelles
+    await db.supabaseAdmin.from('news_cache').delete().eq('category', 'esport');
     await db.addNewsItems('esport', esport);
     results.esport = esport.length;
     notifyFavoriteUsers('esport', esport).catch(e => console.error('[Notify] Error:', e.message));

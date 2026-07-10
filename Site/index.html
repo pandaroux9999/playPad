@@ -1556,41 +1556,6 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
                 )
               )
             ),
-            // ─── Joueurs par jeu (intégré à l'esport) ──────
-            h('div', { className: "mt-5 pt-4 border-t border-border" },
-              h('div', { className: "flex items-center gap-2 mb-3" },
-                h(Users, { size: 14, style: { color: P1 } }),
-                h('h3', { className: "text-xs font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Joueurs par jeu"),
-              ),
-              h('div', { className: "flex gap-2 mb-3" },
-                h('input', {
-                  value: playerSearchGame,
-                  onChange: e => setPlayerSearchGame(e.target.value),
-                  onKeyDown: e => { if (e.key === 'Enter') { setPlayerSearching(true); API.searchPlayers(playerSearchGame).then(d => setPlayerResults(d.players || [])).catch(() => {}).finally(() => setPlayerSearching(false)); } },
-                  placeholder: "Cherche des joueurs...",
-                  className: "flex-1 bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none"
-                }),
-                h('button', {
-                  onClick: () => { setPlayerSearching(true); API.searchPlayers(playerSearchGame).then(d => setPlayerResults(d.players || [])).catch(() => {}).finally(() => setPlayerSearching(false)); },
-                  disabled: playerSearching || !playerSearchGame.trim(),
-                  className: "px-3 py-2.5 rounded-xl text-xs font-bold text-white flex-shrink-0", style: { background: GRAD }
-                }, playerSearching ? h(Loader, { size: 12, className: "animate-spin" }) : h(Search, { size: 12 }))
-              ),
-              playerResults.length === 0 && playerSearchGame && !playerSearching && h('p', { className: "text-[10px] text-muted-foreground text-center py-3" }, "Aucun joueur trouvé pour ce jeu"),
-              h('div', { className: "space-y-1.5" }, playerResults.slice(0, 5).map(p =>
-                h('div', { key: p.id, onClick: () => onSelectFriend?.(p), className: "flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.03)" } },
-                  h('div', { className: "w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white flex-shrink-0 overflow-hidden", style: { background: GRAD } },
-                    p.avatarUrl ? h('img', { src: p.avatarUrl, alt: "", className: "w-full h-full object-cover" }) : (p.displayName || p.username || '?').charAt(0).toUpperCase()
-                  ),
-                  h('div', { className: "flex-1 min-w-0" },
-                    h('p', { className: "text-xs font-bold text-foreground" }, p.displayName || p.username),
-                    h('p', { className: "text-[8px] text-muted-foreground" }, "@", p.username)
-                  ),
-                  h(ChevronRight, { size: 12, className: "text-muted-foreground flex-shrink-0" })
-                )
-              )),
-              playerResults.length > 5 && h('button', { className: "w-full mt-1 p-2 rounded-xl text-[9px] font-bold text-center transition-colors", style: { background: "rgba(255,255,255,0.03)", color: "#8888aa" } }, "Voir les ", playerResults.length, " résultats"),
-            )
           );
         })()
       ),
@@ -2062,7 +2027,7 @@ function ReviewsView({ games, onSelect }) {
   );
 }
 
-function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar, onUpdateEmail, onSyncComplete, showToast }) {
+function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar, onUpdateEmail, onSyncComplete, showToast, showPsnModal, setShowPsnModal, psnInput, setPsnInput, psnSaving, setPsnSaving, psnLogs, setPsnLogs, psnResult, setPsnResult }) {
   const [avatarModal, setAvatarModal] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || "");
   const [avatarSaving, setAvatarSaving] = useState(false);
@@ -2076,6 +2041,11 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   const [syncingPlatform, setSyncingPlatform] = useState(null);
   const [profileConnected, setProfileConnected] = useState(null);
   const [bridgeStatus, setBridgeStatus] = useState('unknown');
+  const [showPsnModal, setShowPsnModal] = useState(false);
+  const [psnInput, setPsnInput] = useState('');
+  const [psnSaving, setPsnSaving] = useState(false);
+  const [psnLogs, setPsnLogs] = useState([]);
+  const [psnResult, setPsnResult] = useState(null);
   const [emailNotifs, setEmailNotifs] = useState(false);
   const [notifLoading, setNotifLoading] = useState(true);
   const fileInputRef = useRef(null);
@@ -3270,7 +3240,7 @@ function App() {
           view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, freshReview, onFreshReviewConsumed: () => setFreshReview(null), onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
           view === "catalogue" && h(CatalogueView, { key: 'cat', refreshKey: catalogRefreshKey, onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
-          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast })
+          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast, showPsnModal, setShowPsnModal, psnInput, setPsnInput, psnSaving, setPsnSaving, psnLogs, setPsnLogs, psnResult, setPsnResult })
         )
       ),
       h(BottomNav, { view, setView }),

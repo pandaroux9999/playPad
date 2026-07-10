@@ -40,7 +40,7 @@ app.use(helmet({
       imgSrc: ["'self'", "https:", "data:"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       connectSrc: ["'self'"],
-      frameSrc: ["'self'", "https://accounts.google.com", "https://steamcommunity.com"],
+      frameSrc: ["'self'", "https://accounts.google.com", "https://steamcommunity.com", "https://www.youtube-nocookie.com"],
       manifestSrc: ["'self'"],
     },
   },

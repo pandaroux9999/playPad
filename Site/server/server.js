@@ -975,6 +975,35 @@ app.post('/api/catalog/populate', requireAuth, async (req, res) => {
 let lastDescriptionRefresh = 0;
 const DESCRIPTION_REFRESH_COOLDOWN = 300000; // 5 min
 
+// ─── Scan progress tracking (RAWG resume) ─────────────────
+const SCAN_PROGRESS_PATH = path.join(__dirname, 'data', 'scan_progress.json');
+function getScanProgress(key) {
+  try {
+    const raw = require('fs').readFileSync(SCAN_PROGRESS_PATH, 'utf-8');
+    const data = JSON.parse(raw);
+    return data[key] || null;
+  } catch { return null; }
+}
+function setScanProgress(key, value) {
+  try {
+    let data = {};
+    try { data = JSON.parse(require('fs').readFileSync(SCAN_PROGRESS_PATH, 'utf-8')); } catch {}
+    data[key] = value;
+    require('fs').writeFileSync(SCAN_PROGRESS_PATH, JSON.stringify(data, null, 2));
+  } catch (e) { console.error('[ScanProgress] Write error:', e.message); }
+}
+function clearScanProgress(key) {
+  if (!key) {
+    try { require('fs').writeFileSync(SCAN_PROGRESS_PATH, '{}'); } catch {}
+    return;
+  }
+  try {
+    const data = JSON.parse(require('fs').readFileSync(SCAN_PROGRESS_PATH, 'utf-8'));
+    delete data[key];
+    require('fs').writeFileSync(SCAN_PROGRESS_PATH, JSON.stringify(data, null, 2));
+  } catch {}
+}
+
 // ─── Nouveautés (new releases) ────────────────────────────
 let newReleasesCache = [];
 let lastNewReleasesFetch = 0;
@@ -1007,13 +1036,16 @@ async function fetchNewReleases() {
     const startDate = threeMonthsAgo.toISOString().split('T')[0];
     const endDate = new Date().toISOString().split('T')[0];
     const tRawg = Date.now();
-    console.log(`[NewReleases] RAWG : jeux sortis entre ${startDate} et ${endDate}`);
-    for (let page = 1; page <= 10; page++) {
+    const progressKey = 'rawg_newreleases_page';
+    let startPage = getScanProgress(progressKey) || 1;
+    if (startPage < 1) startPage = 1;
+    console.log(`[NewReleases] RAWG : jeux sortis entre ${startDate} et ${endDate} (reprise page ${startPage})`);
+    for (let page = startPage; page <= 10; page++) {
       const url = `https://api.rawg.io/api/games?key=${rawgKey}&dates=${startDate},${endDate}&ordering=-released&page=${page}&page_size=40`;
       try {
         const tPage = Date.now();
         const data = await rawgApiGet(url);
-        if (!data || !data.results) break;
+        if (!data || !data.results) { clearScanProgress(progressKey); break; }
         for (const item of data.results) {
           if (!item.name || seenIds.has(item.id)) continue;
           seenIds.add(item.id);
@@ -1036,7 +1068,8 @@ async function fetchNewReleases() {
           await db.ensureCatalogGame(game).catch(() => {});
           allGames.push(game);
         }
-        if (!data.next) break;
+        if (!data.next) { clearScanProgress(progressKey); break; }
+        setScanProgress(progressKey, page + 1);
         console.log(`[NewReleases] RAWG page ${page} : ${data.results.length} jeux, ${Date.now() - tPage}ms`);
         await new Promise(r => setTimeout(r, 200));
       } catch (e) {
@@ -1044,6 +1077,7 @@ async function fetchNewReleases() {
         break;
       }
     }
+    clearScanProgress(progressKey);
     console.log(`[NewReleases] RAWG terminé : ${allGames.length} jeux en ${Date.now() - tRawg}ms`);
   }
 
@@ -1150,9 +1184,21 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
   // catch-all for games missing dates
   yearRanges.push({ label: 'nodate', start: '1970-01-01', end: '2026-12-31', pages: 100 });
 
-  for (const plat of targets) {
-    for (const range of yearRanges) {
-      let page = 1;
+  const progressKey = 'rawg_catalog_progress';
+  const saved = getScanProgress(progressKey);
+  const resume = saved && saved.pi !== undefined ? saved : null;
+  let started = resume === null;
+
+  for (let pi = 0; pi < targets.length; pi++) {
+    const plat = targets[pi];
+    for (let ri = 0; ri < yearRanges.length; ri++) {
+      const range = yearRanges[ri];
+      // Skip until we reach the saved position
+      if (!started) {
+        if (pi < resume.pi || (pi === resume.pi && ri < resume.ri)) continue;
+        started = true;
+      }
+      let page = resume && resume.pi === pi && resume.ri === ri ? resume.page : 1;
       while (page <= range.pages) {
         const url = `https://api.rawg.io/api/games?key=${apiKey}&platforms=${plat.id}&dates=${range.start},${range.end}&page=${page}&page_size=40&ordering=-added`;
         try {
@@ -1175,6 +1221,7 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
           }
           if (!data.next) break;
           page++;
+          setScanProgress(progressKey, { pi, ri, page });
           await new Promise(r => setTimeout(r, 250));
         } catch (e) {
           console.error(`[RAWG] Error ${plat.prefix} ${range.label} page ${page}:`, e.message);
@@ -1183,6 +1230,7 @@ async function populateCatalogFromRAWG(apiKey, platformFilter) {
       }
     }
   }
+  clearScanProgress(progressKey);
   console.log(`[Catalog] ${total} ajoutés, ${skipped} ignorés (déjà présents)`);
   return total;
 }
@@ -1204,8 +1252,18 @@ async function populateOnlineGames(apiKey) {
     { url: `https://api.rawg.io/api/games?key=${apiKey}&stores=1&ordering=-metacritic&page_size=40`, pages: 30 },
     { url: `https://api.rawg.io/api/games?key=${apiKey}&ordering=-added&page_size=40`, pages: 20 },
   ];
-  for (const q of queries) {
-    let page = 1;
+  const progressKey = 'rawg_onlinegames_progress';
+  const savedPg = getScanProgress(progressKey);
+  const resumePg = savedPg && savedPg.qi !== undefined ? savedPg : null;
+  let startedPg = resumePg === null;
+
+  for (let qi = 0; qi < queries.length; qi++) {
+    const q = queries[qi];
+    if (!startedPg) {
+      if (qi < resumePg.qi) continue;
+      startedPg = true;
+    }
+    let page = resumePg && resumePg.qi === qi ? resumePg.page : 1;
     while (page <= q.pages) {
       try {
         const url = q.url + `&page=${page}`;
@@ -1226,10 +1284,12 @@ async function populateOnlineGames(apiKey) {
         }
         if (!data.next) break;
         page++;
+        setScanProgress(progressKey, { qi, page });
         await new Promise(r => setTimeout(r, 200));
       } catch (e) { break; }
     }
   }
+  clearScanProgress(progressKey);
   console.log(`[OnlineGames] ${total} jeux en ligne ajoutés`);
   return total;
 }

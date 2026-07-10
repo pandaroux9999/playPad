@@ -191,6 +191,7 @@ const API = {
   checkEsportFavorite: (title, game) => API.request('GET', `/api/esport/favorites/check?title=${encodeURIComponent(title)}&game=${encodeURIComponent(game||'')}`),
   getEsportMatch: (game, matchId) => API.request('GET', `/api/esport/match/${game}/${matchId}`),
   getEsportTeamPlayers: (game, teamId) => API.request('GET', `/api/esport/team/${game}/${teamId}`),
+  getEsportPlayer: (game, playerId) => API.request('GET', `/api/esport/player/${game}/${playerId}`),
   getNotifPrefs: () => API.request('GET', '/api/account/notifications'),
   setNotifPrefs: (emailNotifications) => API.request('POST', '/api/account/notifications', { emailNotifications }),
   searchPlayers: (game) => API.request('GET', `/api/players/search?game=${encodeURIComponent(game)}`),
@@ -1601,6 +1602,8 @@ function NewsDetailSheet({ item, onClose }) {
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [teamPlayers, setTeamPlayers] = useState([]);
   const [teamLoading, setTeamLoading] = useState(false);
+  const [expandedPlayer, setExpandedPlayer] = useState(null);
+  const [playerDetail, setPlayerDetail] = useState(null);
   const loadTeamPlayers = (team) => {
     if (!item.gameSlug || !team.id) return;
     setSelectedTeam(team);
@@ -1683,28 +1686,45 @@ function NewsDetailSheet({ item, onClose }) {
             ),
             teamLoading && h('div', { className: "flex justify-center py-4" }, h(Loader, { size: 14, className: "animate-spin", style: { color: P1 } })),
             !teamLoading && teamPlayers.length === 0 && h('p', { className: "text-[10px] text-muted-foreground text-center py-3" }, "Aucune information sur les joueurs disponible pour cette équipe"),
-            h('div', { className: "space-y-2" }, teamPlayers.map(p =>
-              h('div', { key: p.id, className: "flex items-center gap-2.5 p-2.5 rounded-xl transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.03)" } },
-                p.imageUrl
-                  ? h('img', { src: p.imageUrl, alt: p.name, className: "w-9 h-9 rounded-full object-cover flex-shrink-0" })
-                  : h('div', { className: "w-9 h-9 rounded-full flex items-center justify-center text-xs font-black text-white flex-shrink-0", style: { background: GRAD } }, (p.name || '?')[0]),
-                h('div', { className: "flex-1 min-w-0" },
-                  h('p', { className: "text-xs font-bold text-foreground" }, p.name),
-                  h('p', { className: "text-[8px] text-muted-foreground" }, 
-                    [p.firstName, p.lastName].filter(Boolean).join(' '), 
-                    p.role ? ` \u2022 ${p.role}` : '',
-                    p.nationality ? ` \u2022 ${p.nationality}` : ''
+              h('div', { className: "space-y-2" }, teamPlayers.map(p =>
+                h('div', { key: p.id },
+                  h('div', { className: "flex items-center gap-2.5 p-2.5 rounded-xl transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.03)" } },
+                    p.imageUrl
+                      ? h('img', { src: p.imageUrl, alt: p.name, className: "w-9 h-9 rounded-full object-cover flex-shrink-0" })
+                      : h('div', { className: "w-9 h-9 rounded-full flex items-center justify-center text-xs font-black text-white flex-shrink-0", style: { background: GRAD } }, (p.name || '?')[0]),
+                    h('div', { className: "flex-1 min-w-0" },
+                      h('p', { className: "text-xs font-bold text-foreground" }, p.name),
+                      h('p', { className: "text-[8px] text-muted-foreground" }, 
+                        [p.firstName, p.lastName].filter(Boolean).join(' '), 
+                        p.role ? ` \u2022 ${p.role}` : '',
+                        p.nationality ? ` \u2022 ${p.nationality}` : ''
+                      )
+                    ),
+                    p.slug && h('button', {
+                      onClick: (e) => {
+                        e.stopPropagation();
+                        if (expandedPlayer === p.id) { setExpandedPlayer(null); setPlayerDetail(null); return; }
+                        setExpandedPlayer(p.id);
+                        setPlayerDetail(null);
+                        API.getEsportPlayer(item.gameSlug, p.id).then(d => setPlayerDetail(d.player || {}));
+                      },
+                      className: "px-2 py-1 rounded-lg text-[8px] font-bold transition-colors",
+                      style: { background: expandedPlayer === p.id ? `${P1}40` : `${P1}20`, color: P1 }
+                    }, expandedPlayer === p.id ? "Masquer" : "Plus d'infos")
+                  ),
+                  expandedPlayer === p.id && h('div', { className: "mx-2.5 mb-2 p-2.5 rounded-xl text-[9px]", style: { background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.15)" } },
+                    !playerDetail
+                      ? h('div', { className: "flex items-center gap-2 py-1" }, h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }), "Chargement...")
+                      : h('div', { className: "space-y-1" },
+                          playerDetail.firstName && playerDetail.lastName && h('p', {}, "\uD83D\uDC64 ", playerDetail.firstName, " ", playerDetail.lastName),
+                          playerDetail.role && h('p', {}, "\uD83C\uDFAE Rôle: ", playerDetail.role),
+                          playerDetail.nationality && h('p', {}, "\uD83C\uDF0D Nationalité: ", playerDetail.nationality),
+                          playerDetail.age && h('p', {}, "\uD83C\uDFC2 Âge: ", playerDetail.age),
+                          playerDetail.hometown && h('p', {}, "\uD83C\uDFE0 Ville: ", playerDetail.hometown),
+                          playerDetail.birthday && h('p', {}, "\uD83C\uDF89 Anniversaire: ", playerDetail.birthday),
+                        )
                   )
-                ),
-                p.slug && h('a', {
-                  href: `https://www.pandascore.co/player/${p.slug}`,
-                  target: "_blank", rel: "noopener noreferrer",
-                  onClick: e => e.stopPropagation(),
-                  className: "px-2 py-1 rounded-lg text-[8px] font-bold transition-colors",
-                  style: { background: `${P1}20`, color: P1 }
-                }, "Plus d'infos")
-              )
-            ))
+                )))
           )
         ),
         // Source badge for drama/actus with live link

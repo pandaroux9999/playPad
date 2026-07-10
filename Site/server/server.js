@@ -2616,8 +2616,8 @@ async function fetchIGDBReleases(clientId, clientSecret) {
 
 // ─── 2. FETCH : Drama/Actu via RSS ────────────────────────
 const DRAMA_RSS_FEEDS = [
-  { url: 'https://www.gamekult.com/feed/actualites.xml', name: 'Gamekult' },
   { url: 'https://www.eurogamer.net/feed', name: 'Eurogamer' },
+  { url: 'https://www.pcgamer.com/rss/all/', name: 'PC Gamer' },
 ];
 
 const NON_GAMING_KEYWORDS = [
@@ -2917,6 +2917,33 @@ app.get('/api/esport/team/:game/:teamId', async (req, res) => {
     res.json({ players: players || [] });
   } catch (err) {
     res.json({ players: [] });
+  }
+});
+
+app.get('/api/esport/player/:game/:playerId', async (req, res) => {
+  try {
+    const key = process.env.PANDASCORE_API_KEY;
+    if (!key) return res.json({ player: null });
+    const url = `https://api.pandascore.co/${req.params.game}/players/${req.params.playerId}?token=${key}`;
+    const body = await httpGet(url);
+    const p = JSON.parse(body);
+    res.json({
+      player: {
+        id: p.id,
+        name: p.name,
+        firstName: p.first_name || '',
+        lastName: p.last_name || '',
+        imageUrl: p.image_url || '',
+        role: p.role || '',
+        nationality: p.nationality || '',
+        slug: p.slug || '',
+        age: p.age || '',
+        birthday: p.birthday || '',
+        hometown: p.hometown || '',
+      }
+    });
+  } catch (err) {
+    res.json({ player: null });
   }
 });
 

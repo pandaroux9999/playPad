@@ -1316,6 +1316,21 @@ async function addNewsItems(category, items) {
   if (insErr) throw new Error(insErr.message);
 }
 
+function cleanItemData(obj) {
+  if (typeof obj === 'string') {
+    return obj.replace(/<!\[CDATA\[/g, '').replace(/\]\]>/g, '')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#x27;/g, "'");
+  }
+  if (Array.isArray(obj)) return obj.map(cleanItemData);
+  if (obj && typeof obj === 'object') {
+    const cleaned = {};
+    for (const k of Object.keys(obj)) cleaned[k] = cleanItemData(obj[k]);
+    return cleaned;
+  }
+  return obj;
+}
+
 async function getNewsFromCache() {
   const { data, error } = await supabaseAdmin
     .from('news_cache')
@@ -1326,7 +1341,7 @@ async function getNewsFromCache() {
   const result = { releases: [], esport: [], drama: [] };
   for (const row of data || []) {
     if (result[row.category]) {
-      result[row.category].push({ ...row.item_data, _created_at: row.created_at });
+      result[row.category].push({ ...cleanItemData(row.item_data), _created_at: row.created_at });
     }
   }
   return result;

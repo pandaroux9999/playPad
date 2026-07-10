@@ -30,9 +30,10 @@
     .game-card { transition: transform 0.15s ease, box-shadow 0.15s ease; cursor: pointer; }
     .game-card:hover { transform: scale(1.02); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
     .game-card:active { transform: scale(0.94); }
-    @keyframes boostRipple { 0% { transform: scale(0.8); opacity: 0.6; } 100% { transform: scale(2.5); opacity: 0; } }
+    @keyframes boostRipple { 0% { transform: scale(0.8); opacity: 0.7; } 100% { transform: scale(2.5); opacity: 0; } }
     @keyframes boostPop { 0% { transform: scale(1); } 40% { transform: scale(1.4); } 100% { transform: scale(1); } }
     .boost-anim { animation: boostPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    .tooltip-pop { animation: fadeSlideIn 0.15s ease-out; }
     .pill-btn { transition: all 0.2s ease; }
     .pill-btn:hover { opacity: 0.85; }
     .no-underline { text-decoration: none; }
@@ -217,6 +218,7 @@ const Edit3 = Icon(["M17 5a2.83 2.83 0 1 1 4 4L7.5 22.5 2 22l.5-5.5L17 5z"]);
 const Wifi = Icon(["M5 12.55a10.94 10.94 0 0 1 14.08 0", "M1.42 9a16 16 0 0 1 21.16 0", "M8.53 16.11a6 6 0 0 1 6.95 0", "M12 20h.01"]);
 const Check = Icon(["M20 6 9 17l-5-5"]);
 const Zap = Icon(["M15.66 2 8 12h6l-2 10 7.66-10H14l2-10z"]);
+const Flame = Icon(["M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"]);
 const Heart = Icon(["M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"]);
 const Crown = Icon(["M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z", "M2 20h20"]);
 const Bell = Icon(["M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9", "M13.73 21a2 2 0 0 1-3.46 0"]);
@@ -353,12 +355,17 @@ function StarRating({ rating, size = 14, interactive = false, onChange }) {
 function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown, small, boostCount, onBoost, boosted, boosterBtn, boosterActive, onBuy }) {
   const [imgError, setImgError] = useState(!game?.cover);
   const [boostAnim, setBoostAnim] = useState(false);
+  const [tooltip, setTooltip] = useState(null);
+  const tooltipTimer = useRef(null);
   const status = game.status ? STATUS_CONFIG[game.status] : null;
   const inWishlist = wishlistIds?.has(game.game_id || game.id);
   const inTopThree = topThreeIds?.has(game.game_id || game.id);
   const gameId = game.game_id || game.id;
   const initials = (game.title || '??').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase().slice(0, 2);
   const handleBoost = (e) => { e.stopPropagation(); if (boostAnim) return; setBoostAnim(true); setTimeout(() => setBoostAnim(false), 400); onBoost(e); };
+  const startTooltip = (name) => { tooltipTimer.current = setTimeout(() => setTooltip(name), 500); };
+  const endTooltip = () => { clearTimeout(tooltipTimer.current); setTooltip(null); };
+  const tt = (name, text) => tooltip === name && h('div', { className: "tooltip-pop absolute left-8 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 rounded-lg text-[8px] font-bold z-20", style: { background: "#1a1a2e", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", pointerEvents: "none" } }, text);
   return h('div', { onClick, className: "game-card relative rounded-2xl overflow-hidden", style: { aspectRatio: "3/4", background: "#1a1a2e" } },
     imgError
       ? h('div', { className: "absolute inset-0 flex items-center justify-center", style: { background: 'linear-gradient(135deg,#1a1a2e,#2d1b69)' } },
@@ -368,18 +375,25 @@ function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown
     h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent" }),
     status && game.status !== "not_started" && h('div', { className: "absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full", style: { background: status.color, boxShadow: `0 0 8px ${status.color}80` } }),
     game.hasReview && h('div', { className: "absolute top-2.5 left-2.5 w-5 h-5 rounded-full flex items-center justify-center", style: { background: GRAD } }, h(Edit3, { size: 10, className: "text-white" })),
-    onWishlist && h('button', { onClick: e => { e.stopPropagation(); onWishlist(game); }, className: "absolute top-9 left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: inWishlist ? "rgba(239,68,68,0.9)" : "rgba(0,0,0,0.5)" } }, h(Heart, { size: 11, fill: inWishlist ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
-    onCrown && h('button', { onClick: e => { e.stopPropagation(); onCrown(game); }, className: "absolute top-[60px] left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: inTopThree ? "rgba(245,158,11,0.9)" : "rgba(0,0,0,0.5)" } }, h(Crown, { size: 11, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
+    onWishlist && h('div', { className: "absolute", style: { top: 36, left: 10 } },
+      tt('wishlist', inWishlist ? 'Retirer de la liste de souhaits' : 'Ajouter \u00e0 la liste de souhaits'),
+      h('button', { onClick: e => { e.stopPropagation(); onWishlist(game); }, onMouseDown: () => startTooltip('wishlist'), onMouseUp: endTooltip, onMouseLeave: endTooltip, onTouchStart: () => startTooltip('wishlist'), onTouchEnd: endTooltip, className: "relative w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: inWishlist ? "rgba(239,68,68,0.9)" : "rgba(0,0,0,0.5)" } }, h(Heart, { size: 11, fill: inWishlist ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
+    ),
+    onCrown && h('div', { className: "absolute", style: { top: 60, left: 10 } },
+      tt('crown', inTopThree ? 'Retirer du Top 3' : 'Ajouter au Top 3'),
+      h('button', { onClick: e => { e.stopPropagation(); onCrown(game); }, onMouseDown: () => startTooltip('crown'), onMouseUp: endTooltip, onMouseLeave: endTooltip, onTouchStart: () => startTooltip('crown'), onTouchEnd: endTooltip, className: "relative w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125", style: { background: inTopThree ? "rgba(245,158,11,0.9)" : "rgba(0,0,0,0.5)" } }, h(Crown, { size: 11, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
+    ),
     onBoost && h('div', { className: "absolute", style: { top: 88, left: 10 } },
-      boostAnim && h('div', { className: "absolute rounded-full", style: { width: 20, height: 20, border: '2px solid rgba(250,204,21,0.5)', animation: 'boostRipple 0.4s ease-out forwards', pointerEvents: 'none', top: 0, left: 0 } }),
-      h('button', { onClick: handleBoost, className: "relative w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-125", style: { background: (boosted || boostAnim) ? "rgba(250,204,21,0.9)" : "rgba(0,0,0,0.6)", transform: boostAnim ? 'scale(1.35)' : 'scale(1)', boxShadow: boostAnim ? '0 0 18px rgba(250,204,21,0.6)' : 'none', border: `1px solid ${(boosted || boostAnim) ? "rgba(250,204,21,0.5)" : "rgba(255,255,255,0.15)"}` } },
-        h(Zap, { size: 10, fill: (boosted || boostAnim) ? "#1a1a2e" : "none", stroke: (boosted || boostAnim) ? "#1a1a2e" : "#fbbf24", strokeWidth: boostAnim ? 1.5 : 2 })
+      tooltip === 'boost' && h('div', { className: "tooltip-pop absolute left-8 top-1/2 -translate-y-1/2 whitespace-nowrap px-2 py-1 rounded-lg text-[8px] font-bold z-20", style: { background: "#1a1a2e", color: "#fff", border: "1px solid rgba(249,115,22,0.3)", pointerEvents: "none" } }, boosted ? 'D\u00e9j\u00e0 boost\u00e9' : 'Booster ce jeu'),
+      boostAnim && h('div', { className: "absolute rounded-full", style: { width: 20, height: 20, border: '2px solid rgba(249,115,22,0.5)', animation: 'boostRipple 0.4s ease-out forwards', pointerEvents: 'none', top: 0, left: 0 } }),
+      h('button', { onClick: handleBoost, onMouseDown: () => startTooltip('boost'), onMouseUp: endTooltip, onMouseLeave: endTooltip, onTouchStart: () => startTooltip('boost'), onTouchEnd: endTooltip, className: "relative w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-125", style: { background: (boosted || boostAnim) ? "rgba(249,115,22,0.9)" : "rgba(0,0,0,0.6)", transform: boostAnim ? 'scale(1.35)' : 'scale(1)', boxShadow: boostAnim ? '0 0 18px rgba(249,115,22,0.6)' : 'none', border: `1px solid ${(boosted || boostAnim) ? "rgba(249,115,22,0.5)" : "rgba(255,255,255,0.15)"}` } },
+        h(Flame, { size: 10, fill: (boosted || boostAnim) ? "#fff" : "none", stroke: (boosted || boostAnim) ? "#fff" : "#fb923c", strokeWidth: boostAnim ? 1.5 : 2 })
       )
     ),
     onBuy && h('button', { onClick: (e) => { e.stopPropagation(); onBuy(game); }, className: "absolute top-[116px] left-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-all hover:scale-125 hover:shadow-[0_0_8px_rgba(34,197,94,0.5)]", style: { background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.15)" } },
       h(ShoppingCart, { size: 10, stroke: "#22c55e", strokeWidth: 2 })
     ),
-    boostCount > 0 && h('div', { className: "absolute bottom-1 left-1 px-1 py-0.5 rounded-md text-[7px] font-bold flex items-center gap-0.5", style: { background: "rgba(250,204,21,0.7)", color: "#1a1a2e" } }, "\u2728", boostCount),
+    boostCount > 0 && h('div', { className: "absolute bottom-1 left-1 px-1 py-0.5 rounded-md text-[7px] font-bold flex items-center gap-0.5", style: { background: "rgba(249,115,22,0.8)", color: "#fff" } }, h(Flame, { size: 7, fill: "#fff" }), boostCount),
     (game.age_rating || 0) > 0 && h('div', { className: "absolute top-1 right-1 w-4.5 h-4.5 rounded flex items-center justify-center text-[6px] font-black text-white", style: { background: game.age_rating >= 16 ? "#ef4444" : game.age_rating >= 12 ? "#f59e0b" : game.age_rating >= 7 ? "#eab308" : "#22c55e", fontSize: "6px", lineHeight: 1, minWidth: 14, height: 14 } }, game.age_rating),
     h('div', { className: "absolute bottom-0 left-0 right-0 p-2.5" },
       h(PlatformBadge, { platform: game.platform, small }),
@@ -388,8 +402,8 @@ function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown
       small && game.release_date && h('p', { className: "text-[8px] text-muted-foreground/50 leading-tight mt-0.5" }, (() => { try { return new Date(game.release_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }); } catch(e) { return game.release_date; } })()),
       h('div', { className: "mt-1.5 flex items-center justify-between" },
         h(StarRating, { rating: game.userRating, size: 9 }),
-        boosterBtn && h('button', { onClick: (e) => { e.stopPropagation(); boosterBtn(); }, className: "px-1.5 py-0.5 rounded text-[8px] font-bold text-white flex items-center gap-0.5 transition-all duration-200 hover:opacity-80 active:scale-125", style: { background: GRAD } }, h(Zap, { size: 7 }), "Booster"),
-        boosterActive && h('span', { className: "px-1.5 py-0.5 rounded text-[8px] font-bold flex items-center gap-0.5", style: { background: "rgba(147,51,234,0.2)", color: "#9333ea" } }, h(Zap, { size: 7, fill: "#9333ea" }), "Boost\u00e9")
+        boosterBtn && h('button', { onClick: (e) => { e.stopPropagation(); boosterBtn(); }, className: "px-1.5 py-0.5 rounded text-[8px] font-bold text-white flex items-center gap-0.5 transition-all duration-200 hover:opacity-80 active:scale-125", style: { background: GRAD } }, h(Flame, { size: 7 }), "Booster"),
+        boosterActive && h('span', { className: "px-1.5 py-0.5 rounded text-[8px] font-bold flex items-center gap-0.5", style: { background: "rgba(249,115,22,0.2)", color: "#f97316" } }, h(Flame, { size: 7, fill: "#f97316" }), "Boost\u00e9")
       )
     )
   );
@@ -1019,7 +1033,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         : h('div', null,
             h('div', { className: "flex items-center justify-between mb-3" },
               h('p', { className: "text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2" }, label),
-              boostPoints > 0 && h('div', { className: "flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold", style: { background: `${P1}15`, color: P1 } }, h(Zap, { size: 10, fill: P1 }), boostPoints + " point" + (boostPoints > 1 ? "s" : "") + " booster")
+              boostPoints > 0 && h('div', { className: "flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold", style: { background: "rgba(249,115,22,0.15)", color: "#f97316" } }, h(Flame, { size: 10, fill: "#f97316" }), boostPoints + " point" + (boostPoints > 1 ? "s" : "") + " booster")
             ),
             h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" },
               catalog.map(game => {
@@ -2274,6 +2288,11 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
   };
 
   const [boostDetailAnim, setBoostDetailAnim] = useState(false);
+  const [detailTooltip, setDetailTooltip] = useState(null);
+  const detailTooltipTimer = useRef(null);
+  const startDetailTooltip = (name) => { detailTooltipTimer.current = setTimeout(() => setDetailTooltip(name), 500); };
+  const endDetailTooltip = () => { clearTimeout(detailTooltipTimer.current); setDetailTooltip(null); };
+  const dtt = (name, text) => detailTooltip === name && h('div', { className: "tooltip-pop absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-1 rounded-lg text-[9px] font-bold z-20", style: { background: "#1a1a2e", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", pointerEvents: "none" } }, text);
   const handleBoostDetail = async (g) => {
     const gId = g.game_id || g.id;
     const hasBoosted = userBoostedSet?.has(gId);
@@ -2295,11 +2314,18 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
         h('img', { src: game.cover, alt: game.title, className: "w-full h-full object-cover" }),
         h('div', { className: "absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent" }),
         h('button', { onClick: onClose, className: "sheet-close-btn absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center", style: { background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(X, { size: 16, className: "text-white" })),
-        h('button', { onClick: () => onToggleWishlist?.(game), className: "absolute top-4 left-4 w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110", style: { background: inWishlist ? "rgba(239,68,68,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Heart, { size: 14, fill: inWishlist ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
-        h('button', { onClick: () => handleTopThree(game), className: "absolute top-4 left-14 w-8 h-8 rounded-full flex items-center justify-center", style: { background: inTopThree ? "rgba(245,158,11,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Crown, { size: 14, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
-        h('div', { className: "absolute", style: { top: 16, left: 96 } },
-          boostDetailAnim && h('div', { className: "absolute rounded-full", style: { width: 32, height: 32, border: '2px solid rgba(147,51,234,0.5)', animation: 'boostRipple 0.4s ease-out forwards', pointerEvents: 'none', top: 3, left: 3 } }),
-          h('button', { onClick: () => handleBoostDetail(game), className: "relative w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200", style: { background: hasBoostedGame ? "rgba(147,51,234,0.85)" : (boosterPoints > 0 ? "rgba(147,51,234,0.5)" : "rgba(0,0,0,0.5)"), transform: boostDetailAnim ? 'scale(1.25)' : 'scale(1)', boxShadow: boostDetailAnim ? '0 0 20px rgba(147,51,234,0.5)' : 'none', backdropFilter: "blur(8px)" } }, h(Zap, { size: 14, fill: (hasBoostedGame || boostDetailAnim) ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 }))
+        h('div', { className: "absolute", style: { top: 16, left: 16 } },
+          dtt('dwishlist', inWishlist ? 'Retirer de la liste de souhaits' : 'Ajouter \u00e0 la liste de souhaits'),
+          h('button', { onClick: () => onToggleWishlist?.(game), onMouseDown: () => startDetailTooltip('dwishlist'), onMouseUp: endDetailTooltip, onMouseLeave: endDetailTooltip, onTouchStart: () => startDetailTooltip('dwishlist'), onTouchEnd: endDetailTooltip, className: "relative w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110", style: { background: inWishlist ? "rgba(239,68,68,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Heart, { size: 14, fill: inWishlist ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
+        ),
+        h('div', { className: "absolute", style: { top: 16, left: 60 } },
+          dtt('dcrown', inTopThree ? 'Retirer du Top 3' : 'Ajouter au Top 3'),
+          h('button', { onClick: () => handleTopThree(game), onMouseDown: () => startDetailTooltip('dcrown'), onMouseUp: endDetailTooltip, onMouseLeave: endDetailTooltip, onTouchStart: () => startDetailTooltip('dcrown'), onTouchEnd: endDetailTooltip, className: "relative w-8 h-8 rounded-full flex items-center justify-center", style: { background: inTopThree ? "rgba(245,158,11,0.85)" : "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)" } }, h(Crown, { size: 14, fill: inTopThree ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 })),
+        ),
+        h('div', { className: "absolute", style: { top: 16, left: 104 } },
+          dtt('dboost', hasBoostedGame ? 'D\u00e9j\u00e0 boost\u00e9' : 'Booster ce jeu (1 point)'),
+          boostDetailAnim && h('div', { className: "absolute rounded-full", style: { width: 32, height: 32, border: '2px solid rgba(249,115,22,0.5)', animation: 'boostRipple 0.4s ease-out forwards', pointerEvents: 'none', top: 3, left: 3 } }),
+          h('button', { onClick: () => handleBoostDetail(game), onMouseDown: () => startDetailTooltip('dboost'), onMouseUp: endDetailTooltip, onMouseLeave: endDetailTooltip, onTouchStart: () => startDetailTooltip('dboost'), onTouchEnd: endDetailTooltip, className: "relative w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200", style: { background: hasBoostedGame ? "rgba(249,115,22,0.85)" : (boosterPoints > 0 ? "rgba(249,115,22,0.5)" : "rgba(0,0,0,0.5)"), transform: boostDetailAnim ? 'scale(1.25)' : 'scale(1)', boxShadow: boostDetailAnim ? '0 0 20px rgba(249,115,22,0.5)' : 'none', backdropFilter: "blur(8px)" } }, h(Flame, { size: 14, fill: (hasBoostedGame || boostDetailAnim) ? "#fff" : "none", stroke: "#fff", strokeWidth: 2 }))
         ),
 
         h('div', { className: "absolute bottom-0 left-0 right-0 px-4 pb-3" },

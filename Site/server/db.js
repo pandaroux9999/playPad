@@ -1427,6 +1427,7 @@ module.exports = {
   getCatalog,
   getCatalogPage,
   getCatalogCount,
+  searchCatalog,
   invalidateCatalogCache,
   updateGamePlatform,
   deletePlatformGames,

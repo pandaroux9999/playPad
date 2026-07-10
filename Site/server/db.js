@@ -1375,6 +1375,78 @@ async function acknowledgeDiscovery(userId, section) {
   }
 }
 
+// ─── NOTIFICATIONS ─────────────────────────────────────────
+async function createNotification(userId, type, title, body, data) {
+  try {
+    const { error } = await supabaseAdmin
+      .from('notifications')
+      .insert({ user_id: userId, type, title, body: body || '', data: data || {} });
+    if (error) console.error('[Notifications] Create error:', error.message);
+  } catch (e) {
+    if (!isMissingTable(e)) console.error('[Notifications] Error:', e.message);
+  }
+}
+
+async function getNotifications(userId, limit = 50, offset = 0) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+      .offset(offset);
+    if (error) { if (isMissingTable(error)) return []; throw new Error(error.message); }
+    return data || [];
+  } catch (e) {
+    if (isMissingTable(e)) return [];
+    throw e;
+  }
+}
+
+async function getUnreadNotificationCount(userId) {
+  try {
+    const { count, error } = await supabaseAdmin
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('read', false);
+    if (error) { if (isMissingTable(error)) return 0; throw new Error(error.message); }
+    return count || 0;
+  } catch (e) {
+    if (isMissingTable(e)) return 0;
+    throw e;
+  }
+}
+
+async function markNotificationRead(userId, notificationId) {
+  try {
+    const { error } = await supabaseAdmin
+      .from('notifications')
+      .update({ read: true })
+      .eq('id', notificationId)
+      .eq('user_id', userId);
+    if (error) { if (isMissingTable(error)) return; throw new Error(error.message); }
+  } catch (e) {
+    if (isMissingTable(e)) return;
+    throw e;
+  }
+}
+
+async function markAllNotificationsRead(userId) {
+  try {
+    const { error } = await supabaseAdmin
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', userId)
+      .eq('read', false);
+    if (error) { if (isMissingTable(error)) return; throw new Error(error.message); }
+  } catch (e) {
+    if (isMissingTable(e)) return;
+    throw e;
+  }
+}
+
 module.exports = {
   supabaseAdmin,
   createUser,
@@ -1462,6 +1534,11 @@ module.exports = {
   searchStreamers,
   getUserDiscoveries,
   acknowledgeDiscovery,
+  createNotification,
+  getNotifications,
+  getUnreadNotificationCount,
+  markNotificationRead,
+  markAllNotificationsRead,
 };
 
 // ─── AUTO-SCHEMA (création des tables manquantes au démarrage) ──

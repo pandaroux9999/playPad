@@ -404,6 +404,10 @@ app.post('/api/games/review', requireAuth, async (req, res) => {
     if (isPublic) {
       await db.savePublicReview(req.session.userId, gameId, rating || 0, sanitizedReview, sanitizedTitle, sanitizedCover);
       console.log('[Review] savePublicReview OK');
+      const me = await db.getUserById(req.session.userId).catch(() => {});
+      if (isPublic && me) {
+        notifyOtherReviewers(req.session.userId, gameId, me.display_name, sTitle).catch(() => {});
+      }
     }
     res.json({ ok: true });
     console.log('[Review] Response sent successfully');
@@ -1805,6 +1809,10 @@ app.post('/api/friends/request', requireAuth, async (req, res) => {
   try {
     const { friendId } = req.body;
     await db.sendFriendRequest(req.session.userId, friendId);
+    const me = await db.getUserById(req.session.userId);
+    db.createNotification(friendId, 'friend', 'Demande d\'ami',
+      `${me?.display_name || 'Quelqu\'un'} veut devenir ton ami`,
+      { fromUserId: req.session.userId, fromName: me?.display_name });
     res.json({ ok: true });
   } catch (err) {
     console.error('[FriendRequest] Error:', err.message);
@@ -1816,6 +1824,10 @@ app.post('/api/friends/accept', requireAuth, async (req, res) => {
   try {
     const { friendId } = req.body;
     await db.acceptFriendRequest(req.session.userId, friendId);
+    const me = await db.getUserById(req.session.userId);
+    db.createNotification(friendId, 'friend', 'Demande d\'ami acceptée',
+      `${me?.display_name || 'Quelqu\'un'} a accepté ta demande d'ami`,
+      { fromUserId: req.session.userId, fromName: me?.display_name });
     res.json({ ok: true });
   } catch (err) {
     console.error('[FriendAccept] Error:', err.message);
@@ -1932,6 +1944,10 @@ app.post('/api/suggestions', requireAuth, async (req, res) => {
     const sCover = gameCover && isValidUrl(gameCover) ? gameCover : '';
     await db.sendGameSuggestion(req.session.userId, toUserId, gameId, sTitle, sCover, sMsg);
     await db.sendMessage(req.session.userId, toUserId, 'Je te propose "' + sTitle + '"' + (sMsg ? ' : ' + sMsg : ''));
+    const me = await db.getUserById(req.session.userId);
+    db.createNotification(toUserId, 'friend', 'Suggestion de jeu',
+      `${me?.display_name || 'Quelqu\'un'} te propose "${sTitle}"`,
+      { fromUserId: req.session.userId, fromName: me?.display_name, gameId, gameTitle: sTitle });
     res.json({ ok: true });
   } catch (err) {
     console.error('[Suggestion] Error:', err.message);
@@ -2629,7 +2645,19 @@ async function refreshAllNews(force) {
   const esportRss = await fetchEsportFromRSS();
   // Esport via PandaScore (matches en direct/à venir)
   const esportPs = await fetchEsportFromPandaScore();
-  const esport = [...esportPs, ...esportRss];
+  let esport = [...esportPs, ...esportRss];
+  // Fallback statique si aucune source e-sport n'a fonctionné
+  if (esport.length === 0) {
+    try {
+      const fallback = JSON.parse(require('fs').readFileSync(path.join(__dirname, 'data', 'news.json'), 'utf-8'));
+      if (fallback.esport && fallback.esport.length > 0) {
+        esport = fallback.esport;
+        console.log('[News] Fallback e-sport statique utilisé (' + esport.length + ' événements)');
+      }
+    } catch (e) {
+      console.error('[News] Fallback e-sport error:', e.message);
+    }
+  }
   if (esport.length > 0) {
     await db.addNewsItems('esport', esport);
     results.esport = esport.length;
@@ -2687,6 +2715,13 @@ app.get('/api/news', newsLimiter, async (req, res) => {
     const data = await db.getNewsFromCache();
     const hasData = (data.releases?.length || 0) + (data.esport?.length || 0) + (data.drama?.length || 0) > 0;
     if (hasData) {
+      // Si l'e-sport est vide dans le cache mais que le fallback en a, on complète
+      if (!data.esport || data.esport.length === 0) {
+        const fallback = loadNewsFallback();
+        if (fallback.esport && fallback.esport.length > 0) {
+          data.esport = fallback.esport;
+        }
+      }
       res.json(data);
     } else {
       // Fallback vers le fichier JSON si le cache DB est vide
@@ -2843,6 +2878,47 @@ app.post('/api/discoveries/dismiss', requireAuth, async (req, res) => {
   }
 });
 
+// ─── NOTIFICATIONS ────────────────────────────────────────────
+app.get('/api/notifications', requireAuth, async (req, res) => {
+  try {
+    const notifications = await db.getNotifications(req.session.userId);
+    res.json({ notifications });
+  } catch (err) {
+    console.error('[Notifications] Get error:', err.message);
+    res.json({ notifications: [] });
+  }
+});
+
+app.get('/api/notifications/unread-count', requireAuth, async (req, res) => {
+  try {
+    const count = await db.getUnreadNotificationCount(req.session.userId);
+    res.json({ count });
+  } catch (err) {
+    console.error('[Notifications] Count error:', err.message);
+    res.json({ count: 0 });
+  }
+});
+
+app.post('/api/notifications/:id/read', requireAuth, async (req, res) => {
+  try {
+    await db.markNotificationRead(req.session.userId, parseInt(req.params.id));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Notifications] Read error:', err.message);
+    res.json({ ok: true });
+  }
+});
+
+app.post('/api/notifications/read-all', requireAuth, async (req, res) => {
+  try {
+    await db.markAllNotificationsRead(req.session.userId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Notifications] ReadAll error:', err.message);
+    res.json({ ok: true });
+  }
+});
+
 // ─── AI CHATBOT (Ollama) ─────────────────────────────────────
 app.post('/api/chat', requireAuth, async (req, res) => {
   try {
@@ -2965,33 +3041,28 @@ async function sendEsportNotificationEmail(user, event, action) {
 // On refresh, notifier les utilisateurs qui ont des favoris correspondant au jeu
 async function notifyFavoriteUsers(newsCategory, items) {
   if (newsCategory !== 'esport' || !items || items.length === 0) return;
-  const transporter = createMailTransporter();
-  if (!transporter) return;
-  // Get all users with email notifications enabled AND who have at least one favorite
-  const { data: notifUsers } = await db.supabaseAdmin
-    .from('users')
-    .select('id, email')
-    .eq('email_notifications', true)
-    .neq('email', '')
-    .not('email', 'is', null);
-  if (!notifUsers || notifUsers.length === 0) return;
-  const userIds = notifUsers.map(u => u.id);
-  // Get their favorites in batch
+  // Récupère tous les utilisateurs qui ont des favoris e-sport
   const { data: allFavs } = await db.supabaseAdmin
     .from('esport_favorites')
-    .select('user_id, event_game, event_title')
-    .in('user_id', userIds);
+    .select('user_id, event_game, event_title');
   if (!allFavs || allFavs.length === 0) return;
   // Build a map: userId -> Set of game names they follow
   const favMap = {};
+  const favUserIds = new Set();
   for (const f of allFavs) {
     if (!favMap[f.user_id]) favMap[f.user_id] = new Set();
     if (f.event_game) favMap[f.user_id].add(f.event_game.toLowerCase());
     if (f.event_title) favMap[f.user_id].add(f.event_title.toLowerCase());
+    favUserIds.add(f.user_id);
   }
-  const userEmailMap = {};
-  for (const u of notifUsers) userEmailMap[u.id] = u.email;
-  // For each new esport item, check if any user follows it
+  // Récupère les infos des utilisateurs concernés (email + préférences)
+  const { data: users } = await db.supabaseAdmin
+    .from('users')
+    .select('id, email, email_notifications')
+    .in('id', [...favUserIds]);
+  const userMap = {};
+  for (const u of users || []) userMap[u.id] = u;
+  // Pour chaque nouvel événement e-sport
   for (const item of items) {
     const game = (item.game || '').toLowerCase();
     const title = (item.event || item.title || '').toLowerCase();
@@ -2999,12 +3070,34 @@ async function notifyFavoriteUsers(newsCategory, items) {
     for (const userId of Object.keys(favMap)) {
       const terms = favMap[userId];
       if (terms.has(game) || terms.has(title)) {
-        const email = userEmailMap[userId];
-        if (email) {
-          sendEsportNotificationEmail({ id: userId, email }, item, 'favorite').catch(() => {});
+        const notifyTitle = item.event || item.title || item.game || 'Nouvel événement e-sport';
+        const notifyBody = item.desc || '';
+        // Notification in-app (toujours)
+        db.createNotification(parseInt(userId), 'esport', notifyTitle, notifyBody,
+          { game: item.game, event: item.event, sourceUrl: item.officialUrl });
+        // Email si l'utilisateur a activé les notifications email
+        const u = userMap[userId];
+        if (u && u.email && u.email_notifications) {
+          sendEsportNotificationEmail({ id: userId, email: u.email }, item, 'favorite').catch(() => {});
         }
       }
     }
+  }
+}
+
+// Notifie les autres utilisateurs qui ont reviewé le même jeu
+async function notifyOtherReviewers(currentUserId, gameId, currentUserName, gameTitle) {
+  const { data: reviewers } = await db.supabaseAdmin
+    .from('community_reviews')
+    .select('user_id')
+    .eq('game_id', gameId)
+    .neq('user_id', currentUserId);
+  if (!reviewers || reviewers.length === 0) return;
+  const uniqueIds = [...new Set(reviewers.map(r => r.user_id))];
+  for (const uid of uniqueIds) {
+    db.createNotification(uid, 'review', 'Nouvelle critique',
+      `${currentUserName} a ajouté une critique sur "${gameTitle}"`,
+      { fromUserId: currentUserId, fromName: currentUserName, gameId, gameTitle });
   }
 }
 

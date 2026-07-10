@@ -2697,67 +2697,105 @@ async function fetchEsportFromRSS() {
 }
 
 // ─── 3b. FETCH : E-Sport via PandaScore API ────────────────
-const PANDASCORE_GAMES = [
-  { slug: 'csgo', name: 'Counter-Strike 2' },
-  { slug: 'lol', name: 'League of Legends' },
-  { slug: 'dota2', name: 'Dota 2' },
-  { slug: 'valorant', name: 'Valorant' },
-  { slug: 'overwatch', name: 'Overwatch 2' },
-  { slug: 'rocket-league', name: 'Rocket League' },
-  { slug: 'call-of-duty', name: 'Call of Duty' },
-  { slug: 'rainbow-six', name: 'Rainbow Six Siege' },
-];
+// Cache en mémoire des jeux disponibles sur PandaScore
+let pandascoreVideogames = [];
+let pandascoreGamesLastFetch = 0;
+const PANDASCORE_GAMES_CACHE_TTL = 86400000; // 24h
+
+async function fetchPandaScoreVideogames() {
+  const key = process.env.PANDASCORE_API_KEY;
+  if (!key) return [];
+  const now = Date.now();
+  if (pandascoreVideogames.length > 0 && now - pandascoreGamesLastFetch < PANDASCORE_GAMES_CACHE_TTL) {
+    return pandascoreVideogames;
+  }
+  try {
+    const url = `https://api.pandascore.co/videogames?per_page=100&token=${key}`;
+    const body = await httpGet(url);
+    const games = JSON.parse(body);
+    // Ne garder que les jeux qui ont une scène e-sport (avec des leagues/tournois)
+    pandascoreVideogames = games
+      .filter(g => g.name && g.slug)
+      .map(g => ({ id: g.id, name: g.name, slug: g.slug }));
+    pandascoreGamesLastFetch = now;
+    console.log(`[PandaScore] ${pandascoreVideogames.length} jeux disponibles`);
+  } catch (e) {
+    console.error('[PandaScore] Erreur récupération jeux:', e.message);
+  }
+  return pandascoreVideogames;
+}
 
 async function fetchEsportFromPandaScore() {
   const key = process.env.PANDASCORE_API_KEY;
   if (!key) return [];
   const items = [];
   const seen = new Set();
-  for (const g of PANDASCORE_GAMES) {
-    try {
-      // Récupère matches running + upcoming pour plus de contenu
-      const statuses = ['running', 'upcoming'];
-      for (const status of statuses) {
-        const url = `https://api.pandascore.co/${g.slug}/matches?filter[status]=${status}&sort=-begin_at&per_page=5&token=${key}`;
-        const body = await httpGet(url);
-        const matches = JSON.parse(body);
-        for (const m of matches) {
-          const title = (m.opponents || []).map(o => o.opponent.name).join(' vs ') || m.name || 'Match à venir';
-          if (seen.has(title)) continue;
-          seen.add(title);
-          const teams = (m.opponents || []).map(o => ({
-            id: o.opponent.id,
-            name: o.opponent.name,
-            logo: o.opponent.image_url || '',
-            players: [],
-          }));
-          items.push({
-            type: 'esport',
-            event: title,
-            game: g.name,
-            gameSlug: g.slug,
-            date: m.begin_at ? m.begin_at.split('T')[0] : '',
-            desc: `${m.league?.name || ''} — ${m.serie?.name || ''} — ${m.tournament?.name || ''}`,
-            officialUrl: `https://www.pandascore.co/${g.slug}/matches/${m.id}`,
-            sourceUrl: '',
-            sourceName: 'PandaScore',
-            details: `${m.league?.name || ''} — ${m.serie?.name || ''}\n${m.tournament?.name || ''}\nStatut: ${m.status || 'unknown'}`,
-            pubDate: m.begin_at || new Date().toISOString(),
-            matchId: m.id,
-            tournament: m.tournament?.name || '',
-            league: m.league?.name || '',
-            teams,
-            teamIds: (m.opponents || []).map(o => o.opponent.id),
-            status: m.status || 'upcoming',
-            scores: (m.results || []).map(r => r.score),
-            gameDescription: '',
-          });
+  // 1. Récupère tous les jeux disponibles
+  const allGames = await fetchPandaScoreVideogames();
+  if (allGames.length === 0) return [];
+  // Map slug -> name pour lookup rapide
+  const gameNames = Object.fromEntries(allGames.map(g => [g.slug, g.name]));
+  // 2. Essaie l'API globale /matches (tous les jeux en une requête)
+  const statuses = ['running', 'upcoming'];
+  const PAST_DAYS = 14;
+  const pastDate = new Date(Date.now() - PAST_DAYS * 86400000).toISOString().split('T')[0];
+  let allMatches = [];
+  try {
+    // Matchs en cours + à venir
+    const url = `https://api.pandascore.co/matches?filter[status]=${statuses.join(',')}&sort=-begin_at&per_page=50&token=${key}`;
+    allMatches.push(...JSON.parse(await httpGet(url)));
+    // Matchs récents (terminés dans les 2 dernières semaines)
+    const pastUrl = `https://api.pandascore.co/matches?filter[status]=finished&range[begin_at]=${pastDate},${new Date().toISOString().split('T')[0]}&sort=-begin_at&per_page=30&token=${key}`;
+    allMatches.push(...JSON.parse(await httpGet(pastUrl)));
+  } catch (e) {
+    console.error('[PandaScore] Erreur API globale /matches:', e.message);
+    // Fallback: une requête par jeu
+    for (const g of allGames) {
+      try {
+        for (const status of [...statuses, 'finished']) {
+          const url = `https://api.pandascore.co/${g.slug}/matches?filter[status]=${status}&sort=-begin_at&per_page=5&token=${key}`;
+          allMatches.push(...JSON.parse(await httpGet(url)));
         }
-      }
-    } catch (e) {
-      console.error(`[News] PandaScore error ${g.slug}:`, e.message);
+      } catch (e2) { /* ignore games without matches */ }
     }
   }
+  for (const m of allMatches) {
+    const vg = m.videogame || {};
+    const gameSlug = vg.slug || '';
+    const gameName = gameNames[gameSlug] || vg.name || '';
+    if (!gameName) continue;
+    const title = (m.opponents || []).map(o => o.opponent.name).join(' vs ') || m.name || 'Match à venir';
+    if (seen.has(title + gameName)) continue;
+    seen.add(title + gameName);
+    const teams = (m.opponents || []).map(o => ({
+      id: o.opponent.id,
+      name: o.opponent.name,
+      logo: o.opponent.image_url || '',
+      players: [],
+    }));
+    items.push({
+      type: 'esport',
+      event: title,
+      game: gameName,
+      gameSlug,
+      date: m.begin_at ? m.begin_at.split('T')[0] : '',
+      desc: `${m.league?.name || ''} — ${m.serie?.name || ''} — ${m.tournament?.name || ''}`,
+      officialUrl: `https://www.pandascore.co/${gameSlug}/matches/${m.id}`,
+      sourceUrl: '',
+      sourceName: 'PandaScore',
+      details: `${m.league?.name || ''} — ${m.serie?.name || ''}\n${m.tournament?.name || ''}\nStatut: ${m.status || 'unknown'}`,
+      pubDate: m.begin_at || new Date().toISOString(),
+      matchId: m.id,
+      tournament: m.tournament?.name || '',
+      league: m.league?.name || '',
+      teams,
+      teamIds: (m.opponents || []).map(o => o.opponent.id),
+      status: m.status || 'upcoming',
+      scores: (m.results || []).map(r => r.score),
+      gameDescription: '',
+    });
+  }
+  console.log(`[PandaScore] ${items.length} matchs trouvés`);
   return items;
 }
 
@@ -2972,6 +3010,15 @@ app.get('/api/esport/team/info/:teamId', async (req, res) => {
     });
   } catch (err) {
     res.json({ team: null });
+  }
+});
+
+app.get('/api/esport/games', async (req, res) => {
+  try {
+    const games = await fetchPandaScoreVideogames();
+    res.json({ games });
+  } catch (err) {
+    res.json({ games: [] });
   }
 });
 

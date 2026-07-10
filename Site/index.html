@@ -882,7 +882,6 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [topBoosted, setTopBoosted] = useState([]);
   const [boostedGamesLocal, setBoostedGamesLocal] = useState(new Set());
-  const [showBoostSection, setShowBoostSection] = useState(false);
   const [boostPoints, setBoostPoints] = useState(null);
   const [newReleases, setNewReleases] = useState([]);
   const [featured, setFeatured] = useState([]);
@@ -907,7 +906,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   }, [search, activeLetter]);
 
   useEffect(() => { setCatalogPage(1); loadCatalog(1, false); }, [loadCatalog]);
-  useEffect(() => { API.getTopBoosted().then(d => { setTopBoosted(d.top || []); if ((d.top || []).length > 0) setShowBoostSection(true); }).catch(() => {}); }, [refreshKey]);
+  useEffect(() => { API.getTopBoosted().then(d => setTopBoosted(d.top || [])).catch(() => {}); }, [refreshKey]);
   useEffect(() => { API.getBoostPoints().then(d => setBoostPoints(d.points)).catch(() => {}); }, [refreshKey]);
   useEffect(() => { API.getNewReleases().then(d => setNewReleases(d.releases || [])).catch(() => {}); }, [refreshKey]);
 
@@ -965,7 +964,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
           )
         ),
         // Boostés de la semaine
-        showBoostSection && topBoosted.length > 0 && h('div', null,
+        topBoosted.length > 0 && h('div', null,
           h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "\u2728 Boost\u00e9s de la semaine"),
           h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
             topBoosted.slice(0, 10).map(b => {

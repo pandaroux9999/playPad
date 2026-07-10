@@ -188,6 +188,8 @@ const API = {
   setNotifPrefs: (emailNotifications) => API.request('POST', '/api/account/notifications', { emailNotifications }),
   searchPlayers: (game) => API.request('GET', `/api/players/search?game=${encodeURIComponent(game)}`),
   searchStreamers: (game) => API.request('GET', `/api/streamers/search?game=${encodeURIComponent(game)}`),
+  getDiscoveries: () => API.request('GET', '/api/discoveries'),
+  dismissDiscovery: (section) => API.request('POST', '/api/discoveries/dismiss', { section }),
 };
 
 function Icon(paths, viewBox = "0 0 24 24") {
@@ -2250,6 +2252,27 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
   );
 }
 
+function DiscoveryToast({ discoveries, onDiscover, onDismiss }) {
+  if (!discoveries || discoveries.length === 0) return null;
+  const d = discoveries[0];
+  const [visible, setVisible] = useState(true);
+  if (!visible) return null;
+  return h('div', { className: "fixed bottom-24 left-4 right-4 md:left-auto md:right-4 md:w-80 z-50 p-4 rounded-2xl shadow-2xl", style: { background: "#1a1a2e", border: "1px solid #1e1e32", animation: "fadeSlideIn 0.3s ease-out" } },
+    h('div', { className: "flex items-start gap-3" },
+      h('span', { className: "text-2xl" }, d.icon),
+      h('div', { className: "flex-1 min-w-0" },
+        h('h4', { className: "text-sm font-bold text-white mb-1" }, `Découvre ${d.label}`),
+        h('p', { className: "text-xs text-muted-foreground mb-3" }, d.desc),
+        h('div', { className: "flex gap-2" },
+          h('button', { onClick: () => { setVisible(false); onDiscover(d.id); }, className: "flex-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white", style: { background: "linear-gradient(135deg,#f59e0b,#f97316)" } }, "Découvrir"),
+          h('button', { onClick: () => { setVisible(false); onDismiss(d.id); }, className: "px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground", style: { background: "#151528" } }, "Ignorer")
+        )
+      ),
+      h('button', { onClick: () => { setVisible(false); onDismiss(d.id); }, className: "absolute top-2 right-2 text-muted-foreground hover:text-white text-sm" }, "✕")
+    )
+  );
+}
+
 function BottomNav({ view, setView }) {
   const items = [
     { id: "library",   label: "Biblio",     Icon: Gamepad2 },
@@ -2534,6 +2557,8 @@ function App() {
   const [catalogRefreshKey, setCatalogRefreshKey] = useState(0);
   const [communityRefreshKey, setCommunityRefreshKey] = useState(0);
   const [freshReview, setFreshReview] = useState(null);
+  const [discoveries, setDiscoveries] = useState([]);
+  const discoveryTimerRef = useRef(null);
   const refreshBooster = useCallback(async () => {
     try {
       const [bpData, topData] = await Promise.all([API.getBoosterPoints(), API.getTopBoosted()]);
@@ -2615,6 +2640,17 @@ function App() {
     poll();
     const interval = setInterval(poll, 10000);
     return () => clearInterval(interval);
+  }, [user]);
+
+  // Fetch discovery notifications with a delay after login
+  useEffect(() => {
+    if (!user) { setDiscoveries([]); return; }
+    discoveryTimerRef.current = setTimeout(() => {
+      API.getDiscoveries().then(d => {
+        setDiscoveries(d.discoveries || []);
+      }).catch(() => {});
+    }, 3000);
+    return () => { if (discoveryTimerRef.current) clearTimeout(discoveryTimerRef.current); };
   }, [user]);
 
   const loadData = async () => {
@@ -2732,6 +2768,9 @@ function App() {
       setTopThreeIds(new Set(t.map(g => g.game_id)));
     }).catch(() => {});
     API.getGameRatings().then(d => setRatings(d.ratings || {})).catch(() => {});
+    setTimeout(() => {
+      API.getDiscoveries().then(d => setDiscoveries(d.discoveries || [])).catch(() => {});
+    }, 3000);
   };
 
   const handleLogout = async () => {
@@ -2769,6 +2808,18 @@ function App() {
     showToast('Email mis à jour');
   };
 
+  const handleDiscover = (section) => {
+    setDiscoveries(prev => prev.filter(d => d.id !== section));
+    API.dismissDiscovery(section).catch(() => {});
+    const sectionViews = { esport: 'community', reviews: 'reviews', community: 'community', top3: 'profile', boost: 'catalogue' };
+    setView(sectionViews[section] || 'catalogue');
+  };
+
+  const handleDismissDiscovery = (section) => {
+    setDiscoveries(prev => prev.filter(d => d.id !== section));
+    API.dismissDiscovery(section).catch(() => {});
+  };
+
   if (loading) {
     return h('div', { className: "min-h-screen flex items-center justify-center", style: { background: "#030308" } },
       h('div', { className: "flex flex-col items-center gap-3" },
@@ -2796,6 +2847,7 @@ function App() {
         )
       ),
       h(BottomNav, { view, setView }),
+      h(DiscoveryToast, { discoveries, onDiscover: handleDiscover, onDismiss: handleDismissDiscovery }),
       selectedGame && h(GameDetailSheet, {
         key: selectedGame.game_id || selectedGame.id,
         game: selectedGame,

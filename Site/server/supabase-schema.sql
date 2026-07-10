@@ -214,6 +214,15 @@ CREATE TABLE IF NOT EXISTS contact_messages (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Notifications de découverte (sections inexplorées rejetées par l'utilisateur)
+CREATE TABLE IF NOT EXISTS user_discoveries (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  section TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, section)
+);
+
 -- Votes sur les critiques communautaires (pouce bleu/rouge)
 CREATE TABLE IF NOT EXISTS review_votes (
   id SERIAL PRIMARY KEY,

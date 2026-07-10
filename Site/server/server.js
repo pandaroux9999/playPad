@@ -522,7 +522,7 @@ app.get('/api/catalog', catalogLimiter, async (req, res) => {
     const total = catalog.length;
     res.json({ catalog: catalog.slice(offset, offset + limit), total, page, limit });
   } catch (err) {
-    console.error('[Catalog] Error:', err.message);
+    console.error('[Catalog] Error:', err.message, 'query:', JSON.stringify({ search: req.query.search, letter: req.query.letter, page: req.query.page }));
     res.status(500).json({ error: 'Erreur interne' });
   }
 });
@@ -2616,6 +2616,29 @@ app.post('/api/contact', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── DISCOVERY NOTIFICATIONS ────────────────────────────────
+app.get('/api/discoveries', requireAuth, async (req, res) => {
+  try {
+    const discoveries = await db.getUserDiscoveries(req.session.userId);
+    res.json({ discoveries });
+  } catch (err) {
+    console.error('[Discoveries] Error:', err.message);
+    res.json({ discoveries: [] });
+  }
+});
+
+app.post('/api/discoveries/dismiss', requireAuth, async (req, res) => {
+  try {
+    const { section } = req.body;
+    if (!section) return res.status(400).json({ error: 'Section requise' });
+    await db.acknowledgeDiscovery(req.session.userId, section);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Discoveries] Dismiss error:', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
   }
 });
 

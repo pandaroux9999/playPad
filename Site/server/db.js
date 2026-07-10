@@ -705,21 +705,24 @@ async function getCatalogPage(page = 1, limit = 500) {
 }
 
 async function searchCatalog({ search, letter, page = 1, limit = 500 }) {
-  let query = supabaseAdmin.from('catalog').select('*', { count: 'exact' });
+  const offset = (page - 1) * limit;
+  let dataQuery = supabaseAdmin.from('catalog').select('*');
+  let countQuery = supabaseAdmin.from('catalog').select('*', { count: 'exact', head: true });
   if (search && search.trim()) {
-    query = query.ilike('title', `%${search.trim()}%`);
-  } else if (letter && letter !== 'all') {
-    if (letter === '#') {
-      query = query.not('title', '~', '^[A-Za-z]');
-    } else {
-      query = query.ilike('title', `${letter}%`);
-    }
+    const s = search.trim();
+    dataQuery = dataQuery.ilike('title', `%${s}%`);
+    countQuery = countQuery.ilike('title', `%${s}%`);
+  } else if (letter && letter !== 'all' && letter !== '#') {
+    dataQuery = dataQuery.ilike('title', `${letter}%`);
+    countQuery = countQuery.ilike('title', `${letter}%`);
   }
-  const from = (page - 1) * limit;
-  const to = from + limit - 1;
-  const { data, count, error } = await query.order('title').range(from, to);
-  if (error) throw new Error(error.message);
-  return { data: data || [], total: count || 0, page, limit };
+  const [dataRes, countRes] = await Promise.all([
+    dataQuery.order('title').limit(limit).offset(offset),
+    countQuery,
+  ]);
+  if (dataRes.error) throw new Error('[searchCatalog] ' + dataRes.error.message);
+  if (countRes.error) console.error('[searchCatalog] Count error:', countRes.error.message);
+  return { data: dataRes.data || [], total: countRes.count || 0, page, limit };
 }
 
 function invalidateCatalogCache() {
@@ -1332,6 +1335,56 @@ async function clearNewsCache() {
   if (error) throw new Error(error.message);
 }
 
+// ─── DISCOVERY NOTIFICATIONS ─────────────────────────────
+async function getUserDiscoveries(userId) {
+  try {
+    // Fetch all dismissed sections for this user
+    const { data: dismissed } = await supabaseAdmin
+      .from('user_discoveries')
+      .select('section')
+      .eq('user_id', userId);
+    const dismissedSet = new Set((dismissed || []).map(d => d.section));
+
+    // Fetch user data to determine explored sections
+    const [games, reviews, friends, topThree, esportFavs, booster] = await Promise.all([
+      supabaseAdmin.from('games').select('id').eq('user_id', userId).limit(1),
+      supabaseAdmin.from('community_reviews').select('id').eq('user_id', userId).limit(1),
+      supabaseAdmin.from('friends').select('id').eq('user_id', userId).eq('status', 'accepted').limit(1),
+      supabaseAdmin.from('top_three').select('id').eq('user_id', userId).limit(1),
+      supabaseAdmin.from('esport_favorites').select('id').eq('user_id', userId).limit(1),
+      supabaseAdmin.from('booster_points').select('points, claimed_first_login').eq('user_id', userId).maybeSingle(),
+    ]);
+
+    const hasGames = (games.data || []).length > 0;
+    const hasReviews = (reviews.data || []).length > 0;
+    const hasFriends = (friends.data || []).length > 0;
+    const hasTopThree = (topThree.data || []).length > 0;
+    const hasEsportFavs = (esportFavs.data || []).length > 0;
+    const hasUsedBooster = booster.data && (booster.data.points > 0 || booster.data.claimed_first_login);
+
+    const sections = [
+      { id: 'esport', label: 'E-Sport', desc: 'Découvre notre espace e-sport avec matchs en direct et tournois 🏆', icon: '🎮', explored: hasEsportFavs },
+      { id: 'reviews', label: 'Critiques', desc: 'Partage ton avis et découvre les critiques de la communauté ⭐', icon: '💬', explored: hasReviews },
+      { id: 'community', label: 'Communauté', desc: 'Ajoute des amis, discute et suis leur bibliothèque 👥', icon: '👥', explored: hasFriends },
+      { id: 'top3', label: 'Top 3', desc: 'Épingle tes 3 jeux préférés sur ton profil 🏅', icon: '🏅', explored: hasTopThree },
+      { id: 'boost', label: 'Booster', desc: 'Utilise tes points booster pour mettre un jeu en avant ⚡', icon: '⚡', explored: hasUsedBooster },
+    ];
+
+    return sections.filter(s => !s.explored && !dismissedSet.has(s.id));
+  } catch (e) {
+    console.error('[Discoveries] Error:', e.message);
+    return [];
+  }
+}
+
+async function acknowledgeDiscovery(userId, section) {
+  const { error } = await supabaseAdmin
+    .from('user_discoveries')
+    .insert({ user_id: userId, section })
+    .catch(() => {}); // ignore duplicate
+  if (error && error.code !== '23505') throw new Error(error.message);
+}
+
 module.exports = {
   supabaseAdmin,
   createUser,
@@ -1416,6 +1469,8 @@ module.exports = {
   setNotificationPrefs,
   searchPlayersByGame,
   searchStreamers,
+  getUserDiscoveries,
+  acknowledgeDiscovery,
 };
 
 // ─── AUTO-SCHEMA (création des tables manquantes au démarrage) ──

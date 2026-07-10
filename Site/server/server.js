@@ -2866,16 +2866,6 @@ async function refreshAllNews(force) {
       console.error('[News] Fallback e-sport error:', e.message);
     }
   }
-  // On complète avec les articles RSS HLTV (sans remplacer les données structurées)
-  const esportRss = await fetchEsportFromRSS();
-  if (esportRss.length > 0) {
-    const rssTitles = new Set(esport.map(e => e.event || e.title));
-    for (const rss of esportRss) {
-      if (!rssTitles.has(rss.event || rss.title)) {
-        esport.push(rss);
-      }
-    }
-  }
   if (esport.length > 0) {
     await db.addNewsItems('esport', esport);
     results.esport = esport.length;

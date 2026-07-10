@@ -2416,7 +2416,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
         h('input', { value: email, onChange: e => setEmail(e.target.value), type: "email", placeholder: "ton@email.com", className: "w-full bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none mb-3" }),
         h('div', { className: "flex gap-2" },
           h('button', { onClick: () => { setEmailModal(false); setSettingsOpen(true); }, className: "flex-1 py-2 text-xs font-bold rounded-lg", style: { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, "Retour"),
-          h('button', { onClick: async () => { setEmailSaving(true); try { await onUpdateEmail?.(email); setEmailModal(false); setSettingsOpen(true); } catch (e) { } setEmailSaving(false); }, disabled: emailSaving, className: "flex-1 py-2 text-xs font-bold rounded-lg text-white", style: { background: GRAD } }, emailSaving ? "..." : "Sauvegarder")
+          h('button', { onClick: async () => { setEmailSaving(true); try { await onUpdateEmail?.(email); setEmailModal(false); setSettingsOpen(true); } catch (e) { showToast(e.message || 'Erreur'); } setEmailSaving(false); }, disabled: emailSaving, className: "flex-1 py-2 text-xs font-bold rounded-lg text-white", style: { background: GRAD } }, emailSaving ? "..." : "Sauvegarder")
         )
       )
     ),
@@ -3328,7 +3328,8 @@ function App() {
 
   const handleUpdateEmail = async (email) => {
     const data = await API.updateEmail(email);
-    setUser(prev => ({ ...prev, email: data.email }));
+    if (data.error) { showToast(data.error); return; }
+    setUser(prev => ({ ...prev, email: data.email || email }));
     showToast('Email mis à jour');
   };
 

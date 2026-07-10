@@ -1715,14 +1715,16 @@ function NewsDetailSheet({ item, onClose }) {
                   expandedPlayer === p.id && h('div', { className: "mx-2.5 mb-2 p-2.5 rounded-xl text-[9px]", style: { background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.15)" } },
                     !playerDetail
                       ? h('div', { className: "flex items-center gap-2 py-1" }, h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }), "Chargement...")
-                      : h('div', { className: "space-y-1" },
-                          playerDetail.firstName && playerDetail.lastName && h('p', {}, "\uD83D\uDC64 ", playerDetail.firstName, " ", playerDetail.lastName),
-                          playerDetail.role && h('p', {}, "\uD83C\uDFAE Rôle: ", playerDetail.role),
-                          playerDetail.nationality && h('p', {}, "\uD83C\uDF0D Nationalité: ", playerDetail.nationality),
-                          playerDetail.age && h('p', {}, "\uD83C\uDFC2 Âge: ", playerDetail.age),
-                          playerDetail.hometown && h('p', {}, "\uD83C\uDFE0 Ville: ", playerDetail.hometown),
-                          playerDetail.birthday && h('p', {}, "\uD83C\uDF89 Anniversaire: ", playerDetail.birthday),
-                        )
+                      : playerDetail.id === undefined
+                        ? h('p', { className: "text-muted-foreground text-center py-1" }, "Aucune information supplémentaire disponible")
+                        : h('div', { className: "space-y-1" },
+                            playerDetail.firstName && playerDetail.lastName && h('p', {}, "\uD83D\uDC64 ", playerDetail.firstName, " ", playerDetail.lastName),
+                            playerDetail.role && h('p', {}, "\uD83C\uDFAE Rôle: ", playerDetail.role),
+                            playerDetail.nationality && h('p', {}, "\uD83C\uDF0D Nationalité: ", playerDetail.nationality),
+                            playerDetail.age && h('p', {}, "\uD83C\uDFC2 Âge: ", playerDetail.age),
+                            playerDetail.hometown && h('p', {}, "\uD83C\uDFE0 Ville: ", playerDetail.hometown),
+                            playerDetail.birthday && h('p', {}, "\uD83C\uDF89 Anniversaire: ", playerDetail.birthday),
+                          )
                   )
                 )))
           )

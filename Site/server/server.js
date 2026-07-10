@@ -2924,9 +2924,10 @@ app.get('/api/esport/player/:game/:playerId', async (req, res) => {
   try {
     const key = process.env.PANDASCORE_API_KEY;
     if (!key) return res.json({ player: null });
-    const url = `https://api.pandascore.co/${req.params.game}/players/${req.params.playerId}?token=${key}`;
+    const url = `https://api.pandascore.co/players/${req.params.playerId}?token=${key}`;
     const body = await httpGet(url);
     const p = JSON.parse(body);
+    if (!p || p.id === undefined) return res.json({ player: null });
     res.json({
       player: {
         id: p.id,
@@ -2943,6 +2944,7 @@ app.get('/api/esport/player/:game/:playerId', async (req, res) => {
       }
     });
   } catch (err) {
+    console.error('[News] PandaScore player detail error:', err.message);
     res.json({ player: null });
   }
 });

@@ -1443,13 +1443,13 @@ async function createNotification(userId, type, title, body, data) {
 
 async function getNotifications(userId, limit = 50, offset = 0) {
   try {
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('notifications')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
-      .limit(limit)
-      .offset(offset);
+      .range(offset, offset + limit - 1);
+    const { data, error } = await query;
     if (error) { if (isMissingTable(error)) return []; throw new Error(error.message); }
     return data || [];
   } catch (e) {

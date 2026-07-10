@@ -2713,6 +2713,10 @@ async function fetchPandaScoreVideogames() {
     const url = `https://api.pandascore.co/videogames?per_page=100&token=${key}`;
     const body = await httpGet(url);
     const games = JSON.parse(body);
+    if (!Array.isArray(games)) {
+      console.error('[PandaScore] Réponse API non-tableau:', typeof games, games?.error || '');
+      return pandascoreVideogames;
+    }
     // Ne garder que les jeux qui ont une scène e-sport (avec des leagues/tournois)
     pandascoreVideogames = games
       .filter(g => g.name && g.slug)

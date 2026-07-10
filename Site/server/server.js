@@ -2382,6 +2382,28 @@ app.get('/api/game-details/:gameId', requireAuth, generalLimiter, async (req, re
   }
 });
 
+app.get('/api/game-videos/:gameTitle', requireAuth, async (req, res) => {
+  try {
+    const title = decodeURIComponent(req.params.gameTitle);
+    const igdbId = process.env.TWITCH_CLIENT_ID;
+    const igdbSecret = process.env.TWITCH_CLIENT_SECRET;
+    if (!igdbId || !igdbSecret) return res.json({ videos: [] });
+    const token = await igdbGetToken(igdbId, igdbSecret);
+    const data = await igdbApiGet('https://api.igdb.com/v4/games', igdbId, token,
+      `search "${title}"; fields name,videos.video_id,videos.name; limit 3;`
+    );
+    if (!data || data.length === 0) return res.json({ videos: [] });
+    const videos = (data[0]?.videos || []).map(v => ({
+      id: v.video_id,
+      name: v.name || 'Trailer',
+    }));
+    res.json({ videos });
+  } catch (err) {
+    console.error('[GameVideos] Error:', err.message);
+    res.json({ videos: [] });
+  }
+});
+
 // ============ GAME PRICES (RAWG Stores + CheapShark) ============
 
 const STORE_INFO = {

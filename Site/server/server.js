@@ -649,6 +649,39 @@ app.delete('/api/games/platform/:platform', requireAuth, async (req, res) => {
   }
 });
 
+// ─── DOWNLOAD COUNTS ──────────────────────────────────────
+const DOWNLOADS_PATH = path.join(__dirname, 'data', 'downloads.json');
+function readDownloadCounts() {
+  try { return JSON.parse(require('fs').readFileSync(DOWNLOADS_PATH, 'utf-8')); } catch { return {}; }
+}
+function writeDownloadCounts(data) {
+  try {
+    const dir = path.dirname(DOWNLOADS_PATH);
+    if (!require('fs').existsSync(dir)) require('fs').mkdirSync(dir, { recursive: true });
+    require('fs').writeFileSync(DOWNLOADS_PATH, JSON.stringify(data));
+  } catch (e) { console.error('[Downloads] Write error:', e.message); }
+}
+
+app.post('/api/games/download/:gameId', requireAuth, async (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const data = readDownloadCounts();
+    data[gameId] = (data[gameId] || 0) + 1;
+    writeDownloadCounts(data);
+    res.json({ ok: true, count: data[gameId] });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
+app.get('/api/games/download/counts', async (req, res) => {
+  try {
+    res.json({ counts: readDownloadCounts() });
+  } catch (err) {
+    res.json({ counts: {} });
+  }
+});
+
 app.post('/api/admin/reset', requireAuth, async (req, res) => {
   try {
     const user = await db.getUserById(req.session.userId);

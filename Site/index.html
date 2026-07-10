@@ -192,6 +192,7 @@ const API = {
   getEsportMatch: (game, matchId) => API.request('GET', `/api/esport/match/${game}/${matchId}`),
   getEsportTeamPlayers: (game, teamId) => API.request('GET', `/api/esport/team/${game}/${teamId}`),
   getEsportPlayer: (game, playerId) => API.request('GET', `/api/esport/player/${game}/${playerId}`),
+  getEsportTeamInfo: (teamId) => API.request('GET', `/api/esport/team/info/${teamId}`),
   getNotifPrefs: () => API.request('GET', '/api/account/notifications'),
   setNotifPrefs: (emailNotifications) => API.request('POST', '/api/account/notifications', { emailNotifications }),
   searchPlayers: (game) => API.request('GET', `/api/players/search?game=${encodeURIComponent(game)}`),
@@ -1442,7 +1443,8 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
                       isLive && h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold animate-pulse", style: { background: "rgba(34,197,94,0.2)", color: "#22c55e" } }, "EN DIRECT")
                     ),
                     h('p', { className: "text-[8px] text-muted-foreground mt-0.5" },
-                      item.scores && item.scores.length > 0 ? item.scores.join(' - ') + ' \u2022 ' : '',
+                      item.league && item.league + ' \u203A ',
+                      item.tournament && item.tournament + ' \u2022 ',
                       item.game, item.date ? ' \u2022 ' + item.date : ''
                     )
                   ),
@@ -1602,15 +1604,22 @@ function NewsDetailSheet({ item, onClose }) {
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [teamPlayers, setTeamPlayers] = useState([]);
   const [teamLoading, setTeamLoading] = useState(false);
+  const [teamInfo, setTeamInfo] = useState(null);
   const [expandedPlayer, setExpandedPlayer] = useState(null);
   const [playerDetail, setPlayerDetail] = useState(null);
   const loadTeamPlayers = (team) => {
     if (!item.gameSlug || !team.id) return;
     setSelectedTeam(team);
     setTeamLoading(true);
+    setTeamInfo(null);
+    setExpandedPlayer(null);
+    setPlayerDetail(null);
     API.getEsportTeamPlayers(item.gameSlug, team.id).then(d => {
       setTeamPlayers(d.players || []);
     }).catch(() => {}).finally(() => setTeamLoading(false));
+    API.getEsportTeamInfo(team.id).then(d => {
+      if (d.team) setTeamInfo(d.team);
+    }).catch(() => {});
   };
   return h('div', { className: "fixed inset-0 z-50" },
     h('div', { ref: overlayRef, className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
@@ -1646,12 +1655,14 @@ function NewsDetailSheet({ item, onClose }) {
             h('span', { key: 'p'+i, className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: "rgba(255,255,255,0.06)", color: "#8888aa" } }, p.trim())
           )
         ),
-        // Game badge + Source for esport
-        isEsport && h('div', { className: "flex flex-wrap items-center gap-2 mt-2.5" },
-          h('span', { className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: `${P1}20`, color: P1 } }, item.game),
-          item.sourceName && h('span', { className: "text-[8px] text-muted-foreground" }, "Source: ", item.sourceName),
-          item.tournament && h('span', { className: "text-[8px] text-muted-foreground" }, "\u2022", item.tournament),
-          item.league && h('span', { className: "text-[8px] text-muted-foreground" }, "\u2022", item.league)
+        // Game badge + League/Tournament hierarchy for esport
+        isEsport && h('div', { className: "mt-2.5 space-y-1" },
+          h('div', { className: "flex items-center gap-2" },
+            h('span', { className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: `${P1}20`, color: P1 } }, item.game),
+            item.league && h('span', { className: "text-[8px] text-muted-foreground" }, "\u25B6 ", item.league),
+            item.tournament && h('span', { className: "text-[8px] text-muted-foreground" }, "\u25B6 ", item.tournament),
+          ),
+          item.event && item.event !== title && h('p', { className: "text-[9px] text-muted-foreground mt-0.5" }, "Match: ", item.event)
         ),
         // ─── E-SPORT: Game description ──────────────────────
         isEsport && h('div', { className: "mt-4 p-3 rounded-2xl", style: { background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.12)" } },
@@ -1678,6 +1689,24 @@ function NewsDetailSheet({ item, onClose }) {
           ),
           // ─── Team players roster ──────────────────────────
           selectedTeam && h('div', { className: "mt-3 p-3 rounded-2xl", style: { background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.15)" } },
+            // Team info header
+            teamInfo && h('div', { className: "flex items-center gap-2 mb-2 p-2 rounded-xl text-[9px]", style: { background: "rgba(255,255,255,0.03)" } },
+              teamInfo.imageUrl && h('img', { src: teamInfo.imageUrl, alt: teamInfo.name, className: "w-6 h-6 object-contain rounded" }),
+              h('div', { className: "flex-1" },
+                h('p', { className: "font-bold text-foreground text-[10px]" }, teamInfo.name, teamInfo.acronym ? ` (${teamInfo.acronym})` : ''),
+                h('p', { className: "text-muted-foreground" },
+                  teamInfo.location ? `${teamInfo.location} ` : '',
+                  teamInfo.currentVideogame ? `\u2022 ${teamInfo.currentVideogame}` : '',
+                  teamInfo.players?.length ? `\u2022 ${teamInfo.players.length} joueurs` : ''
+                )
+              ),
+              h('a', {
+                href: `https://liquipedia.net/${item.gameSlug}/${selectedTeam.name.replace(/ /g, '_')}`,
+                target: "_blank", rel: "noopener noreferrer",
+                className: "px-2 py-1 rounded-lg font-bold transition-colors flex-shrink-0",
+                style: { background: `${P1}20`, color: P1 }
+              }, "Palmar\u00e8s")
+            ),
             h('div', { className: "flex items-center justify-between mb-3" },
               h('p', { className: "text-[10px] font-bold uppercase tracking-wider", style: { color: "#a78bfa" } }, 
                 "Joueurs ", selectedTeam.name
@@ -1724,6 +1753,14 @@ function NewsDetailSheet({ item, onClose }) {
                             playerDetail.age && h('p', {}, "\uD83C\uDFC2 Âge: ", playerDetail.age),
                             playerDetail.hometown && h('p', {}, "\uD83C\uDFE0 Ville: ", playerDetail.hometown),
                             playerDetail.birthday && h('p', {}, "\uD83C\uDF89 Anniversaire: ", playerDetail.birthday),
+                            playerDetail.currentTeam && h('p', {}, "\uD83C\uDFC6 Équipe: ", playerDetail.currentTeam),
+                            playerDetail.earnings && h('p', {}, "\uD83D\uDCB0 Gains: ", playerDetail.earnings),
+                            playerDetail.slug && h('a', {
+                              href: `https://liquipedia.net/${item.gameSlug}/${playerDetail.name.replace(/ /g, '_')}`,
+                              target: "_blank", rel: "noopener noreferrer",
+                              className: "inline-block mt-1.5 px-2 py-1 rounded-lg text-[8px] font-bold transition-colors",
+                              style: { background: `${P1}20`, color: P1 }
+                            }, "\uD83D\uDD0D Voir le parcours complet")
                           )
                   )
                 )))

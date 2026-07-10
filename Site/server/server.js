@@ -2941,11 +2941,37 @@ app.get('/api/esport/player/:game/:playerId', async (req, res) => {
         age: p.age || '',
         birthday: p.birthday || '',
         hometown: p.hometown || '',
+        currentTeam: p.current_team?.name || '',
+        earnings: p.earnings || '',
       }
     });
   } catch (err) {
     console.error('[News] PandaScore player detail error:', err.message);
     res.json({ player: null });
+  }
+});
+
+app.get('/api/esport/team/info/:teamId', async (req, res) => {
+  try {
+    const key = process.env.PANDASCORE_API_KEY;
+    if (!key) return res.json({ team: null });
+    const url = `https://api.pandascore.co/teams/${req.params.teamId}?token=${key}`;
+    const body = await httpGet(url);
+    const t = JSON.parse(body);
+    if (!t || t.id === undefined) return res.json({ team: null });
+    res.json({
+      team: {
+        id: t.id,
+        name: t.name,
+        acronym: t.acronym || '',
+        imageUrl: t.image_url || '',
+        location: t.location || '',
+        players: (t.players || []).map(p => p.name),
+        currentVideogame: t.current_videogame?.name || '',
+      }
+    });
+  } catch (err) {
+    res.json({ team: null });
   }
 });
 

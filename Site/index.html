@@ -1967,7 +1967,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   const platformStats = ["steam","xbox","epic","gog","nintendo","ps5"].map(p => ({
     id: p, name: PLATFORM_CONFIG[p]?.name || p, color: PLATFORM_CONFIG[p]?.color || "#888",
     count: games.filter(g => (g.platforms || [g.platform]).filter(Boolean).includes(p)).length,
-    connected: p === "steam" ? !!user?.steam_id : p === "xbox" ? !!user?.xbox_gamertag : p === "epic" ? !!user?.epic_username : p === "ps5" ? !!user?.psn_npsso : false,
+    connected: profileConnected?.[p] ?? (p === "steam" ? !!user?.steam_id : p === "xbox" ? !!user?.xbox_gamertag : p === "epic" ? !!user?.epic_username : p === "ps5" ? !!user?.psn_npsso : false),
   }));
   const connectedCount = platformStats.filter(p => p.connected).length;
 
@@ -2057,7 +2057,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
                 try {
                   const r = await API.connectPsn(psnInput);
                   if (r.error) { showToast('Erreur PSN: ' + r.error); return; }
-                  setConnected(c => ({ ...c, ps5: true }));
+                  setProfileConnected(c => ({ ...(c || {}), ps5: true }));
                   onSyncComplete?.();
                   showToast(`${r.count} jeux PlayStation importés`);
                   setShowPsnModal(false);
@@ -2126,7 +2126,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
                   if (p.id === 'steam') r = await API.resyncSteam();
                   else if (p.id === 'xbox' && user?.xbox_gamertag) r = await API.connectXbox(user.xbox_gamertag);
                   else if (p.id === 'epic' && user?.epic_username) { r = await API.connectEpic(user.epic_username); if (r.warning) showToast(r.warning); }
-                  else if (p.id === 'ps5' && user?.psn_npsso) r = await API.resyncPsn();
+                  else if (p.id === 'ps5') r = await API.resyncPsn();
                   if (r?.count !== undefined) showToast(`${r.count} jeux ${p.name} synchronisés`);
                   onSyncComplete?.();
                 } catch (err) { showToast('Erreur: ' + (err.message || 'inconnue')); }

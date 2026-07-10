@@ -706,23 +706,15 @@ async function getCatalogPage(page = 1, limit = 500) {
 
 async function searchCatalog({ search, letter, page = 1, limit = 500 }) {
   const offset = (page - 1) * limit;
-  let dataQuery = supabaseAdmin.from('catalog').select('*');
-  let countQuery = supabaseAdmin.from('catalog').select('*', { count: 'exact', head: true });
+  let query = supabaseAdmin.from('catalog').select('*', { count: 'exact' });
   if (search && search.trim()) {
-    const s = search.trim();
-    dataQuery = dataQuery.ilike('title', `%${s}%`);
-    countQuery = countQuery.ilike('title', `%${s}%`);
+    query = query.ilike('title', `%${search.trim()}%`);
   } else if (letter && letter !== 'all' && letter !== '#') {
-    dataQuery = dataQuery.ilike('title', `${letter}%`);
-    countQuery = countQuery.ilike('title', `${letter}%`);
+    query = query.ilike('title', `${letter}%`);
   }
-  const [dataRes, countRes] = await Promise.all([
-    dataQuery.order('title').limit(limit).offset(offset),
-    countQuery,
-  ]);
-  if (dataRes.error) throw new Error('[searchCatalog] ' + dataRes.error.message);
-  if (countRes.error) console.error('[searchCatalog] Count error:', countRes.error.message);
-  return { data: dataRes.data || [], total: countRes.count || 0, page, limit };
+  const { data, count, error } = await query.order('title').limit(limit).offset(offset);
+  if (error) throw new Error('[searchCatalog] ' + error.message);
+  return { data: data || [], total: count || 0, page, limit };
 }
 
 function invalidateCatalogCache() {

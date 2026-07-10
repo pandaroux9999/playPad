@@ -883,7 +883,6 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const [topBoosted, setTopBoosted] = useState([]);
   const [boostedGamesLocal, setBoostedGamesLocal] = useState(new Set());
   const [showBoostSection, setShowBoostSection] = useState(false);
-  const [sponsored, setSponsored] = useState([]);
   const [boostPoints, setBoostPoints] = useState(null);
   const [newReleases, setNewReleases] = useState([]);
   const [featured, setFeatured] = useState([]);
@@ -967,10 +966,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         ),
         // Boostés de la semaine
         showBoostSection && topBoosted.length > 0 && h('div', null,
-          h('div', { className: "flex items-center justify-between mb-2" },
-            h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5" }, "\u2728 Boost\u00e9s de la semaine"),
-            h('button', { onClick: () => setShowBoostSection(false), className: "text-[9px] font-medium hover:opacity-80", style: { color: `${P1}80` } }, "Masquer")
-          ),
+          h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "\u2728 Boost\u00e9s de la semaine"),
           h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
             topBoosted.slice(0, 10).map(b => {
               const game = b.game;
@@ -1067,6 +1063,7 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
   const [loading, setLoading] = useState(true);
   const [esportFavorites, setEsportFavorites] = useState(new Set());
   const [favLoading, setFavLoading] = useState(false);
+  const [newsSubTab, setNewsSubTab] = useState("sorties");
   const [playerSearchGame, setPlayerSearchGame] = useState('');
   const [playerResults, setPlayerResults] = useState([]);
   const [playerSearching, setPlayerSearching] = useState(false);
@@ -1328,74 +1325,104 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
 
     // --- ONGLET NOUVEAUTES ---
     subTab === "news" && h('div', { className: "px-4 pb-4 space-y-4" },
-      h('div', { className: "flex items-center justify-between mb-2" },
-        h('p', { className: "text-[9px] text-muted-foreground" }, "Mise \u00e0 jour automatique toutes les 2 min"),
+      // Header + news sub-tabs
+      h('div', { className: "flex items-center justify-between mb-1" },
+        h('p', { className: "text-[9px] text-muted-foreground" }, "Mise \u00e0 jour auto toutes les 2 min"),
         h('button', { onClick: () => { loadNews(); }, className: "flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold transition-colors", style: { background: `${P1}15`, color: P1 } }, h(RefreshCw, { size: 10 }), "Actualiser")
       ),
-      h('div', null,
-        h('div', { className: "flex items-center gap-2 mb-3" },
-          h(Calendar, { size: 14, style: { color: P1 } }),
-          h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Sorties a venir"),
-        ),
+      h('div', { className: "flex gap-1.5 pb-3 overflow-x-auto flex-shrink-0" },
+        [
+          { id: "sorties", label: "Sorties", icon: Calendar },
+          { id: "esport", label: "E-Sport", icon: Trophy },
+          { id: "actus", label: "Actus", icon: MessageCircle },
+        ].map(({ id, label, icon }) =>
+          h('button', { key: id, onClick: () => setNewsSubTab(id), className: "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all", style: { background: newsSubTab === id ? `${P1}20` : "rgba(255,255,255,0.05)", color: newsSubTab === id ? P1 : "#8888aa", border: newsSubTab === id ? `1px solid ${P1}30` : "1px solid transparent" } },
+            h(icon, { size: 13 }), label
+          )
+        )
+      ),
+      loadingNews && h('div', { className: "flex items-center justify-center py-10" }, h(Loader, { size: 20, className: "animate-spin", style: { color: P1 } })),
+
+      // ─── ONGLET SORTIES ──────────────────────────────────
+      newsSubTab === "sorties" && h('div', null,
         (() => {
-          const current = releases.filter(r => !r._archived);
-          const archived = releases.filter(r => r._archived);
+          const items = releases.filter(r => !r._archived);
+          const limit = 5;
+          const visible = items.slice(0, limit);
+          const rest = items.slice(limit);
           return h('div', null,
-            current.length === 0 && loadingNews && h('div', { className: "flex items-center justify-center py-6" }, h(Loader, { size: 16, className: "animate-spin", style: { color: P1 } })),
-            current.length === 0 && !loadingNews && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucune actualit\u00e9 pour le moment"),
-            current.map((item, i) => h('div', { key: 'c'+i, onClick: () => setSelectedNews(item), className: "flex gap-3 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.12)" } },
-          h('div', { className: "w-10 h-14 rounded-lg overflow-hidden flex-shrink-0" }, h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover" })),
-          h('div', { className: "flex-1 min-w-0" },
-            h('p', { className: "text-[10px] font-bold", style: { color: P1 } }, item.date),
-            h('p', { className: "text-xs font-bold text-foreground mt-0.5", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
-            h('p', { className: "text-[10px] text-muted-foreground mt-0.5 leading-relaxed line-clamp-2" }, item.desc)
-          ),
-          h(ChevronRight, { size: 14, className: "self-center text-muted-foreground flex-shrink-0" })
-        )),
-            archived.length > 0 && h('div', { className: "mt-2" },
-              h('button', { onClick: () => setShowArchivedReleases(!showArchivedReleases), className: "flex items-center gap-2 w-full p-2.5 rounded-xl text-[10px] font-bold transition-colors", style: { background: "rgba(255,255,255,0.03)", color: "#8888aa" } },
-                h(ChevronRight, { size: 12, className: `transition-transform ${showArchivedReleases ? 'rotate-90' : ''}` }),
-                "Anciennes sorties (", archived.length, ")"
+            visible.length === 0 && !loadingNews && h('p', { className: "text-[11px] text-muted-foreground text-center py-6" }, "Aucune sortie récente pour le moment"),
+            visible.map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "flex gap-3 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] mb-2", style: { background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.12)" } },
+              h('div', { className: "w-14 h-20 rounded-xl overflow-hidden flex-shrink-0" }, h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover" })),
+              h('div', { className: "flex-1 min-w-0" },
+                h('p', { className: "text-[9px] font-bold", style: { color: P1 } }, item.date),
+                h('p', { className: "text-xs font-bold text-foreground mt-0.5 leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
+                item.genre && h('span', { className: "inline-block mt-1 px-1.5 py-0.5 rounded text-[7px] font-bold mr-1", style: { background: "rgba(139,92,246,0.12)", color: "#a78bfa" } }, item.genre.split(',')[0].trim()),
+                item.platforms && item.platforms.split(',').slice(0, 3).map((p, j) =>
+                  h('span', { key: j, className: "inline-block mt-1 px-1.5 py-0.5 rounded text-[7px] font-bold mr-1", style: { background: "rgba(255,255,255,0.06)", color: "#8888aa" } }, p.trim())
+                ),
+                h('p', { className: "text-[9px] text-muted-foreground mt-1.5 leading-relaxed line-clamp-2" }, item.desc)
               ),
-              showArchivedReleases && archived.map((item, i) => h('div', { key: 'a'+i, onClick: () => setSelectedNews(item), className: "flex gap-3 p-2.5 rounded-xl border cursor-pointer transition-all hover:opacity-80 mt-1", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" } },
-                h('div', { className: "w-8 h-11 rounded overflow-hidden flex-shrink-0" }, h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover" })),
-                h('div', { className: "flex-1 min-w-0" },
-                  h('p', { className: "text-[9px] font-bold", style: { color: P1 } }, item.date || ''),
-                  h('p', { className: "text-[10px] font-bold text-foreground mt-0.5", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
-                  h('p', { className: "text-[8px] text-muted-foreground mt-0.5 line-clamp-1" }, item.desc)
-                )
-              ))
-            )
+              h(ChevronRight, { size: 14, className: "self-center text-muted-foreground flex-shrink-0" })
+            )),
+            rest.length > 0 && h('button', { onClick: () => setShowArchivedReleases(!showArchivedReleases), className: "flex items-center gap-2 w-full mt-1 p-2.5 rounded-xl text-[10px] font-bold transition-colors", style: { background: "rgba(255,255,255,0.03)", color: "#8888aa" } },
+              h(ChevronRight, { size: 12, className: `transition-transform ${showArchivedReleases ? 'rotate-90' : ''}` }),
+              "Voir plus (", rest.length, " sorties supplémentaires)"
+            ),
+            showArchivedReleases && rest.map((item, i) => h('div', { key: 'r'+i, onClick: () => setSelectedNews(item), className: "flex gap-2 p-2.5 rounded-xl border cursor-pointer transition-all hover:opacity-80 mt-1", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" } },
+              h('div', { className: "w-8 h-11 rounded overflow-hidden flex-shrink-0" }, h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover" })),
+              h('div', { className: "flex-1 min-w-0" },
+                h('p', { className: "text-[9px] font-bold", style: { color: P1 } }, item.date || ''),
+                h('p', { className: "text-[10px] font-bold text-foreground mt-0.5 leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title)
+              )
+            ))
           );
         })()
       ),
-      h('div', null,
-        h('div', { className: "flex items-center gap-2 mb-3 mt-2" },
-          h(Trophy, { size: 14, style: { color: "#fbbf24" } }),
-          h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "E-Sport"),
-          h('span', { className: "ml-auto text-[8px] text-muted-foreground" }, esportFavorites.size, " favoris")
-        ),
+
+      // ─── ONGLET E-SPORT ──────────────────────────────────
+      newsSubTab === "esport" && h('div', null,
         (() => {
-          const current = esportEvents.filter(r => !r._archived);
-          const archived = esportEvents.filter(r => r._archived);
+          const items = esportEvents.filter(r => !r._archived);
+          const limit = 5;
+          const visible = items.slice(0, limit);
+          const rest = items.slice(limit);
           return h('div', null,
-            current.length === 0 && loadingNews && h('div', { className: "flex items-center justify-center py-6" }, h(Loader, { size: 16, className: "animate-spin", style: { color: P1 } })),
-            current.length === 0 && !loadingNews && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucun \u00e9v\u00e9nement e-sport pour le moment"),
-            current.map((item, i) => {
+            h('div', { className: "flex items-center gap-2 mb-3" },
+              h(Trophy, { size: 14, style: { color: "#fbbf24" } }),
+              h('span', { className: "text-[10px] text-muted-foreground" }, esportFavorites.size, " favoris")
+            ),
+            visible.length === 0 && !loadingNews && h('p', { className: "text-[11px] text-muted-foreground text-center py-6" }, "Aucun événement e-sport pour le moment"),
+            visible.map((item, i) => {
               const favKey = (item.event || item.title || '') + '::' + (item.game || '');
               const isFav = esportFavorites.has(favKey);
-              return h('div', { key: 'c'+i, className: "flex items-center gap-2 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.1)" } },
+              const isLive = item.status === 'running' || item.status === 'live';
+              return h('div', { key: i, className: "flex items-center gap-2 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] mb-2", style: { background: isLive ? "rgba(34,197,94,0.06)" : "rgba(251,191,36,0.06)", border: isLive ? "1px solid rgba(34,197,94,0.2)" : "1px solid rgba(251,191,36,0.1)" } },
                 h('div', { onClick: () => setSelectedNews(item), className: "flex items-center gap-2 flex-1 min-w-0" },
-                  h(Trophy, { size: 16, style: { color: "#fbbf24", flexShrink: 0 } }),
+                  // Team logos if available
+                  item.teams && item.teams.length > 0
+                    ? h('div', { className: "flex -space-x-2 flex-shrink-0" },
+                        item.teams.slice(0, 2).map((t, ti) =>
+                          t.logo
+                            ? h('img', { key: ti, src: t.logo, alt: t.name, className: "w-7 h-7 rounded-full object-contain border-2", style: { borderColor: "#1a1a2e", background: "#1a1a2e" } })
+                            : h('div', { key: ti, className: "w-7 h-7 rounded-full flex items-center justify-center text-[8px] font-black text-white border-2", style: { background: GRAD, borderColor: "#1a1a2e" } }, (t.name || '?')[0])
+                        )
+                      )
+                    : h(Trophy, { size: 16, style: { color: "#fbbf24", flexShrink: 0 } }),
                   h('div', { className: "flex-1 min-w-0" },
-                    h('p', { className: "text-xs font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event),
-                    h('p', { className: "text-[9px] text-muted-foreground mt-0.5" }, item.desc, " \u2022 ", item.date)
+                    h('div', { className: "flex items-center gap-1.5" },
+                      h('p', { className: "text-xs font-bold text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event),
+                      isLive && h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold animate-pulse", style: { background: "rgba(34,197,94,0.2)", color: "#22c55e" } }, "EN DIRECT")
+                    ),
+                    h('p', { className: "text-[8px] text-muted-foreground mt-0.5" },
+                      item.scores && item.scores.length > 0 ? item.scores.join(' - ') + ' \u2022 ' : '',
+                      item.game, item.date ? ' \u2022 ' + item.date : ''
+                    )
                   ),
-                  h('span', { className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: `${P1}20`, color: P1 } }, item.game),
-                  h(ChevronRight, { size: 12, className: "text-muted-foreground flex-shrink-0" })
+                  h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold flex-shrink-0", style: { background: `${P1}20`, color: P1 } }, item.game)
                 ),
                 h(Star, {
-                  size: 14,
+                  size: 13,
                   fill: isFav ? "#fbbf24" : "none",
                   stroke: isFav ? "#fbbf24" : "#8888aa",
                   className: "flex-shrink-0 cursor-pointer transition-all hover:scale-110",
@@ -1403,127 +1430,127 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
                 })
               );
             }),
-            archived.length > 0 && h('div', { className: "mt-2" },
-              h('button', { onClick: () => setShowArchivedEsport(!showArchivedEsport), className: "flex items-center gap-2 w-full p-2.5 rounded-xl text-[10px] font-bold transition-colors", style: { background: "rgba(255,255,255,0.03)", color: "#8888aa" } },
-                h(ChevronRight, { size: 12, className: `transition-transform ${showArchivedEsport ? 'rotate-90' : ''}` }),
-                "Anciens \u00e9v\u00e9nements (", archived.length, ")"
+            rest.length > 0 && h('button', { onClick: () => setShowArchivedEsport(!showArchivedEsport), className: "flex items-center gap-2 w-full mt-1 p-2.5 rounded-xl text-[10px] font-bold transition-colors", style: { background: "rgba(255,255,255,0.03)", color: "#8888aa" } },
+              h(ChevronRight, { size: 12, className: `transition-transform ${showArchivedEsport ? 'rotate-90' : ''}` }),
+              "Voir plus (", rest.length, " événements supplémentaires)"
+            ),
+            showArchivedEsport && rest.map((item, i) => h('div', { key: 'e'+i, onClick: () => setSelectedNews(item), className: "flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all hover:opacity-80 mt-1", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" } },
+              h(Trophy, { size: 12, style: { color: "#fbbf24", flexShrink: 0 } }),
+              h('div', { className: "flex-1 min-w-0" },
+                h('p', { className: "text-[10px] font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event),
+                h('p', { className: "text-[8px] text-muted-foreground mt-0.5" }, item.game, item.date ? ' \u2022 ' + item.date : '')
+              )
+            )),
+            // ─── Joueurs par jeu (intégré à l'esport) ──────
+            h('div', { className: "mt-5 pt-4 border-t border-border" },
+              h('div', { className: "flex items-center gap-2 mb-3" },
+                h(Users, { size: 14, style: { color: P1 } }),
+                h('h3', { className: "text-xs font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Joueurs par jeu"),
               ),
-              showArchivedEsport && archived.map((item, i) => h('div', { key: 'a'+i, onClick: () => setSelectedNews(item), className: "flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all hover:opacity-80 mt-1", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" } },
-                h(Trophy, { size: 12, style: { color: "#fbbf24", flexShrink: 0 } }),
-                h('div', { className: "flex-1 min-w-0" },
-                  h('p', { className: "text-[10px] font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event),
-                  h('p', { className: "text-[8px] text-muted-foreground mt-0.5" }, item.desc, " \u2022 ", item.date)
+              h('div', { className: "flex gap-2 mb-3" },
+                h('input', {
+                  value: playerSearchGame,
+                  onChange: e => setPlayerSearchGame(e.target.value),
+                  onKeyDown: e => { if (e.key === 'Enter') { setPlayerSearching(true); API.searchPlayers(playerSearchGame).then(d => setPlayerResults(d.players || [])).catch(() => {}).finally(() => setPlayerSearching(false)); } },
+                  placeholder: "Cherche des joueurs...",
+                  className: "flex-1 bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none"
+                }),
+                h('button', {
+                  onClick: () => { setPlayerSearching(true); API.searchPlayers(playerSearchGame).then(d => setPlayerResults(d.players || [])).catch(() => {}).finally(() => setPlayerSearching(false)); },
+                  disabled: playerSearching || !playerSearchGame.trim(),
+                  className: "px-3 py-2.5 rounded-xl text-xs font-bold text-white flex-shrink-0", style: { background: GRAD }
+                }, playerSearching ? h(Loader, { size: 12, className: "animate-spin" }) : h(Search, { size: 12 }))
+              ),
+              playerResults.length === 0 && playerSearchGame && !playerSearching && h('p', { className: "text-[10px] text-muted-foreground text-center py-3" }, "Aucun joueur trouvé pour ce jeu"),
+              h('div', { className: "space-y-1.5" }, playerResults.slice(0, 5).map(p =>
+                h('div', { key: p.id, onClick: () => onSelectFriend?.(p), className: "flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.03)" } },
+                  h('div', { className: "w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white flex-shrink-0 overflow-hidden", style: { background: GRAD } },
+                    p.avatarUrl ? h('img', { src: p.avatarUrl, alt: "", className: "w-full h-full object-cover" }) : (p.displayName || p.username || '?').charAt(0).toUpperCase()
+                  ),
+                  h('div', { className: "flex-1 min-w-0" },
+                    h('p', { className: "text-xs font-bold text-foreground" }, p.displayName || p.username),
+                    h('p', { className: "text-[8px] text-muted-foreground" }, "@", p.username)
+                  ),
+                  h(ChevronRight, { size: 12, className: "text-muted-foreground flex-shrink-0" })
                 )
-              ))
+              )),
+              playerResults.length > 5 && h('button', { className: "w-full mt-1 p-2 rounded-xl text-[9px] font-bold text-center transition-colors", style: { background: "rgba(255,255,255,0.03)", color: "#8888aa" } }, "Voir les ", playerResults.length, " résultats"),
+              // Streamers section under esport too
+              h('div', { className: "mt-4" },
+                h('div', { className: "flex items-center gap-2 mb-3" },
+                  h(Monitor, { size: 14, style: { color: "#9146ff" } }),
+                  h('h3', { className: "text-xs font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Streamers en direct"),
+                ),
+                h('div', { className: "flex gap-2 mb-3" },
+                  h('input', {
+                    value: playerSearchGame,
+                    onChange: e => setPlayerSearchGame(e.target.value),
+                    onKeyDown: e => { if (e.key === 'Enter') { setStreamerSearching(true); API.searchStreamers(playerSearchGame).then(d => setStreamerResults(d.streamers || [])).catch(() => {}).finally(() => setStreamerSearching(false)); } },
+                    placeholder: "Cherche un jeu...",
+                    className: "flex-1 bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none"
+                  }),
+                  h('button', {
+                    onClick: () => { setStreamerSearching(true); API.searchStreamers(playerSearchGame).then(d => setStreamerResults(d.streamers || [])).catch(() => {}).finally(() => setStreamerSearching(false)); },
+                    disabled: streamerSearching || !playerSearchGame.trim(),
+                    className: "px-3 py-2.5 rounded-xl text-xs font-bold text-white flex-shrink-0", style: { background: GRAD }
+                  }, streamerSearching ? h(Loader, { size: 12, className: "animate-spin" }) : h(Search, { size: 12 }))
+                ),
+                streamerResults.length === 0 && playerSearchGame && !streamerSearching && h('p', { className: "text-[10px] text-muted-foreground text-center py-3" }, "Aucun streamer trouvé pour ce jeu"),
+                h('div', { className: "space-y-1.5" }, streamerResults.slice(0, 5).map(s =>
+                  h('a', { key: s.id, href: `https://twitch.tv/${s.login}`, target: "_blank", rel: "noopener noreferrer", className: "flex items-center gap-2.5 p-2.5 rounded-xl transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.03)" } },
+                    h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black text-white flex-shrink-0 overflow-hidden", style: { background: "#9146ff" } },
+                      s.thumbnailUrl ? h('img', { src: s.thumbnailUrl.replace('{width}x{height}', '70x70'), alt: "", className: "w-full h-full object-cover", onError: e => e.target.style.display = 'none' }) : h(Monitor, { size: 12 })
+                    ),
+                    h('div', { className: "flex-1 min-w-0" },
+                      h('p', { className: "text-xs font-bold text-foreground" }, s.displayName),
+                      h('p', { className: "text-[8px] text-muted-foreground" }, s.gameName || 'Jeu inconnu')
+                    ),
+                    s.isLive && h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold animate-pulse", style: { background: "rgba(239,68,68,0.2)", color: "#ef4444" } }, "LIVE"),
+                    h(ExternalLink, { size: 10, className: "text-muted-foreground flex-shrink-0" })
+                  )
+                ))
+              )
             )
           );
         })()
       ),
-      // ─── Joueurs par jeu ─────────────────────────────────
-      h('div', { className: "mt-4" },
-        h('div', { className: "flex items-center gap-2 mb-3" },
-          h(Users, { size: 14, style: { color: P1 } }),
-          h('h2', { className: "text-sm font-black text-foreground flex-1", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Joueurs"),
-        ),
-        h('div', { className: "flex gap-2 mb-3" },
-          h('input', {
-            value: playerSearchGame,
-            onChange: e => setPlayerSearchGame(e.target.value),
-            onKeyDown: e => { if (e.key === 'Enter') { setPlayerSearching(true); API.searchPlayers(playerSearchGame).then(d => setPlayerResults(d.players || [])).catch(() => {}).finally(() => setPlayerSearching(false)); } },
-            placeholder: "Cherche un jeu...",
-            className: "flex-1 bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none"
-          }),
-          h('button', {
-            onClick: () => { setPlayerSearching(true); API.searchPlayers(playerSearchGame).then(d => setPlayerResults(d.players || [])).catch(() => {}).finally(() => setPlayerSearching(false)); },
-            disabled: playerSearching || !playerSearchGame.trim(),
-            className: "px-3 py-2.5 rounded-xl text-xs font-bold text-white flex-shrink-0", style: { background: GRAD }
-          }, playerSearching ? h(Loader, { size: 12, className: "animate-spin" }) : h(Search, { size: 12 }))
-        ),
-        playerResults.length === 0 && playerSearchGame && !playerSearching && h('p', { className: "text-[10px] text-muted-foreground text-center py-3" }, "Aucun joueur trouv\u00e9 pour ce jeu"),
-        h('div', { className: "space-y-1.5" }, playerResults.map(p =>
-          h('div', { key: p.id, onClick: () => onSelectFriend?.(p), className: "flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.03)" } },
-            h('div', { className: "w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white flex-shrink-0 overflow-hidden", style: { background: GRAD } },
-              p.avatarUrl ? h('img', { src: p.avatarUrl, alt: "", className: "w-full h-full object-cover" }) : (p.displayName || p.username || '?').charAt(0).toUpperCase()
-            ),
-            h('div', { className: "flex-1 min-w-0" },
-              h('p', { className: "text-xs font-bold text-foreground" }, p.displayName || p.username),
-              h('p', { className: "text-[8px] text-muted-foreground" }, "@", p.username)
-            ),
-            h(ChevronRight, { size: 12, className: "text-muted-foreground flex-shrink-0" })
-          )
-        ))
-      ),
-      // ─── Streamers ───────────────────────────────────────
-      h('div', { className: "mt-4" },
-        h('div', { className: "flex items-center gap-2 mb-3" },
-          h(Monitor, { size: 14, style: { color: "#ef4444" } }),
-          h('h2', { className: "text-sm font-black text-foreground flex-1", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Streamers & YouTubeurs"),
-        ),
-        h('div', { className: "flex gap-2 mb-3" },
-          h('input', {
-            value: playerSearchGame,
-            onChange: e => setPlayerSearchGame(e.target.value),
-            onKeyDown: e => { if (e.key === 'Enter') { setStreamerSearching(true); API.searchStreamers(playerSearchGame).then(d => setStreamerResults(d.streamers || [])).catch(() => {}).finally(() => setStreamerSearching(false)); } },
-            placeholder: "Cherche un jeu...",
-            className: "flex-1 bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none"
-          }),
-          h('button', {
-            onClick: () => { setStreamerSearching(true); API.searchStreamers(playerSearchGame).then(d => setStreamerResults(d.streamers || [])).catch(() => {}).finally(() => setStreamerSearching(false)); },
-            disabled: streamerSearching || !playerSearchGame.trim(),
-            className: "px-3 py-2.5 rounded-xl text-xs font-bold text-white flex-shrink-0", style: { background: GRAD }
-          }, streamerSearching ? h(Loader, { size: 12, className: "animate-spin" }) : h(Search, { size: 12 }))
-        ),
-        streamerResults.length === 0 && playerSearchGame && !streamerSearching && h('p', { className: "text-[10px] text-muted-foreground text-center py-3" }, "Aucun streamer trouv\u00e9 pour ce jeu"),
-        h('div', { className: "space-y-1.5" }, streamerResults.map(s =>
-          h('a', { key: s.id, href: `https://twitch.tv/${s.login}`, target: "_blank", rel: "noopener noreferrer", className: "flex items-center gap-2.5 p-2.5 rounded-xl transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.03)" } },
-            h('div', { className: "w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black text-white flex-shrink-0 overflow-hidden", style: { background: "#9146ff" } },
-              s.thumbnailUrl ? h('img', { src: s.thumbnailUrl.replace('{width}x{height}', '70x70'), alt: "", className: "w-full h-full object-cover", onError: e => e.target.style.display = 'none' }) : h(Monitor, { size: 12 })
-            ),
-            h('div', { className: "flex-1 min-w-0" },
-              h('p', { className: "text-xs font-bold text-foreground" }, s.displayName),
-              h('p', { className: "text-[8px] text-muted-foreground" }, s.gameName || 'Jeu inconnu', s.isLive ? " \u2022 EN DIRECT" : '')
-            ),
-            s.isLive && h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold", style: { background: "rgba(239,68,68,0.2)", color: "#ef4444" } }, "LIVE"),
-            h(ExternalLink, { size: 10, className: "text-muted-foreground flex-shrink-0" })
-          )
-        ))
-      ),
-      h('div', null,
-        h('div', { className: "flex items-center gap-2 mb-3 mt-2" },
-          h(MessageCircle, { size: 14, style: { color: "#ef4444" } }),
-          h('h2', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Drama & Actu"),
-        ),
+
+      // ─── ONGLET ACTUS ────────────────────────────────────
+      newsSubTab === "actus" && h('div', null,
         (() => {
-          const current = dramaItems.filter(r => !r._archived);
-          const archived = dramaItems.filter(r => r._archived);
+          const items = dramaItems.filter(r => !r._archived);
+          const limit = 6;
+          const visible = items.slice(0, limit);
+          const rest = items.slice(limit);
           return h('div', null,
-            current.length === 0 && loadingNews && h('div', { className: "flex items-center justify-center py-6" }, h(Loader, { size: 16, className: "animate-spin", style: { color: P1 } })),
-            current.length === 0 && !loadingNews && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucune actualit\u00e9 pour le moment"),
-            current.map((item, i) => h('div', { key: 'c'+i, onClick: () => setSelectedNews(item), className: "p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.1)" } },
-              h('div', { className: "flex items-start gap-2" },
-                h('span', { className: "px-1.5 py-0.5 rounded text-[8px] font-bold flex-shrink-0 mt-0.5", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.2)" : "rgba(59,130,246,0.2)", color: item.tag === "Drama" ? "#ef4444" : "#3b82f6" } }, item.tag),
+            visible.length === 0 && !loadingNews && h('p', { className: "text-[11px] text-muted-foreground text-center py-6" }, "Aucune actualité pour le moment"),
+            visible.map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] mb-2", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.05)" : "rgba(59,130,246,0.05)", border: item.tag === "Drama" ? "1px solid rgba(239,68,68,0.12)" : "1px solid rgba(59,130,246,0.12)" } },
+              h('div', { className: "flex items-start gap-2.5" },
                 h('div', { className: "flex-1 min-w-0" },
-                  h('p', { className: "text-[11px] font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
-                  h('p', { className: "text-[10px] text-muted-foreground mt-0.5 leading-relaxed line-clamp-2" }, item.desc)
+                  h('div', { className: "flex items-center gap-1.5 mb-1" },
+                    h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.2)" : "rgba(59,130,246,0.2)", color: item.tag === "Drama" ? "#ef4444" : "#3b82f6" } }, item.tag || 'Actu'),
+                    item.sourceName && h('span', { className: "text-[7px] text-muted-foreground" }, item.sourceName),
+                    item.officialUrl && h('a', { href: item.officialUrl, target: "_blank", rel: "noopener noreferrer", onClick: e => e.stopPropagation(), className: "ml-auto px-1.5 py-0.5 rounded text-[7px] font-bold transition-colors", style: { background: "rgba(34,197,94,0.15)", color: "#22c55e" } }, h(ExternalLink, { size: 8, className: "inline mr-0.5" }), "LIVE")
+                  ),
+                  h('p', { className: "text-[11px] font-bold text-foreground leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
+                  h('p', { className: "text-[9px] text-muted-foreground mt-1 leading-relaxed line-clamp-2" }, item.desc || item.details)
                 ),
                 h(ChevronRight, { size: 14, className: "self-center text-muted-foreground flex-shrink-0" })
               )
             )),
-            archived.length > 0 && h('div', { className: "mt-2" },
-              h('button', { onClick: () => setShowArchivedDrama(!showArchivedDrama), className: "flex items-center gap-2 w-full p-2.5 rounded-xl text-[10px] font-bold transition-colors", style: { background: "rgba(255,255,255,0.03)", color: "#8888aa" } },
-                h(ChevronRight, { size: 12, className: `transition-transform ${showArchivedDrama ? 'rotate-90' : ''}` }),
-                "Anciennes actualit\u00e9s (", archived.length, ")"
-              ),
-              showArchivedDrama && archived.map((item, i) => h('div', { key: 'a'+i, onClick: () => setSelectedNews(item), className: "p-2.5 rounded-xl border cursor-pointer transition-all hover:opacity-80 mt-1", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" } },
-                h('div', { className: "flex items-start gap-2" },
-                  h('span', { className: "px-1 py-0.5 rounded text-[7px] font-bold flex-shrink-0", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.15)" : "rgba(59,130,246,0.15)", color: item.tag === "Drama" ? "#ef4444" : "#3b82f6" } }, item.tag || ''),
-                  h('div', { className: "flex-1 min-w-0" },
-                    h('p', { className: "text-[10px] font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
-                    h('p', { className: "text-[8px] text-muted-foreground mt-0.5 line-clamp-1" }, item.desc)
-                  )
+            rest.length > 0 && h('button', { onClick: () => setShowArchivedDrama(!showArchivedDrama), className: "flex items-center gap-2 w-full mt-1 p-2.5 rounded-xl text-[10px] font-bold transition-colors", style: { background: "rgba(255,255,255,0.03)", color: "#8888aa" } },
+              h(ChevronRight, { size: 12, className: `transition-transform ${showArchivedDrama ? 'rotate-90' : ''}` }),
+              "Voir plus (", rest.length, " actualités supplémentaires)"
+            ),
+            showArchivedDrama && rest.map((item, i) => h('div', { key: 'd'+i, onClick: () => setSelectedNews(item), className: "p-2.5 rounded-xl border cursor-pointer transition-all hover:opacity-80 mt-1", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" } },
+              h('div', { className: "flex items-start gap-2" },
+                h('span', { className: "px-1 py-0.5 rounded text-[7px] font-bold flex-shrink-0", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.15)" : "rgba(59,130,246,0.15)", color: item.tag === "Drama" ? "#ef4444" : "#3b82f6" } }, item.tag || ''),
+                h('div', { className: "flex-1 min-w-0" },
+                  h('p', { className: "text-[10px] font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
+                  h('p', { className: "text-[8px] text-muted-foreground mt-0.5 line-clamp-1" }, item.desc)
                 )
-              ))
-            )
+              )
+            ))
           );
         })()
       )
@@ -1539,15 +1566,16 @@ function NewsDetailSheet({ item, onClose }) {
   const isDrama = item.type === "drama";
   const title = isRelease ? item.title : isEsport ? item.event : item.title;
   const tagColor = isRelease ? P1 : isEsport ? "#fbbf24" : item.tag === "Drama" ? "#ef4444" : "#3b82f6";
+  const isLive = item.status === 'running' || item.status === 'live';
   const links = [];
-  if (item.officialUrl) links.push({ label: isRelease ? "Site officiel" : isEsport ? "Site du tournoi" : "Site officiel", url: item.officialUrl, icon: Globe });
-  if (item.sourceUrl) links.push({ label: "Source : " + (item.sourceName || "Article"), url: item.sourceUrl, icon: ExternalLink });
+  if (item.officialUrl) links.push({ label: isRelease ? "Site officiel" : isEsport ? "Voir le match" : "Voir l'article", url: item.officialUrl, icon: Globe });
+  if (item.sourceUrl && item.sourceUrl !== item.officialUrl) links.push({ label: "Source : " + (item.sourceName || "Article"), url: item.sourceUrl, icon: ExternalLink });
   const { panelRef, overlayRef, onTouchStart, onTouchMove, onTouchEnd } = useSheetSwipe(onClose);
   return h('div', { className: "fixed inset-0 z-50" },
     h('div', { ref: overlayRef, className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
     h('div', { ref: panelRef, onTouchStart, onTouchMove, onTouchEnd, className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-y-auto", style: { maxHeight: "85%", scrollbarWidth: "none" } },
       // Cover header
-      isRelease && item.cover && h('div', { className: "relative h-44 flex-shrink-0" },
+      isRelease && item.cover && h('div', { className: "relative h-48 flex-shrink-0" },
         h('img', { src: item.cover, alt: title, className: "w-full h-full object-cover" }),
         h('div', { className: "absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" }),
         h('button', { onClick: onClose, className: "absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-black/60 text-white backdrop-blur" }, h(X, { size: 18 }))
@@ -1558,34 +1586,54 @@ function NewsDetailSheet({ item, onClose }) {
         !isRelease && h('div', { className: "flex justify-end mb-2" },
           h('button', { onClick: onClose, className: "grid h-9 w-9 place-items-center rounded-full bg-black/60 text-white backdrop-blur" }, h(X, { size: 18 }))
         ),
-        // Tag + Date
+        // Tag + Date + Live badge
         h('div', { className: "flex items-center gap-2 mb-2" },
           h('span', { className: "px-2 py-0.5 rounded text-[9px] font-bold", style: { background: tagColor + "20", color: tagColor } },
             isRelease ? "Sortie" : isEsport ? "E-Sport" : item.tag
           ),
+          isLive && h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold animate-pulse", style: { background: "rgba(34,197,94,0.2)", color: "#22c55e" } }, "EN DIRECT"),
           item.date && h('span', { className: "text-[10px] text-muted-foreground" }, item.date)
         ),
         // Title
         h('h2', { className: "text-lg font-black text-foreground leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, title),
-        // Game badge for esport
-        isEsport && h('span', { className: "inline-block mt-2 px-2 py-0.5 rounded text-[9px] font-bold", style: { background: `${P1}20`, color: P1 } }, item.game),
-        // Teams for esport matches (PandaScore data)
-        isEsport && item.teams && item.teams.length > 0 && h('div', { className: "mt-4 space-y-2" },
-          h('p', { className: "text-[10px] font-bold uppercase tracking-wider text-muted-foreground" }, "Équipes"),
-          h('div', { className: "flex gap-3" },
-            item.teams.map((t, i) =>
-              h('div', { key: i, className: "flex-1 p-3 rounded-xl text-center", style: { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" } },
-                t.logo && h('img', { src: t.logo, alt: t.name, className: "w-10 h-10 object-contain mx-auto mb-1.5" }),
-                h('p', { className: "text-xs font-bold text-foreground" }, t.name),
-                item.scores && item.scores[i] !== undefined && h('p', { className: "text-lg font-black mt-1", style: { color: P1 } }, item.scores[i])
-              )
-            )
+        // Platform + Genre badges for releases
+        isRelease && h('div', { className: "flex flex-wrap gap-1.5 mt-2.5" },
+          item.genre && item.genre.split(',').slice(0, 3).map((g, i) =>
+            h('span', { key: 'g'+i, className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: "rgba(139,92,246,0.15)", color: "#a78bfa" } }, g.trim())
+          ),
+          item.platforms && item.platforms.split(',').slice(0, 4).map((p, i) =>
+            h('span', { key: 'p'+i, className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: "rgba(255,255,255,0.06)", color: "#8888aa" } }, p.trim())
           )
         ),
-        // Tournament name
-        isEsport && item.tournament && h('p', { className: "text-[10px] text-muted-foreground mt-3" }, item.tournament),
+        // Game badge + Source for esport
+        isEsport && h('div', { className: "flex items-center gap-2 mt-2.5" },
+          h('span', { className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: `${P1}20`, color: P1 } }, item.game),
+          item.sourceName && h('span', { className: "text-[8px] text-muted-foreground" }, "Source: ", item.sourceName),
+          item.tournament && h('span', { className: "text-[8px] text-muted-foreground" }, "\u2022", item.tournament)
+        ),
+        // Teams for esport matches (PandaScore data) - enhanced with scores and status
+        isEsport && item.teams && item.teams.length > 0 && h('div', { className: "mt-4 p-4 rounded-2xl", style: { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" } },
+          h('p', { className: "text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3" }, isLive ? "\u26a1 Match en cours" : "\u00c9quipes"),
+          h('div', { className: "flex items-center gap-3" },
+            item.teams.map((t, i) =>
+              h('div', { key: i, className: "flex-1 flex flex-col items-center gap-1.5" },
+                t.logo
+                  ? h('img', { src: t.logo, alt: t.name, className: "w-12 h-12 object-contain rounded-xl", style: { background: "rgba(255,255,255,0.05)" } })
+                  : h('div', { className: "w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black text-white", style: { background: GRAD } }, (t.name || '?')[0]),
+                h('p', { className: "text-xs font-bold text-foreground text-center leading-tight" }, t.name),
+                item.scores && item.scores[i] !== undefined && h('p', { className: "text-2xl font-black mt-0.5", style: { color: isLive ? "#22c55e" : P1 } }, item.scores[i])
+              )
+            ),
+            item.teams.length === 2 && h('p', { className: "text-lg font-black text-muted-foreground" }, "VS")
+          )
+        ),
+        // Source badge for drama/actus with live link
+        isDrama && h('div', { className: "flex items-center gap-2 mt-3" },
+          item.sourceName && h('span', { className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: "rgba(59,130,246,0.12)", color: "#3b82f6" } }, item.sourceName),
+          item.officialUrl && h('a', { href: item.officialUrl, target: "_blank", rel: "noopener noreferrer", className: "px-2 py-0.5 rounded text-[8px] font-bold transition-colors", style: { background: "rgba(34,197,94,0.15)", color: "#22c55e" } }, h(ExternalLink, { size: 8, className: "inline mr-0.5" }), "Lire l'article")
+        ),
         // Description
-        h('p', { className: "text-xs text-foreground/80 mt-3 leading-relaxed" }, item.details || item.desc),
+        h('p', { className: "text-xs text-foreground/80 mt-4 leading-relaxed" }, item.details || item.desc),
         // Links
         links.length > 0 && h('div', { className: "mt-5 space-y-2" },
           h('p', { className: "text-[10px] font-bold uppercase tracking-wider text-muted-foreground" }, "Liens"),

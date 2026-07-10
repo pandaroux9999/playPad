@@ -193,6 +193,7 @@ const API = {
   getEsportTeamPlayers: (game, teamId) => API.request('GET', `/api/esport/team/${game}/${teamId}`),
   getEsportPlayer: (game, playerId) => API.request('GET', `/api/esport/player/${game}/${playerId}`),
   getEsportTeamInfo: (teamId) => API.request('GET', `/api/esport/team/info/${teamId}`),
+  getEsportGames: () => API.request('GET', '/api/esport/games'),
   getNotifPrefs: () => API.request('GET', '/api/account/notifications'),
   setNotifPrefs: (emailNotifications) => API.request('POST', '/api/account/notifications', { emailNotifications }),
   searchPlayers: (game) => API.request('GET', `/api/players/search?game=${encodeURIComponent(game)}`),
@@ -1092,6 +1093,7 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
   const [esportFavorites, setEsportFavorites] = useState(new Set());
   const [esportGameFilter, setEsportGameFilter] = useState('');
   const [esportSearch, setEsportSearch] = useState('');
+  const [esportAllGames, setEsportAllGames] = useState([]);
   const [favLoading, setFavLoading] = useState(false);
   const [newsSubTab, setNewsSubTab] = useState("sorties");
   const [playerSearchGame, setPlayerSearchGame] = useState('');
@@ -1119,10 +1121,13 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
   }, []);
   const loadNews = useCallback(() => {
     setLoadingNews(true);
-    API.getNews().then(d => {
-      setReleases(d.releases || []);
-      setEsportEvents(d.esport || []);
-      setDramaItems(d.drama || []);
+    Promise.all([
+      API.getNews(),
+      API.getEsportGames().then(d => setEsportAllGames(d.games || [])).catch(() => {})
+    ]).then(([news]) => {
+      setReleases(news.releases || []);
+      setEsportEvents(news.esport || []);
+      setDramaItems(news.drama || []);
     }).catch(() => {}).finally(() => setLoadingNews(false));
   }, []);
   useEffect(() => { if (freshReview) { setPublicReviews(prev => [freshReview, ...prev.filter(r => r.game_id !== freshReview.game_id || r.user_id !== freshReview.user_id)]); onFreshReviewConsumed(); } }, [freshReview]);
@@ -1441,6 +1446,8 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
           const hasFilter = games.length > 1;
           // Show game filter pills when no search; else hide them
           const showPills = hasFilter && !q;
+          // Game browser: show all games as a grid when no filter and no search
+          const showGameBrowser = !esportGameFilter && !q;
           const matchCard = (item, idx) => {
             const favKey = (item.event || item.title || '') + '::' + (item.game || '');
             const isFav = esportFavorites.has(favKey);
@@ -1512,7 +1519,26 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
                 }, g)
               )
             ),
+            // Game browser (all games grid, shown when no filter/search)
+            showGameBrowser && esportAllGames.length > 0 && h('div', { className: "mb-4" },
+              h('div', { className: "flex items-center gap-2 mb-2.5" },
+                h(Trophy, { size: 13, style: { color: "#fbbf24" } }),
+                h('span', { className: "text-[10px] font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Tous les jeux e-sport"),
+                h('span', { className: "text-[8px] text-muted-foreground" }, "(", esportAllGames.length, " jeux)")
+              ),
+              h('div', { className: "flex flex-wrap gap-1.5" },
+                esportAllGames.map(g =>
+                  h('button', {
+                    key: g.slug,
+                    onClick: () => { setEsportGameFilter(g.name); setEsportSearch(''); },
+                    className: "px-2.5 py-1.5 rounded-lg text-[8px] font-bold whitespace-nowrap transition-all hover:scale-105 active:scale-95",
+                    style: { background: "rgba(255,255,255,0.04)", color: "#a78bfa", border: "1px solid rgba(139,92,246,0.15)" }
+                  }, g.name)
+                )
+              )
+            ),
             allItems.length === 0 && !loadingNews && h('p', { className: "text-[11px] text-muted-foreground text-center py-6" }, "Aucun événement e-sport pour le moment"),
+            q && filtered.length === 0 && !showGameBrowser && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucun match trouvé pour «", q, "»"),
             // Grouped matches
             sortedLeagues.length > 0 && sortedLeagues.map(league =>
               h('div', { key: league, className: "mb-4" },

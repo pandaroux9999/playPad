@@ -2749,10 +2749,11 @@ async function fetchEsportFromPandaScore() {
     allMatches.push(...JSON.parse(await httpGet(pastUrl)));
   } catch (e) {
     console.error('[PandaScore] Erreur API globale /matches:', e.message);
-    // Fallback: une requête par jeu
+    // Fallback: une requête par jeu (avec délai pour respecter rate limit)
     for (const g of allGames) {
       try {
         for (const status of [...statuses, 'finished']) {
+          await new Promise(r => setTimeout(r, 250)); // 250ms entre chaque appel
           const url = `https://api.pandascore.co/${g.slug}/matches?filter[status]=${status}&sort=-begin_at&per_page=5&token=${key}`;
           allMatches.push(...JSON.parse(await httpGet(url)));
         }

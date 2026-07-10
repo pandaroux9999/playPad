@@ -886,6 +886,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const [sponsored, setSponsored] = useState([]);
   const [boostPoints, setBoostPoints] = useState(null);
   const [newReleases, setNewReleases] = useState([]);
+  const [featured, setFeatured] = useState([]);
   const sentinelRef = useRef(null);
   const loadLockRef = useRef(false);
   const LETTERS = ["all", "#", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('')];
@@ -897,7 +898,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       const d = await API.getCatalog(page, 60, search || undefined, activeLetter === 'all' ? undefined : activeLetter);
       const games = d.catalog || [];
       if (append) setCatalog(prev => [...prev, ...games]);
-      else setCatalog(games);
+      else { setCatalog(games); setFeatured(games.filter(g => g.rating >= 4).sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 10)); }
       setCatalogTotal(d.total || 0);
       setCatalogPage(page);
     } catch (e) {
@@ -945,49 +946,67 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       h('div', { className: "relative mb-3 flex gap-2" },
         h('div', { className: "relative flex-1" }, h(Search, { size: 13, className: "absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" }), h('input', { value: search, onChange: e => setSearch(e.target.value), placeholder: "Chercher dans le catalogue\u2026", className: "w-full bg-secondary/60 border border-border rounded-xl pl-8 pr-4 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none" })),
       ),
-      h('div', { className: "flex gap-1 px-4 mb-3 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
-        LETTERS.map(l => h('button', { key: l, onClick: () => { setActiveLetter(l); setSearch(''); }, className: "flex-shrink-0 w-7 h-7 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all", style: activeLetter === l ? { background: GRAD, color: "#fff", boxShadow: "0 0 12px rgba(168,85,247,0.4)" } : { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, l === "all" ? "All" : l))
-      ),
     h('div', { className: "flex-1 overflow-y-auto px-4 pb-20", style: { scrollbarWidth: "none" } },
-      !search && newReleases.length > 0 && activeLetter === 'all' && h('div', { className: "mb-4" },
-        h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, h('span', { style: { color: P2 } }, "\uD83C\uDF89"), " Nouveaut\u00e9s"),
-        h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
-          newReleases.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },
-            h(GameCard, {
-              game: { ...game, userRating: ratings?.[game.game_id] || 0 },
-              onClick: () => onSelect(game),
-              wishlistIds, onWishlist: onToggleWishlist,
-              topThreeIds, onCrown: onToggleTopThree,
-              boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
-              small: true,
-            })
-          ))
-        )
-      ),
-      showBoostSection && topBoosted.length > 0 && activeLetter === 'all' && h('div', { className: "mb-4" },
-        h('div', { className: "flex items-center justify-between mb-2" },
-          h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5" }, "\u2728 Boost\u00e9s de la semaine"),
-          h('button', { onClick: () => setShowBoostSection(false), className: "text-[9px] font-medium hover:opacity-80", style: { color: `${P1}80` } }, "Masquer")
+      // Sections: always visible when not searching (regardless of letter)
+      !search && h('div', { className: "flex flex-col gap-4 mb-3" },
+        // Nouveautés
+        newReleases.length > 0 && h('div', null,
+          h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, h('span', { style: { color: P2 } }, "\uD83C\uDF89"), " Nouveaut\u00e9s"),
+          h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
+            newReleases.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },
+              h(GameCard, {
+                game: { ...game, userRating: ratings?.[game.game_id] || 0 },
+                onClick: () => onSelect(game),
+                wishlistIds, onWishlist: onToggleWishlist,
+                topThreeIds, onCrown: onToggleTopThree,
+                boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
+                small: true,
+              })
+            ))
+          )
         ),
-        h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
-          topBoosted.slice(0, 10).map(b => {
-            const game = b.game;
-            if (!game) return null;
-            const rank = topBoosted.indexOf(b) + 1;
-            const medal = rank === 1 ? "\u{1F947}" : rank === 2 ? "\u{1F948}" : rank === 3 ? "\u{1F949}" : null;
-            return h('div', { key: b.game_id, onClick: () => onSelect(game), className: "flex-shrink-0 w-24 cursor-pointer hover:opacity-80 transition-opacity" },
-              h('div', { className: "relative rounded-xl overflow-hidden mb-1", style: { aspectRatio: "3/4", background: "#1a1a2e" } },
-                game.cover && h('img', { src: game.cover, alt: game.title, className: "w-full h-full object-cover" }),
-                h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" }),
-                rank <= 3 && h('span', { className: "absolute top-1 left-1 text-[16px]" }, medal),
-                (game.age_rating || 0) > 0 && h('span', { className: "absolute top-1 right-1 text-[7px] font-black px-1 rounded flex items-center justify-center", style: { background: game.age_rating >= 16 ? "#ef4444" : game.age_rating >= 12 ? "#f59e0b" : game.age_rating >= 7 ? "#eab308" : "#22c55e", color: "#fff", minWidth: 14, height: 14 } }, game.age_rating),
-                h('span', { className: "absolute bottom-1 right-1 text-[9px] font-bold px-1 py-0.5 rounded-md", style: { background: `${P1}cc`, color: "#fff" } }, "#", rank)
-              ),
-              h('p', { className: "text-[9px] font-bold text-foreground leading-tight line-clamp-2" }, game.title),
-              h('p', { className: "text-[8px] text-muted-foreground" }, b.count, " boost", b.count > 1 ? "s" : "")
-            );
-          })
-        )
+        // Boostés de la semaine
+        showBoostSection && topBoosted.length > 0 && h('div', null,
+          h('div', { className: "flex items-center justify-between mb-2" },
+            h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5" }, "\u2728 Boost\u00e9s de la semaine"),
+            h('button', { onClick: () => setShowBoostSection(false), className: "text-[9px] font-medium hover:opacity-80", style: { color: `${P1}80` } }, "Masquer")
+          ),
+          h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
+            topBoosted.slice(0, 10).map(b => {
+              const game = b.game;
+              if (!game) return null;
+              return h('div', { key: b.game_id, className: "flex-shrink-0 w-24" },
+                h(GameCard, {
+                  game: { ...game, userRating: ratings?.[game.game_id] || 0 },
+                  onClick: () => onSelect(game),
+                  wishlistIds, onWishlist: onToggleWishlist,
+                  topThreeIds, onCrown: onToggleTopThree,
+                  boostCount: b.count,
+                  small: true,
+                })
+              );
+            })
+          )
+        ),
+        // À la une (top rated)
+        !search && featured.length > 0 && h('div', null,
+          h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "\u2B50", " \u00c0 la une"),
+          h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
+            featured.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },
+              h(GameCard, {
+                game: { ...game, userRating: ratings?.[game.game_id] || 0 },
+                onClick: () => onSelect(game),
+                wishlistIds, onWishlist: onToggleWishlist,
+                topThreeIds, onCrown: onToggleTopThree,
+                boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
+                small: true,
+              })
+            ))
+          )
+        ),
+      ),
+      h('div', { className: "flex gap-1 mb-3 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
+        LETTERS.map(l => h('button', { key: l, onClick: () => { setActiveLetter(l); setSearch(''); }, className: "flex-shrink-0 w-7 h-7 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all", style: activeLetter === l ? { background: GRAD, color: "#fff", boxShadow: "0 0 12px rgba(168,85,247,0.4)" } : { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, l === "all" ? "All" : l))
       ),
       catalog.length === 0 && loadingCatalog
         ? h('div', { className: "flex items-center justify-center h-40" }, h('div', { className: "w-6 h-6 border-2 rounded-full animate-spin", style: { borderColor: `${P1}30 ${P1}30 ${P1}30 transparent` } }))

@@ -184,6 +184,7 @@ const API = {
   getEsportFavorites: () => API.request('GET', '/api/esport/favorites'),
   checkEsportFavorite: (title, game) => API.request('GET', `/api/esport/favorites/check?title=${encodeURIComponent(title)}&game=${encodeURIComponent(game||'')}`),
   getEsportMatch: (game, matchId) => API.request('GET', `/api/esport/match/${game}/${matchId}`),
+  getEsportTeamPlayers: (game, teamId) => API.request('GET', `/api/esport/team/${game}/${teamId}`),
   getNotifPrefs: () => API.request('GET', '/api/account/notifications'),
   setNotifPrefs: (emailNotifications) => API.request('POST', '/api/account/notifications', { emailNotifications }),
   searchPlayers: (game) => API.request('GET', `/api/players/search?game=${encodeURIComponent(game)}`),
@@ -1570,6 +1571,18 @@ function NewsDetailSheet({ item, onClose }) {
   if (item.officialUrl) links.push({ label: isRelease ? "Site officiel" : isEsport ? "Voir le match" : "Voir l'article", url: item.officialUrl, icon: Globe });
   if (item.sourceUrl && item.sourceUrl !== item.officialUrl) links.push({ label: "Source : " + (item.sourceName || "Article"), url: item.sourceUrl, icon: ExternalLink });
   const { panelRef, overlayRef, onTouchStart, onTouchMove, onTouchEnd } = useSheetSwipe(onClose);
+  // Team detail state
+  const [selectedTeam, setSelectedTeam] = useState(null);
+  const [teamPlayers, setTeamPlayers] = useState([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const loadTeamPlayers = (team) => {
+    if (!item.gameSlug || !team.id) return;
+    setSelectedTeam(team);
+    setTeamLoading(true);
+    API.getEsportTeamPlayers(item.gameSlug, team.id).then(d => {
+      setTeamPlayers(d.players || []);
+    }).catch(() => {}).finally(() => setTeamLoading(false));
+  };
   return h('div', { className: "fixed inset-0 z-50" },
     h('div', { ref: overlayRef, className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
     h('div', { ref: panelRef, onTouchStart, onTouchMove, onTouchEnd, className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-y-auto", style: { maxHeight: "85%", scrollbarWidth: "none" } },
@@ -1605,25 +1618,67 @@ function NewsDetailSheet({ item, onClose }) {
           )
         ),
         // Game badge + Source for esport
-        isEsport && h('div', { className: "flex items-center gap-2 mt-2.5" },
+        isEsport && h('div', { className: "flex flex-wrap items-center gap-2 mt-2.5" },
           h('span', { className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: `${P1}20`, color: P1 } }, item.game),
           item.sourceName && h('span', { className: "text-[8px] text-muted-foreground" }, "Source: ", item.sourceName),
-          item.tournament && h('span', { className: "text-[8px] text-muted-foreground" }, "\u2022", item.tournament)
+          item.tournament && h('span', { className: "text-[8px] text-muted-foreground" }, "\u2022", item.tournament),
+          item.league && h('span', { className: "text-[8px] text-muted-foreground" }, "\u2022", item.league)
         ),
-        // Teams for esport matches (PandaScore data) - enhanced with scores and status
-        isEsport && item.teams && item.teams.length > 0 && h('div', { className: "mt-4 p-4 rounded-2xl", style: { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" } },
-          h('p', { className: "text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3" }, isLive ? "\u26a1 Match en cours" : "\u00c9quipes"),
-          h('div', { className: "flex items-center gap-3" },
+        // ─── E-SPORT: Game description ──────────────────────
+        isEsport && h('div', { className: "mt-4 p-3 rounded-2xl", style: { background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.12)" } },
+          h('p', { className: "text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5" }, "\u00c0 propos du jeu"),
+          h('p', { className: "text-xs text-foreground/80 leading-relaxed" }, item.desc || item.details || `Match de ${item.game} organisé par ${item.league || item.tournament || 'un tournoi'}.`)
+        ),
+        // ─── E-SPORT: Teams (clickable) ────────────────────
+        isEsport && item.teams && item.teams.length > 0 && h('div', { className: "mt-4" },
+          h('p', { className: "text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3" }, isLive ? "\u26a1 Match en cours" : "\u00c9quipes participantes"),
+          h('div', { className: "space-y-2" },
             item.teams.map((t, i) =>
-              h('div', { key: i, className: "flex-1 flex flex-col items-center gap-1.5" },
+              h('div', { key: i, onClick: () => loadTeamPlayers(t), className: "flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: selectedTeam?.id === t.id ? "rgba(139,92,246,0.1)" : "rgba(255,255,255,0.03)", border: selectedTeam?.id === t.id ? "1px solid rgba(139,92,246,0.3)" : "1px solid rgba(255,255,255,0.06)" } },
                 t.logo
-                  ? h('img', { src: t.logo, alt: t.name, className: "w-12 h-12 object-contain rounded-xl", style: { background: "rgba(255,255,255,0.05)" } })
-                  : h('div', { className: "w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black text-white", style: { background: GRAD } }, (t.name || '?')[0]),
-                h('p', { className: "text-xs font-bold text-foreground text-center leading-tight" }, t.name),
-                item.scores && item.scores[i] !== undefined && h('p', { className: "text-2xl font-black mt-0.5", style: { color: isLive ? "#22c55e" : P1 } }, item.scores[i])
+                  ? h('img', { src: t.logo, alt: t.name, className: "w-10 h-10 object-contain rounded-xl flex-shrink-0", style: { background: "rgba(255,255,255,0.05)" } })
+                  : h('div', { className: "w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white flex-shrink-0", style: { background: GRAD } }, (t.name || '?')[0]),
+                h('div', { className: "flex-1 min-w-0" },
+                  h('p', { className: "text-sm font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, t.name),
+                  h('p', { className: "text-[9px] text-muted-foreground mt-0.5" }, "Clique pour voir les joueurs")
+                ),
+                item.scores && item.scores[i] !== undefined && h('span', { className: "text-xl font-black px-2", style: { color: isLive ? "#22c55e" : P1 } }, item.scores[i]),
+                h(ChevronRight, { size: 14, className: "text-muted-foreground flex-shrink-0" })
               )
+            )
+          ),
+          // ─── Team players roster ──────────────────────────
+          selectedTeam && h('div', { className: "mt-3 p-3 rounded-2xl", style: { background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.15)" } },
+            h('div', { className: "flex items-center justify-between mb-3" },
+              h('p', { className: "text-[10px] font-bold uppercase tracking-wider", style: { color: "#a78bfa" } }, 
+                "Joueurs ", selectedTeam.name
+              ),
+              h('button', { onClick: () => setSelectedTeam(null), className: "text-[9px] font-bold px-2 py-1 rounded-lg", style: { background: "rgba(255,255,255,0.06)", color: "#8888aa" } }, "Fermer")
             ),
-            item.teams.length === 2 && h('p', { className: "text-lg font-black text-muted-foreground" }, "VS")
+            teamLoading && h('div', { className: "flex justify-center py-4" }, h(Loader, { size: 14, className: "animate-spin", style: { color: P1 } })),
+            !teamLoading && teamPlayers.length === 0 && h('p', { className: "text-[10px] text-muted-foreground text-center py-3" }, "Aucune information sur les joueurs disponible pour cette équipe"),
+            h('div', { className: "space-y-2" }, teamPlayers.map(p =>
+              h('div', { key: p.id, className: "flex items-center gap-2.5 p-2.5 rounded-xl transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.03)" } },
+                p.imageUrl
+                  ? h('img', { src: p.imageUrl, alt: p.name, className: "w-9 h-9 rounded-full object-cover flex-shrink-0" })
+                  : h('div', { className: "w-9 h-9 rounded-full flex items-center justify-center text-xs font-black text-white flex-shrink-0", style: { background: GRAD } }, (p.name || '?')[0]),
+                h('div', { className: "flex-1 min-w-0" },
+                  h('p', { className: "text-xs font-bold text-foreground" }, p.name),
+                  h('p', { className: "text-[8px] text-muted-foreground" }, 
+                    [p.firstName, p.lastName].filter(Boolean).join(' '), 
+                    p.role ? ` \u2022 ${p.role}` : '',
+                    p.nationality ? ` \u2022 ${p.nationality}` : ''
+                  )
+                ),
+                p.slug && h('a', {
+                  href: `https://www.pandascore.co/player/${p.slug}`,
+                  target: "_blank", rel: "noopener noreferrer",
+                  onClick: e => e.stopPropagation(),
+                  className: "px-2 py-1 rounded-lg text-[8px] font-bold transition-colors",
+                  style: { background: `${P1}20`, color: P1 }
+                }, "Plus d'infos")
+              )
+            ))
           )
         ),
         // Source badge for drama/actus with live link
@@ -1631,8 +1686,8 @@ function NewsDetailSheet({ item, onClose }) {
           item.sourceName && h('span', { className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: "rgba(59,130,246,0.12)", color: "#3b82f6" } }, item.sourceName),
           item.officialUrl && h('a', { href: item.officialUrl, target: "_blank", rel: "noopener noreferrer", className: "px-2 py-0.5 rounded text-[8px] font-bold transition-colors", style: { background: "rgba(34,197,94,0.15)", color: "#22c55e" } }, h(ExternalLink, { size: 8, className: "inline mr-0.5" }), "Lire l'article")
         ),
-        // Description
-        h('p', { className: "text-xs text-foreground/80 mt-4 leading-relaxed" }, item.details || item.desc),
+        // Description (for non-esport)
+        !isEsport && h('p', { className: "text-xs text-foreground/80 mt-4 leading-relaxed" }, item.details || item.desc),
         // Links
         links.length > 0 && h('div', { className: "mt-5 space-y-2" },
           h('p', { className: "text-[10px] font-bold uppercase tracking-wider text-muted-foreground" }, "Liens"),

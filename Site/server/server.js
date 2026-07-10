@@ -2359,35 +2359,44 @@ async function fetchEsportFromPandaScore() {
   const seen = new Set();
   for (const g of PANDASCORE_GAMES) {
     try {
-      const url = `https://api.pandascore.co/${g.slug}/matches?filter[status]=running&sort=-begin_at&per_page=5&token=${key}`;
-      const body = await httpGet(url);
-      const matches = JSON.parse(body);
-      for (const m of matches) {
-        const title = (m.opponents || []).map(o => o.opponent.name).join(' vs ') || m.name || 'Match à venir';
-        if (seen.has(title)) continue;
-        seen.add(title);
-        const teams = (m.opponents || []).map(o => ({
-          name: o.opponent.name,
-          logo: o.opponent.image_url || '',
-          players: [],
-        }));
-        items.push({
-          type: 'esport',
-          event: title,
-          game: g.name,
-          date: m.begin_at ? m.begin_at.split('T')[0] : '',
-          desc: `${m.league?.name || ''} — ${m.serie?.name || ''} — ${m.tournament?.name || ''}`,
-          officialUrl: `https://www.pandascore.co/${g.slug}/matches/${m.id}`,
-          sourceUrl: '',
-          sourceName: 'PandaScore',
-          details: `${m.league?.name || ''} — ${m.serie?.name || ''}\n${m.tournament?.name || ''}\nStatut: ${m.status || 'unknown'}`,
-          pubDate: m.begin_at || new Date().toISOString(),
-          matchId: m.id,
-          tournament: m.tournament?.name || '',
-          teams,
-          status: m.status || 'upcoming',
-          scores: (m.results || []).map(r => r.score),
-        });
+      // Récupère matches running + upcoming pour plus de contenu
+      const statuses = ['running', 'upcoming'];
+      for (const status of statuses) {
+        const url = `https://api.pandascore.co/${g.slug}/matches?filter[status]=${status}&sort=-begin_at&per_page=5&token=${key}`;
+        const body = await httpGet(url);
+        const matches = JSON.parse(body);
+        for (const m of matches) {
+          const title = (m.opponents || []).map(o => o.opponent.name).join(' vs ') || m.name || 'Match à venir';
+          if (seen.has(title)) continue;
+          seen.add(title);
+          const teams = (m.opponents || []).map(o => ({
+            id: o.opponent.id,
+            name: o.opponent.name,
+            logo: o.opponent.image_url || '',
+            players: [],
+          }));
+          items.push({
+            type: 'esport',
+            event: title,
+            game: g.name,
+            gameSlug: g.slug,
+            date: m.begin_at ? m.begin_at.split('T')[0] : '',
+            desc: `${m.league?.name || ''} — ${m.serie?.name || ''} — ${m.tournament?.name || ''}`,
+            officialUrl: `https://www.pandascore.co/${g.slug}/matches/${m.id}`,
+            sourceUrl: '',
+            sourceName: 'PandaScore',
+            details: `${m.league?.name || ''} — ${m.serie?.name || ''}\n${m.tournament?.name || ''}\nStatut: ${m.status || 'unknown'}`,
+            pubDate: m.begin_at || new Date().toISOString(),
+            matchId: m.id,
+            tournament: m.tournament?.name || '',
+            league: m.league?.name || '',
+            teams,
+            teamIds: (m.opponents || []).map(o => o.opponent.id),
+            status: m.status || 'upcoming',
+            scores: (m.results || []).map(r => r.score),
+            gameDescription: '',
+          });
+        }
       }
     } catch (e) {
       console.error(`[News] PandaScore error ${g.slug}:`, e.message);
@@ -2396,6 +2405,7 @@ async function fetchEsportFromPandaScore() {
   return items;
 }
 
+// Récupère les détails d'un match (équipes + joueurs via API séparée)
 async function fetchEsportMatchRoster(matchId, game) {
   const key = process.env.PANDASCORE_API_KEY;
   if (!key) return null;
@@ -2404,12 +2414,17 @@ async function fetchEsportMatchRoster(matchId, game) {
     const body = await httpGet(url);
     const m = JSON.parse(body);
     if (!m) return null;
-    return {
-      teams: (m.opponents || []).map(o => ({
+    const teams = await Promise.all((m.opponents || []).map(async (o) => {
+      const players = await fetchTeamPlayers(game, o.opponent.id);
+      return {
+        id: o.opponent.id,
         name: o.opponent.name,
         logo: o.opponent.image_url || '',
-        players: [],
-      })),
+        players: players || [],
+      };
+    }));
+    return {
+      teams,
       status: m.status,
       scores: (m.results || []).map(r => r.score),
       league: m.league?.name || '',
@@ -2418,6 +2433,31 @@ async function fetchEsportMatchRoster(matchId, game) {
   } catch (e) {
     console.error('[News] PandaScore roster error:', e.message);
     return null;
+  }
+}
+
+// Récupère les joueurs d'une équipe via PandaScore
+async function fetchTeamPlayers(game, teamId) {
+  const key = process.env.PANDASCORE_API_KEY;
+  if (!key) return [];
+  try {
+    const url = `https://api.pandascore.co/${game}/players?filter[team_id]=${teamId}&per_page=10&token=${key}`;
+    const body = await httpGet(url);
+    const players = JSON.parse(body);
+    if (!Array.isArray(players)) return [];
+    return players.map(p => ({
+      id: p.id,
+      name: p.name,
+      firstName: p.first_name || '',
+      lastName: p.last_name || '',
+      imageUrl: p.image_url || '',
+      role: p.role || '',
+      nationality: p.nationality || '',
+      slug: p.slug || '',
+    }));
+  } catch (e) {
+    console.error(`[News] PandaScore players error team ${teamId}:`, e.message);
+    return [];
   }
 }
 
@@ -2488,6 +2528,15 @@ app.get('/api/esport/match/:game/:matchId', async (req, res) => {
     res.json({ match: roster });
   } catch (err) {
     res.json({ match: null });
+  }
+});
+
+app.get('/api/esport/team/:game/:teamId', async (req, res) => {
+  try {
+    const players = await fetchTeamPlayers(req.params.game, parseInt(req.params.teamId));
+    res.json({ players: players || [] });
+  } catch (err) {
+    res.json({ players: [] });
   }
 });
 

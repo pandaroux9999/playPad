@@ -1044,13 +1044,15 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
           newReleases.length === 0
             ? h('p', { className: "text-[10px] text-muted-foreground italic" }, "Chargement\u2026")
             : h('div', { className: "flex gap-3 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } },
-                newReleases.map(game => h('div', { key: game.game_id, className: "flex-shrink-0", style: { width: "calc((100vw - 64px)/2)" } },
+                newReleases.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-36" },
                   h(GameCard, {
                     game: { ...game, userRating: ratings?.[game.game_id] || 0 },
                     onClick: () => onSelect(game),
                     wishlistIds, onWishlist: onToggleWishlist,
                     topThreeIds, onCrown: onToggleTopThree,
                     boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
+                    boosterActive: userBoostedSet?.has(game.game_id),
+                    boosterBtn: () => onSelect(game),
                   })
                 ))
               )
@@ -1064,7 +1066,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                 topBoosted.slice(0, 10).map(b => {
               const game = b.game;
               if (!game) return null;
-              return h('div', { key: b.game_id, className: "flex-shrink-0", style: { width: "calc((100vw - 64px)/2)" } },
+              return h('div', { key: b.game_id, className: "flex-shrink-0 w-36" },
                 h(GameCard, {
                   game: { ...game, userRating: ratings?.[game.game_id] || 0 },
                   onClick: () => onSelect(game),
@@ -2676,7 +2678,7 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
                 : !trailerLoading && h('button', { onClick: () => window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent((game.title || game.name) + ' trailer')}`, '_blank'), className: "text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 hover:opacity-80", style: { color: "#ef4444" } }, h(Play, { size: 10 }), "Bande-annonce")
             ),
             showTrailer && trailerVideoId && h('div', { className: "mb-3 rounded-xl overflow-hidden", style: { aspectRatio: "16/9" } },
-              h('iframe', { src: `https://www.youtube.com/embed/${trailerVideoId}?autoplay=1`, allow: "autoplay; encrypted-media", allowFullScreen: true, className: "w-full h-full", style: { border: "none" } })
+              h('iframe', { src: `https://www.youtube-nocookie.com/embed/${trailerVideoId}?autoplay=1&origin=${window.location.origin}`, allow: "autoplay; encrypted-media", allowFullScreen: true, className: "w-full h-full", style: { border: "none" } })
             ),
             gameDetails?.description && h('p', { className: "text-[11px] text-foreground/70 leading-relaxed mb-3" }, gameDetails.description),
             h('div', { className: "grid grid-cols-2 gap-2 text-[10px]" },

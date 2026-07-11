@@ -555,7 +555,6 @@ async function removeGameSuggestion(id, userId) {
 async function ensureCatalogGame(game) {
   const { game_id, title, platform, cover, genre, year, developer, publisher, description, editorial_score, user_score, platforms_raw, jv_url, age_rating } = game;
   if (!game_id || !title) return;
-  if (!game_id.startsWith('jv-')) return;
   const payload = { game_id, title, platform: platform || '', cover: cover || '', genre: genre || '', year: year || 0, developer: developer || '', publisher: publisher || '', editorial_score: editorial_score || '', user_score: user_score || '', platforms_raw: platforms_raw || '', jv_url: jv_url || '', age_rating: age_rating || 0 };
   if (description) payload.description = description;
   const { error } = await supabaseAdmin

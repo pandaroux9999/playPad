@@ -189,6 +189,8 @@ const API = {
   resyncPsn: () => API.request('POST', '/api/platform/psn/resync'),
   getNews: () => API.request('GET', '/api/news'),
   getNewReleases: () => API.request('GET', '/api/catalog/new-releases'),
+  replaceCatalogFromJson: () => API.request('POST', '/api/catalog/replace-from-json'),
+  deleteCatalogGame: (gameId) => API.request('POST', `/api/catalog/delete/${gameId}`),
   replyToReview: (reviewId, text) => API.request('POST', `/api/reviews/${reviewId}/reply`, { text }),
   getReviewReplies: (reviewId) => API.request('GET', `/api/reviews/${reviewId}/replies`),
   toggleEsportFavorite: (event) => API.request('POST', '/api/esport/favorite/toggle', { event }),
@@ -1052,7 +1054,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" },
             h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }),
             h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"),
-            h('button', { onClick: async () => { setLoadingCatalog(true); await API.populateCatalog(); setTimeout(() => loadCatalog(1, false), 3000); }, className: "mt-3 px-3 py-1.5 rounded-xl text-[10px] font-bold text-white", style: { background: GRAD } }, "Remplir le catalogue")
+            h('button', { onClick: async () => { setLoadingCatalog(true); try { const r = await API.replaceCatalogFromJson(); showToast(`${r.count} jeux importés depuis JeuxVideo.com`); loadCatalog(1, false); } catch (err) { showToast('Erreur: ' + err.message); } setLoadingCatalog(false); }, className: "mt-3 px-3 py-1.5 rounded-xl text-[10px] font-bold text-white", style: { background: GRAD } }, "Remplir le catalogue")
           )
         : h('div', null,
             h('div', { className: "flex items-center justify-between mb-3" },
@@ -1062,16 +1064,18 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
               catalog.map(game => {
                 const boostCount = topBoosted.find(b => b.game_id === game.game_id)?.count || 0;
                 const dlCount = downloadCounts[game.game_id] || 0;
-                return h(GameCard, {
-                  key: game.game_id,
-                  game: { ...game, userRating: ratings?.[game.game_id] || 0, downloads: dlCount },
-                  onClick: () => onSelect(game),
-                  wishlistIds,
-                  onWishlist: onToggleWishlist,
-                  topThreeIds, onCrown: onToggleTopThree,
-                  boostCount,
-                  small: false,
-                });
+                return h('div', { key: game.game_id, className: "relative" },
+                  h(GameCard, {
+                    game: { ...game, userRating: ratings?.[game.game_id] || 0, downloads: dlCount },
+                    onClick: () => onSelect(game),
+                    wishlistIds,
+                    onWishlist: onToggleWishlist,
+                    topThreeIds, onCrown: onToggleTopThree,
+                    boostCount,
+                    small: false,
+                  }),
+                  h('button', { onClick: async (e) => { e.stopPropagation(); if (!confirm(`Supprimer "${game.title}" du catalogue ?`)) return; try { await API.deleteCatalogGame(game.game_id); showToast('Jeu supprimé'); setCatalog(prev => prev.filter(g => g.game_id !== game.game_id)); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "absolute top-1 right-1 p-1 rounded-lg opacity-0 hover:opacity-100 transition-opacity", style: { background: "rgba(239,68,68,0.2)" }, title: "Supprimer" }, h(Trash2, { size: 10, style: { color: "#ef4444" } }))
+                );
               })
             ),
             h('div', { ref: sentinelRef, className: "flex justify-center py-4" },

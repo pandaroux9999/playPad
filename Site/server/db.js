@@ -589,10 +589,20 @@ async function batchUpsertCatalog(games) {
     cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
     developer: g.developer || '', publisher: g.publisher || ''
   }));
-  const { error } = await supabaseAdmin
-    .from('catalog')
-    .upsert(payloads, { onConflict: 'game_id', ignoreDuplicates: false });
+  const { error } = await supabaseAdmin.from('catalog').upsert(payloads, { onConflict: 'game_id', ignoreDuplicates: true });
   if (error) console.error('[batchUpsertCatalog] Error:', error.message);
+  invalidateCatalogCache();
+}
+
+async function clearCatalog() {
+  const { error } = await supabaseAdmin.from('catalog').delete().neq('game_id', '');
+  if (error) throw new Error(error.message);
+  invalidateCatalogCache();
+}
+
+async function deleteCatalogGame(gameId) {
+  const { error } = await supabaseAdmin.from('catalog').delete().eq('game_id', gameId);
+  if (error) throw new Error(error.message);
   invalidateCatalogCache();
 }
 
@@ -1537,6 +1547,8 @@ module.exports = {
   resetAllData,
   ensureCatalogGame,
   batchUpsertCatalog,
+  clearCatalog,
+  deleteCatalogGame,
   dedupeCatalog,
   mergeCatalogDuplicatesByTitle,
   getCatalog,

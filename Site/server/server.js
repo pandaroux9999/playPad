@@ -1322,6 +1322,43 @@ app.post('/api/catalog/populate', requireAuth, async (req, res) => {
   })();
 });
 
+app.post('/api/catalog/replace-from-json', requireAuth, async (req, res) => {
+  try {
+    const jvPath = path.join(__dirname, 'data', 'jv-catalog.json');
+    const fs = require('fs');
+    if (!fs.existsSync(jvPath)) {
+      return res.status(404).json({ error: 'Fichier jv-catalog.json introuvable' });
+    }
+    const raw = fs.readFileSync(jvPath, 'utf-8');
+    const games = JSON.parse(raw);
+    if (!Array.isArray(games) || games.length === 0) {
+      return res.status(400).json({ error: 'Fichier JSON invalide ou vide' });
+    }
+    console.log(`[Catalog] Remplacement du catalogue par ${games.length} jeux JV...`);
+    await db.clearCatalog();
+    const batchSize = 500;
+    for (let i = 0; i < games.length; i += batchSize) {
+      const batch = games.slice(i, i + batchSize);
+      await db.batchUpsertCatalog(batch);
+    }
+    console.log(`[Catalog] Catalogue remplacé: ${games.length} jeux importés`);
+    res.json({ ok: true, count: games.length });
+  } catch (err) {
+    console.error('[CatalogReplace] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/catalog/delete/:gameId', requireAuth, async (req, res) => {
+  try {
+    await db.deleteCatalogGame(req.params.gameId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[CatalogDelete] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 let lastDescriptionRefresh = 0;
 const DESCRIPTION_REFRESH_COOLDOWN = 300000; // 5 min
 

@@ -3129,11 +3129,11 @@ function App() {
       setTopThree(t);
       setTopThreeIds(new Set(t.map(g => g.game_id)));
       setRatings(rData.ratings || {});
-      return Promise.all([API.getBoosterPoints(), API.getTopBoosted(), API.getFriends()]);
-    }).then(([bpData, topData, friendsData]) => {
+      return Promise.all([API.getBoosterPoints(), API.getTopBoosted()]);
+    }).then(([bpData, topData]) => {
       setBoosterPoints(bpData.points || 0);
       setBoostedGames(topData.top || []);
-      setFriendsCount((friendsData?.friends || []).length);
+      API.getFriends().then(d => setFriendsCount((d.friends || []).length)).catch(() => {});
     }).catch((err) => {
       console.log('[App] No session (expected if not logged in):', err?.message);
     }).finally(() => {

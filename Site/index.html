@@ -3119,12 +3119,18 @@ function App() {
   const [view, setView] = useState("library");
   const swipeStartX = useRef(null);
   const TAB_ORDER = ["library", "community", "catalogue", "reviews", "profile"];
-  const onTouchStart = (e) => { swipeStartX.current = e.touches[0].clientX; };
+  const onTouchStart = (e) => {
+    const x = e.touches[0].clientX;
+    const edge = window.innerWidth;
+    // swipe only from edges (30px from left or right)
+    if (x > 30 && x < edge - 30) { swipeStartX.current = null; return; }
+    swipeStartX.current = x;
+  };
   const onTouchEnd = (e) => {
     if (swipeStartX.current === null) return;
     const dx = e.changedTouches[0].clientX - swipeStartX.current;
     swipeStartX.current = null;
-    if (Math.abs(dx) < 50) return;
+    if (Math.abs(dx) < 80) return;
     const idx = TAB_ORDER.indexOf(view);
     if (idx === -1) return;
     if (dx < 0 && idx < TAB_ORDER.length - 1) setView(TAB_ORDER[idx + 1]);

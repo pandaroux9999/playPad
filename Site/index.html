@@ -610,7 +610,7 @@ const PLATFORM_SYNC_DATA = [
   { platform: "xbox",     gameCount: 0,  lastSync: "\u2014" },
 ];
 
-function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast, user, onAddNotification, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, setView, showPsnModal, setShowPsnModal, psnInput, setPsnInput, psnSaving, setPsnSaving, psnLogs, setPsnLogs, psnResult, setPsnResult }) {
+function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast, user, onAddNotification, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, setView }) {
   const genres = useMemo(() => ["all", ...new Set(games.map(g => g.genre).filter(Boolean))], [games]);
   const [showFilters, setShowFilters] = useState(false);
   const [filterGenre, setFilterGenre] = useState("all");
@@ -800,7 +800,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
           const onConnect = platform === "steam"
             ? () => { window.location.href = "/api/auth/steam"; }
             : isPsn
-              ? () => { setPsnInput(''); setShowPsnModal(true); }
+              ? () => { setView('profile'); showToast('Connecte PSN depuis ton profil'); }
               : isXbox
                 ? async () => {
                 const current = user?.xbox_gamertag || '';
@@ -900,93 +900,6 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" }, h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"))
         : h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, filtered.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: () => onSelect(game), wishlistIds, onWishlist: onToggleWishlist, topThreeIds, onCrown: onToggleTopThree })))
     ),
-    showPsnModal && h('div', { className: "fixed inset-0 z-50 flex items-center justify-center" },
-      h('div', { className: "absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: () => { if (!psnSaving) { setShowPsnModal(false); setPsnInput(''); setPsnLogs([]); setPsnResult(null); } } }),
-      h('div', { className: "relative bg-card border border-border rounded-2xl p-5 w-80 max-h-[85vh] overflow-y-auto", style: { zIndex: 1 } },
-        h('div', { className: "flex items-center gap-2 mb-3" },
-          h('div', { className: "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0", style: { background: "#0070d120" } },
-            h('img', { src: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/PlayStation_logo_colour.svg/200px-PlayStation_logo_colour.svg.png", alt: "PSN", className: "w-4 h-4 object-contain" })
-          ),
-          h('p', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Connecter PlayStation Network")
-        ),
-        psnResult === null && h('div', { className: "bg-secondary/50 rounded-xl p-3 mb-3" },
-          h('p', { className: "text-[10px] font-bold text-foreground mb-2" }, "Comment r\u00e9cup\u00e9rer ton NPSSO :"),
-          h('ol', { className: "text-[9px] text-muted-foreground space-y-1.5 list-decimal list-inside" },
-            h('li', null, "Connecte-toi sur ", h('span', { className: "font-bold text-foreground" }, "playstation.com"), " (dans ton navigateur)"),
-            h('li', { className: "leading-relaxed" }, "Ouvre cette URL dans le ", h('span', { className: "font-bold text-foreground" }, "m\u00eame onglet"), " :",
-              h('br'), h('code', { className: "text-[8px] bg-background/50 px-1 py-0.5 rounded font-mono break-all" }, "ca.account.sony.com/api/v1/ssocookie")),
-            h('li', null, "Tu verras un JSON. Copie la valeur du champ ",
-              h('code', { className: "text-[8px] bg-background/50 px-1 py-0.5 rounded font-mono" }, "npsso"),
-              " (64 caract\u00e8res)"),
-            h('li', null, "Colle-la ci-dessous")
-          ),
-          h('p', { className: "text-[8px] mt-2 flex items-start gap-1", style: { color: "#f59e0b" } },
-            h('span', { className: "flex-shrink-0 mt-0.5" }, "\u26a0"),
-            "Ce token expire tous les ~2 mois. Tu devras le re-copier.")
-        ),
-        psnResult === null && h('div', { className: "mb-3" },
-          h('label', { className: "text-[10px] font-bold text-muted-foreground mb-1 block" }, "Token NPSSO (64 caract\u00e8res)"),
-          h('input', {
-            value: psnInput,
-            onChange: (e) => setPsnInput(e.target.value),
-            placeholder: "Commence par _wa...",
-            maxLength: 128,
-            className: "w-full bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs font-mono text-foreground placeholder-muted-foreground outline-none focus:border-[#0070d1] transition-colors"
-          }),
-          psnInput && psnInput.length < 64
-            ? h('p', { className: "text-[9px] mt-1", style: { color: "#f59e0b" } }, psnInput.length + "/64 \u2014 trop court")
-            : psnInput.length >= 64
-              ? h('p', { className: "text-[9px] mt-1", style: { color: "#22c55e" } }, "Format OK")
-              : null
-        ),
-        psnLogs.length > 0 && h('div', { className: "mb-3 rounded-xl overflow-hidden", style: { background: "rgba(0,0,0,0.4)" } },
-          h('div', { className: "px-3 py-1.5 border-b border-white/5 flex items-center gap-1.5" },
-            h('div', { className: "w-1.5 h-1.5 rounded-full animate-pulse", style: { background: psnSaving ? "#f59e0b" : psnResult === 'ok' ? "#22c55e" : "#ef4444" } }),
-            h('span', { className: "text-[9px] font-bold", style: { color: "#8888aa" } }, psnSaving ? "Connexion en cours..." : psnResult === 'ok' ? "Termin\u00e9" : "Erreur")
-          ),
-          h('div', { className: "px-3 py-2 space-y-1 max-h-40 overflow-y-auto" },
-            psnLogs.map((line, i) => {
-              const isError = line.toLowerCase().startsWith('echec') || line.toLowerCase().startsWith('erreur') || line.toLowerCase().startsWith('solution');
-              const isSolution = line.toLowerCase().startsWith('solution');
-              return h('div', { key: i, className: "flex items-start gap-1.5" },
-                !isSolution && h('span', { className: "text-[8px] mt-0.5 flex-shrink-0", style: { color: isError ? "#ef4444" : "#22c55e" } }, isError ? "\u2717" : "\u2713"),
-                h('span', {
-                  className: "text-[8px] font-mono leading-relaxed",
-                  style: { color: isSolution ? "#f59e0b" : isError ? "#f87171" : "#a1a1aa" }
-                }, line)
-              );
-            })
-          )
-        ),
-        h('div', { className: "flex gap-2" },
-          h('button', {
-            onClick: () => { setShowPsnModal(false); setPsnInput(''); setPsnLogs([]); setPsnResult(null); },
-            disabled: psnSaving,
-            className: "flex-1 py-2 text-xs font-bold rounded-lg",
-            style: { background: "rgba(26,26,46,0.7)", color: "#8888aa" }
-          }, psnResult ? "Fermer" : "Annuler"),
-          psnResult !== 'ok' && h('button', {
-            disabled: psnSaving || !psnInput || psnInput.length < 64,
-            onClick: async () => {
-              setPsnSaving(true); setPsnLogs([]); setPsnResult(null);
-              try {
-                setPsnLogs(['Envoi du NPSSO au serveur...']);
-                const r = await API.connectPsn(psnInput);
-                if (r.logs) setPsnLogs(r.logs);
-                if (r.error) { setPsnResult('error'); return; }
-                setPsnResult('ok');
-                onSyncComplete?.();
-              } catch (err) {
-                setPsnLogs(prev => [...prev, 'Erreur r\u00e9seau : ' + (err.message || 'impossible de contacter le serveur')]);
-                setPsnResult('error');
-              } finally { setPsnSaving(false); }
-            },
-            className: "flex-1 py-2 text-xs font-bold rounded-lg text-white disabled:opacity-40",
-            style: { background: GRAD }
-          }, psnSaving ? h('span', { className: "flex items-center gap-1.5" }, h(Loader, { size: 10, className: "animate-spin" }), "Connexion...") : "Connecter")
-        )
-      )
-    )
   );
 }
 
@@ -2137,7 +2050,12 @@ function ReviewsView({ games, onSelect }) {
   );
 }
 
-function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar, onUpdateEmail, onSyncComplete, showToast, showPsnModal, setShowPsnModal, psnInput, setPsnInput, psnSaving, setPsnSaving, psnLogs, setPsnLogs, psnResult, setPsnResult }) {
+function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar, onUpdateEmail, onSyncComplete, showToast }) {
+  const [showPsnModal, setShowPsnModal] = useState(false);
+  const [psnInput, setPsnInput] = useState('');
+  const [psnSaving, setPsnSaving] = useState(false);
+  const [psnLogs, setPsnLogs] = useState([]);
+  const [psnResult, setPsnResult] = useState(null);
   const [avatarModal, setAvatarModal] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || "");
   const [avatarSaving, setAvatarSaving] = useState(false);
@@ -2822,12 +2740,10 @@ function AuthPage({ onLoginSuccess, resetToken, onResetComplete }) {
             loading ? h(Loader, { size: 14, className: "animate-spin" }) : "R\u00e9initialiser"
           )
         ),
-      toast && h('div', { className: "toast", style: { background: GRAD } }, toast),
-      h(ChatBot, { setView })
+      toast && h('div', { className: "toast", style: { background: GRAD } }, toast)
     )
   );
 }
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -3042,11 +2958,6 @@ function App() {
   const [userBoostedSet, setUserBoostedSet] = useState(new Set());
   const [catalogRefreshKey, setCatalogRefreshKey] = useState(0);
   const [communityRefreshKey, setCommunityRefreshKey] = useState(0);
-  const [showPsnModal, setShowPsnModal] = useState(false);
-  const [psnInput, setPsnInput] = useState('');
-  const [psnSaving, setPsnSaving] = useState(false);
-  const [psnLogs, setPsnLogs] = useState([]);
-  const [psnResult, setPsnResult] = useState(null);
   const [freshReview, setFreshReview] = useState(null);
   const [discoveries, setDiscoveries] = useState([]);
   const discoveryTimerRef = useRef(null);
@@ -3367,11 +3278,11 @@ function App() {
     h('div', { className: "app-content relative flex flex-col h-screen bg-background mx-auto" },
       h('div', { className: "flex-1 overflow-hidden" },
         h('div', { className: "h-full overflow-y-auto" },
-          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); }, wishlistIds, onToggleWishlist: handleToggleWishlist, topThreeIds, onToggleTopThree: handleToggleTopThree, setView, showPsnModal, setShowPsnModal, psnInput, setPsnInput, psnSaving, setPsnSaving, psnLogs, setPsnLogs, psnResult, setPsnResult }),
+          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); }, wishlistIds, onToggleWishlist: handleToggleWishlist, topThreeIds, onToggleTopThree: handleToggleTopThree, setView }),
           view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, freshReview, onFreshReviewConsumed: () => setFreshReview(null), onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
           view === "catalogue" && h(CatalogueView, { key: 'cat', refreshKey: catalogRefreshKey, onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
-          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast, showPsnModal, setShowPsnModal, psnInput, setPsnInput, psnSaving, setPsnSaving, psnLogs, setPsnLogs, psnResult, setPsnResult })
+          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast })
         )
       ),
       h(BottomNav, { view, setView }),
@@ -3393,8 +3304,7 @@ function App() {
         onBoostGame: handleBoostGame,
       }),
       selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => setSelectedFriend(null), isOnline, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, friendId: selectedFriend.id, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
-      toast && h('div', { className: "toast", style: { background: GRAD } }, toast),
-      h(ChatBot, { setView })
+      toast && h('div', { className: "toast", style: { background: GRAD } }, toast)
     )
   );
 }

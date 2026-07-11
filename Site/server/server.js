@@ -1359,6 +1359,17 @@ app.post('/api/catalog/delete/:gameId', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/catalog/no-covers', requireAuth, async (req, res) => {
+  try {
+    const catalog = await db.getCatalog();
+    const noCover = catalog.filter(g => !g.cover).map(g => ({ game_id: g.game_id, title: g.title, platform: g.platform }));
+    res.json({ games: noCover, total: noCover.length });
+  } catch (err) {
+    console.error('[CatalogNoCovers] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 let lastDescriptionRefresh = 0;
 const DESCRIPTION_REFRESH_COOLDOWN = 300000; // 5 min
 

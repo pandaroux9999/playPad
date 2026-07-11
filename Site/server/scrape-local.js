@@ -111,11 +111,19 @@ async function getPage(browser) {
     if (browser) await browser.close().catch(() => {});
   }
 
+  // Dédoublonnage final
+  const unique = new Map();
+  for (const g of allGames) {
+    unique.set(g.game_id, g);
+  }
+  allGames = Array.from(unique.values());
+  const dupesRemoved = allGames.length - unique.size;
+
   // Sauvegarde finale
   fs.writeFileSync(OUTPUT_PATH, JSON.stringify(allGames, null, 2));
   try { fs.unlinkSync(PROGRESS_PATH); } catch {}
 
   const sizeMB = Math.round(fs.statSync(OUTPUT_PATH).size / 1024 / 1024 * 10) / 10;
-  console.log(`\n=== TERMINÉ: ${allGames.length} jeux sauvegardés (${sizeMB}MB) ===`);
+  console.log(`\n=== TERMINÉ: ${allGames.length} jeux uniques (${-dupesRemoved} doublons supprimés, ${sizeMB}MB) ===`);
   process.exit(0);
 })();

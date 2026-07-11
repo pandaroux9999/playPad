@@ -408,8 +408,11 @@ function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown
       small && game.release_date && h('p', { className: "text-[8px] text-muted-foreground/50 leading-tight mt-0.5" }, (() => { try { return new Date(game.release_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }); } catch(e) { return game.release_date; } })()),
       h('div', { className: "mt-1.5 flex items-center justify-between" },
         h(StarRating, { rating: game.userRating, size: 9 }),
-        boosterBtn && h('button', { onClick: (e) => { e.stopPropagation(); boosterBtn(); }, className: "px-1.5 py-0.5 rounded text-[8px] font-bold text-white flex items-center gap-0.5 transition-all duration-200 hover:opacity-80 active:scale-125", style: { background: GRAD } }, h(Flame, { size: 7 }), "Booster"),
-        boosterActive && h('span', { className: "px-1.5 py-0.5 rounded text-[8px] font-bold flex items-center gap-0.5", style: { background: "rgba(249,115,22,0.2)", color: "#f97316" } }, h(Flame, { size: 7, fill: "#f97316" }), "Boost\u00e9")
+        boosterBtn && h('div', { className: "relative flex items-center" },
+          tt('booster', boosterActive ? "D\u00e9j\u00e0 boost\u00e9" : "Booster ce jeu (1 point)"),
+          h('button', { onClick: (e) => { e.stopPropagation(); boosterBtn(); }, onMouseDown: () => startTooltip('booster'), onMouseUp: endTooltip, onMouseLeave: endTooltip, onTouchStart: () => startTooltip('booster'), onTouchEnd: endTooltip, className: "px-1.5 py-0.5 rounded text-[8px] font-bold text-white flex items-center gap-0.5 transition-all duration-200 hover:opacity-80 active:scale-125", style: { background: boosterActive ? "rgba(249,115,22,0.85)" : GRAD } }, h(Flame, { size: 7, fill: boosterActive ? "#fff" : "none", stroke: "#fff", strokeWidth: 1.5 }), boosterActive ? "Boost\u00e9" : "Booster"),
+        ),
+        boosterActive && !boosterBtn && h('span', { className: "px-1.5 py-0.5 rounded text-[8px] font-bold flex items-center gap-0.5", style: { background: "rgba(249,115,22,0.2)", color: "#f97316" } }, h(Flame, { size: 7, fill: "#f97316" }), "Boost\u00e9")
       )
     )
   );
@@ -1018,6 +1021,8 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                   topThreeIds, onCrown: onToggleTopThree,
                   boostCount: b.count,
                   small: true,
+                  boosterActive: userBoostedSet?.has(b.game_id),
+                  boosterBtn: () => onSelect(game),
                 })
               );
             })

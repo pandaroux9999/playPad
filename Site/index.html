@@ -2715,23 +2715,7 @@ function BottomNav({ view, setView }) {
   );
 }
 
-function HeroBanner({ user, gamesCount, friendsCount, onDismiss }) {
-  return h('div', { className: "relative overflow-hidden rounded-2xl mx-4 mt-3 mb-1 p-5", style: { background: `linear-gradient(135deg, ${P1}25, ${P2}15)`, border: `1px solid ${P1}20` } },
-    h('div', { className: "absolute top-0 right-0 w-32 h-32 rounded-full blur-2xl pointer-events-none", style: { background: `${P1}15`, transform: "translate(30%, -30%)" } }),
-    h('button', { onClick: onDismiss, className: "absolute top-2 right-2 text-muted-foreground hover:text-white transition-colors" }, h(X, { size: 14 })),
-    h('div', { className: "relative z-10" },
-      h('h2', { className: "text-base font-bold text-white mb-2", style: { fontFamily: "'Rajdhani', sans-serif" } },
-        "Bienvenue", user?.display_name ? `, ${user.display_name}` : "", " \uD83D\uDC4B"
-      ),
-      h('div', { className: "flex items-center gap-4 text-[11px] text-muted-foreground mb-3" },
-        h('span', null, h(Gamepad2, { size: 12, className: "inline mr-1" }), `${gamesCount} jeu${gamesCount !== 1 ? 'x' : ''}`),
-        h('span', null, h(Users, { size: 12, className: "inline mr-1" }), `${friendsCount} ami${friendsCount !== 1 ? 's' : ''}`)
-      )
-    )
-  );
-}
-
-function OnboardingModal({ onDismiss }) {
+function OnboardingModal({ onDismiss, user, gamesCount, friendsCount }) {
   const [step, setStep] = useState(0);
   const steps = [
     { icon: Gamepad2, label: "Biblioth\u00e8que", desc: "G\u00e8re ta collection, suis ta progression et note tes jeux." },
@@ -2755,7 +2739,14 @@ function OnboardingModal({ onDismiss }) {
         h('h3', { className: "text-lg font-bold text-white mb-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, s.label),
         h('p', { className: "text-sm text-muted-foreground max-w-xs" }, s.desc)
       ),
-      step >= steps.length - 1 && h('div', { className: "mt-3 p-3 rounded-xl text-center", style: { background: `${P1}10`, border: `1px solid ${P1}20` } },
+      step >= steps.length - 1 && h('div', { className: "w-full text-center mb-4 p-3 rounded-xl", style: { background: `${P1}10`, border: `1px solid ${P1}20` } },
+        h('h2', { className: "text-base font-bold text-white mb-2", style: { fontFamily: "'Rajdhani', sans-serif" } },
+          "Bienvenue", user?.display_name ? `, ${user.display_name}` : "", " \uD83D\uDC4B"
+        ),
+        h('div', { className: "flex items-center justify-center gap-4 text-[11px] text-muted-foreground mb-2" },
+          h('span', null, h(Gamepad2, { size: 12, className: "inline mr-1" }), `${gamesCount} jeu${gamesCount !== 1 ? 'x' : ''}`),
+          h('span', null, h(Users, { size: 12, className: "inline mr-1" }), `${friendsCount} ami${friendsCount !== 1 ? 's' : ''}`)
+        ),
         h('p', { className: "text-[11px] leading-relaxed", style: { color: `${P1}cc` } },
           "Ajoute tes premiers jeux depuis le Catalogue pour constituer ta biblioth\u00e8que \uD83D\uDE80"
         )
@@ -3427,7 +3418,7 @@ function App() {
     h('div', { className: "app-content relative flex flex-col h-screen bg-background mx-auto" },
       h('div', { className: "flex-1 overflow-hidden" },
         h('div', { className: "h-full overflow-y-auto" },
-          showHero && h(HeroBanner, { user, gamesCount: games.length, friendsCount, onDismiss: () => setShowHero(false) }),
+          null,
           view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); }, wishlistIds, onToggleWishlist: handleToggleWishlist, topThreeIds, onToggleTopThree: handleToggleTopThree, setView, showAuthModal }),
           view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, freshReview, onFreshReviewConsumed: () => setFreshReview(null), onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); }, showAuthModal, user }),
           view === "catalogue" && h(CatalogueView, { key: 'cat', refreshKey: catalogRefreshKey, onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
@@ -3437,7 +3428,7 @@ function App() {
       ),
       h(BottomNav, { view, setView }),
       h(DiscoveryToast, { discoveries, onDiscover: handleDiscover, onDismiss: handleDismissDiscovery }),
-      showOnboarding && h(OnboardingModal, { onDismiss: () => setShowOnboarding(false) }),
+      showOnboarding && h(OnboardingModal, { onDismiss: () => setShowOnboarding(false), user, gamesCount: games.length, friendsCount }),
       selectedGame && h(GameDetailSheet, {
         key: selectedGame.game_id || selectedGame.id,
         game: selectedGame,

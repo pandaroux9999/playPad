@@ -1658,7 +1658,6 @@ module.exports = {
   dedupeCatalog,
   mergeCatalogDuplicatesByTitle,
   getCatalog,
-  getCatalogPage,
   getCatalogCount,
   searchCatalog,
   queryCatalog,

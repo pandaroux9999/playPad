@@ -183,6 +183,7 @@ const API = {
   getBoosterPoints: () => API.request('GET', '/api/booster/points'),
   boosterGame: (gameId) => API.request('POST', '/api/booster/boost', { gameId }),
   getBoostStatus: (gameId) => API.request('GET', `/api/booster/status/${gameId}`),
+  getBoosterTop: () => API.request('GET', '/api/booster/top'),
   connectEpic: (epicUsername) => API.request('POST', '/api/platform/epic/connect', { epicUsername }),
   connectPsn: (npsso) => API.request('POST', '/api/platform/psn/connect', { npsso }),
   resyncPsn: () => API.request('POST', '/api/platform/psn/resync'),
@@ -944,8 +945,8 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   }, [search, activeLetter]);
 
   useEffect(() => { setCatalogPage(1); loadCatalog(1, false); }, [loadCatalog]);
-  useEffect(() => { API.getTopBoosted().then(d => setTopBoosted(d.top || [])).catch(() => {}); }, [refreshKey]);
-  useEffect(() => { API.getBoostPoints().then(d => setBoostPoints(d.points)).catch(() => {}); }, [refreshKey]);
+  useEffect(() => { API.getBoosterTop().then(d => setTopBoosted(d.top || [])).catch(() => {}); }, [refreshKey]);
+  useEffect(() => { API.getBoosterPoints().then(d => setBoostPoints(d.points)).catch(() => {}); }, [refreshKey]);
   useEffect(() => { API.getNewReleases().then(d => setNewReleases(d.releases || [])).catch(() => {}); }, [refreshKey]);
   useEffect(() => { API.getDownloadCounts().then(d => setDownloadCounts(d.counts || {})).catch(() => {}); }, [refreshKey]);
 
@@ -3087,7 +3088,7 @@ function App() {
   const discoveryTimerRef = useRef(null);
   const refreshBooster = useCallback(async () => {
     try {
-      const [bpData, topData] = await Promise.all([API.getBoosterPoints(), API.getTopBoosted()]);
+      const [bpData, topData] = await Promise.all([API.getBoosterPoints(), API.getBoosterTop()]);
       console.log('[App] Booster points:', bpData, 'Top boosted:', topData.top?.length);
       setBoosterPoints(bpData.points || 0);
       setBoostedGames(topData.top || []);
@@ -3130,7 +3131,7 @@ function App() {
       setTopThree(t);
       setTopThreeIds(new Set(t.map(g => g.game_id)));
       setRatings(rData.ratings || {});
-      return Promise.all([API.getBoosterPoints(), API.getTopBoosted()]);
+      return Promise.all([API.getBoosterPoints(), API.getBoosterTop()]);
     }).then(([bpData, topData]) => {
       setBoosterPoints(bpData.points || 0);
       setBoostedGames(topData.top || []);
@@ -3291,6 +3292,7 @@ function App() {
       setBoosterPoints(prev => Math.max(0, prev - 1));
       setUserBoostedSet(prev => new Set(prev).add(gameId));
       refreshBooster();
+      setCatalogRefreshKey(k => k + 1);
       showToast("Jeu boost\u00e9 !");
     } catch (e) {
       console.error('[Booster] Error:', e.message);

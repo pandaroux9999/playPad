@@ -1764,20 +1764,24 @@ async function fixMissingCovers() {
   } catch (e) { console.error('[Covers] Error:', e.message); return 0; }
 }
 
-// Peuple le catalogue au démarrage via JeuxVideo.com (RAWG désactivé)
+// Peuple le catalogue au démarrage si SCRAPE_ON_START=true (local uniquement, pas sur Render)
 (async () => {
-  try {
-    const existing = await db.getCatalogCount();
-    if (existing < 100) {
-      console.log('[Catalog] Peuplement initial du catalogue via JeuxVideo.com...');
-      const result = await scrapeJV(db, { startPage: 1 });
-      await db.mergeCatalogDuplicatesByTitle().catch(() => {});
-      console.log(`[Catalog] ${result.totalImported} jeux JV.com importés`);
-    } else {
-      console.log(`[Catalog] Catalogue déjà peuplé (${existing} jeux), skip scraping initial`);
+  if (process.env.SCRAPE_ON_START === 'true') {
+    try {
+      const existing = await db.getCatalogCount();
+      if (existing < 100) {
+        console.log('[Catalog] Peuplement initial du catalogue via JeuxVideo.com...');
+        const result = await scrapeJV(db, { startPage: 1 });
+        await db.mergeCatalogDuplicatesByTitle().catch(() => {});
+        console.log(`[Catalog] ${result.totalImported} jeux JV.com importés`);
+      } else {
+        console.log(`[Catalog] Catalogue déjà peuplé (${existing} jeux), skip scraping initial`);
+      }
+    } catch (e) {
+      console.error('[Catalog] Erreur peuplement initial JV.com:', e.message);
     }
-  } catch (e) {
-    console.error('[Catalog] Erreur peuplement initial JV.com:', e.message);
+  } else {
+    console.log('[Catalog] SCRAPE_ON_START non défini, scraping automatique désactivé');
   }
   // Steam App List : importé UNIQUEMENT via l'API /api/catalog/populate (pas au démarrage)
   // Jeux cultes : toujours insérés (indépendant du seed)

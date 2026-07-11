@@ -157,7 +157,6 @@ async function launchBrowser() {
 
 async function fetchPageHTML(puppeteerPage, url) {
   await puppeteerPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await sleep(1500);
   return puppeteerPage.content();
 }
 

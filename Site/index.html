@@ -1054,7 +1054,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" },
             h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }),
             h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"),
-            h('button', { onClick: async () => { setLoadingCatalog(true); try { const r = await API.replaceCatalogFromJson(); showToast(`${r.count} jeux importés depuis JeuxVideo.com`); loadCatalog(1, false); } catch (err) { showToast('Erreur: ' + err.message); } setLoadingCatalog(false); }, className: "mt-3 px-3 py-1.5 rounded-xl text-[10px] font-bold text-white", style: { background: GRAD } }, "Remplir le catalogue")
+            h('button', { onClick: async () => { try { const r = await API.replaceCatalogFromJson(); showToast(`${r.count} jeux importés depuis JeuxVideo.com`); setLoadingCatalog(false); loadCatalog(1, false); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "mt-3 px-3 py-1.5 rounded-xl text-[10px] font-bold text-white", style: { background: GRAD } }, "Remplir le catalogue")
           )
         : h('div', null,
             h('div', { className: "flex items-center justify-between mb-3" },

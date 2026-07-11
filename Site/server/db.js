@@ -587,16 +587,36 @@ async function batchUpsertCatalog(games) {
   const payloads = games.map(g => ({
     game_id: g.game_id, title: g.title, platform: g.platform || '',
     cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
-    developer: g.developer || '', publisher: g.publisher || ''
+    developer: g.developer || '', publisher: g.publisher || '',
+    description: g.description || ''
   }));
   const { error } = await supabaseAdmin.from('catalog').upsert(payloads, { onConflict: 'game_id', ignoreDuplicates: true });
-  if (error) console.error('[batchUpsertCatalog] Error:', error.message);
+  if (error) {
+    if (error.message && error.message.includes('description')) {
+      const fallback = games.map(g => ({
+        game_id: g.game_id, title: g.title, platform: g.platform || '',
+        cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
+        developer: g.developer || '', publisher: g.publisher || ''
+      }));
+      const { error: e2 } = await supabaseAdmin.from('catalog').upsert(fallback, { onConflict: 'game_id', ignoreDuplicates: true });
+      if (e2) console.error('[batchUpsertCatalog] Fallback error:', e2.message);
+    } else {
+      console.error('[batchUpsertCatalog] Error:', error.message);
+    }
+  }
   invalidateCatalogCache();
 }
 
 async function clearCatalog() {
-  const { error } = await supabaseAdmin.from('catalog').delete().neq('game_id', '');
-  if (error) throw new Error(error.message);
+  const { data: all, error: fetchError } = await supabaseAdmin.from('catalog').select('game_id');
+  if (fetchError) throw new Error(fetchError.message);
+  if (!all || all.length === 0) return;
+  const ids = all.map(r => r.game_id).filter(Boolean);
+  for (let i = 0; i < ids.length; i += 500) {
+    const batch = ids.slice(i, i + 500);
+    const { error } = await supabaseAdmin.from('catalog').delete().in('game_id', batch);
+    if (error) throw new Error(error.message);
+  }
   invalidateCatalogCache();
 }
 

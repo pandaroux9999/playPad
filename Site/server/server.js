@@ -1336,7 +1336,7 @@ app.post('/api/catalog/replace-from-json', requireAuth, async (req, res) => {
     }
     console.log(`[Catalog] Remplacement du catalogue par ${games.length} jeux JV...`);
     await db.clearCatalog();
-    const batchSize = 500;
+    const batchSize = 200;
     for (let i = 0; i < games.length; i += batchSize) {
       const batch = games.slice(i, i + batchSize);
       await db.batchUpsertCatalog(batch);

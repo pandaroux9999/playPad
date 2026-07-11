@@ -2450,7 +2450,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   );
 }
 
-function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, userId, ratings, boosterPoints, userBoostedSet, onBoostGame }) {
+function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, userId, ratings, boosterPoints, userBoostedSet, onBoostGame, showAuthModal }) {
   const [downloadCount, setDownloadCount] = useState(0);
   const [trailerVideoId, setTrailerVideoId] = useState(null);
   const [trailerLoading, setTrailerLoading] = useState(false);
@@ -2547,6 +2547,7 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
   const endDetailTooltip = () => { clearTimeout(detailTooltipTimer.current); setDetailTooltip(null); };
   const dtt = (name, text) => detailTooltip === name && h('div', { className: "tooltip-pop absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-1 rounded-lg text-[9px] font-bold z-20", style: { background: "#1a1a2e", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", pointerEvents: "none" } }, text);
   const handleBoostDetail = async (g) => {
+    if (!userId) { showAuthModal('register'); return; }
     const gId = g.game_id || g.id;
     const hasBoosted = userBoostedSet?.has(gId);
     if (hasBoosted) { setBoostDetailAnim(true); setTimeout(() => setBoostDetailAnim(false), 400); alert('Tu as déjà boosté ce jeu'); return; }
@@ -3442,6 +3443,7 @@ function App() {
         boosterPoints,
         userBoostedSet,
         onBoostGame: handleBoostGame,
+        showAuthModal,
       }),
       selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => setSelectedFriend(null), isOnline, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, friendId: selectedFriend.id, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
       toast && h('div', { className: "toast", style: { background: GRAD } }, toast),

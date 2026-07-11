@@ -337,16 +337,10 @@ async function savePublicReview(userId, gameId, rating, reviewText, gameTitle, g
 }
 
 async function getGameReviews(gameId) {
-  let gameIds = [gameId];
-  const { data: catEntry } = await supabaseAdmin.from('catalog').select('title').eq('game_id', gameId).maybeSingle();
-  if (catEntry?.title) {
-    const { data: related } = await supabaseAdmin.from('catalog').select('game_id').ilike('title', catEntry.title);
-    if (related?.length > 1) gameIds = [...new Set(related.map(r => r.game_id))];
-  }
   const { data, error } = await supabaseAdmin
     .from('community_reviews')
     .select(`*, users(display_name, username)`)
-    .in('game_id', gameIds)
+    .eq('game_id', gameId)
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return data || [];
@@ -630,7 +624,7 @@ async function batchUpsertCatalog(games) {
 }
 
 async function clearCatalog() {
-  const { data: all, error: fetchError } = await supabaseAdmin.from('catalog').select('game_id');
+  const { data: all, error: fetchError } = await supabaseAdmin.from('catalog').select('game_id').limit(100000);
   if (fetchError) throw new Error(fetchError.message);
   if (!all || all.length === 0) return;
   const ids = all.map(r => r.game_id).filter(Boolean);

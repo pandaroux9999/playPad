@@ -41,7 +41,6 @@
     .review-card { transition: border-color 0.2s ease; }
     .sheet-close-btn { transition: background 0.2s ease; }
     .sheet-close-btn:hover { background: rgba(0,0,0,0.7) !important; }
-    .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 999; padding: 10px 24px; border-radius: 12px; font-size: 13px; font-weight: 600; color: #fff; animation: fadeSlideIn 0.3s ease-out; pointer-events: none; }
     @media (min-width: 768px) {
       .game-card:hover { transform: scale(1.03); }
       .nav-btn { transition: all 0.2s ease; }
@@ -2935,7 +2934,6 @@ function AuthPage({ onLoginSuccess, resetToken, onResetComplete, initialMode, on
             loading ? h(Loader, { size: 14, className: "animate-spin" }) : "R\u00e9initialiser"
           )
         ),
-      toast && h('div', { className: "toast", style: { background: GRAD } }, toast)
     )
   );
 }
@@ -3069,7 +3067,6 @@ function AuthPage({ onLoginSuccess, resetToken, onResetComplete, initialMode, on
         isRegister ? "D\u00e9j\u00e0 un compte ? Connecte-toi" : "Pas de compte ? Inscris-toi"
       ),
       h('p', { className: "text-[10px] text-muted-foreground/50 mt-4" }, "PlayPad \u00a9 2026"),
-      toast && h('div', { className: "toast", style: { background: GRAD } }, toast)
     )
   );
 }
@@ -3537,7 +3534,6 @@ function App() {
         showAuthModal,
       }),
       selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => setSelectedFriend(null), isOnline, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, friendId: selectedFriend.id, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
-      toast && h('div', { className: "toast", style: { background: GRAD } }, toast),
       authModal && h('div', { className: "fixed inset-0 z-50 flex items-end md:items-center justify-center", style: { animation: "fadeIn 0.2s ease-out" } },
         h('div', { className: "absolute inset-0", style: { background: "rgba(0,0,0,0.7)" }, onClick: closeAuthModal }),
         h('div', { className: "relative max-h-[90vh] overflow-y-auto", style: { animation: "slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1)" } },

@@ -1391,6 +1391,25 @@ app.post('/api/catalog/delete/:gameId', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/catalog/clean-non-jv', requireAuth, async (req, res) => {
+  try {
+    const catalog = await db.getCatalog();
+    const nonJv = catalog.filter(g => !g.game_id?.startsWith('jv-'));
+    const ids = nonJv.map(g => g.game_id).filter(Boolean);
+    for (let i = 0; i < ids.length; i += 200) {
+      const batch = ids.slice(i, i + 200);
+      const { error } = await db.supabaseAdmin.from('catalog').delete().in('game_id', batch);
+      if (error) console.error('[CleanNonJV] batch error:', error.message);
+    }
+    db.invalidateCatalogCache();
+    console.log(`[Catalog] Nettoyage: ${ids.length} jeux non-JV supprimés`);
+    res.json({ ok: true, deleted: ids.length });
+  } catch (err) {
+    console.error('[CleanNonJV] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/catalog/no-covers', requireAuth, async (req, res) => {
   try {
     const catalog = await db.getCatalog();

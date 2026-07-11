@@ -190,6 +190,7 @@ const API = {
   getNews: () => API.request('GET', '/api/news'),
   getNewReleases: () => API.request('GET', '/api/catalog/new-releases'),
   replaceCatalogFromJson: () => API.request('POST', '/api/catalog/replace-from-json'),
+  cleanCatalogNonJv: () => API.request('POST', '/api/catalog/clean-non-jv'),
   deleteCatalogGame: (gameId) => API.request('POST', `/api/catalog/delete/${gameId}`),
   replyToReview: (reviewId, text) => API.request('POST', `/api/reviews/${reviewId}/reply`, { text }),
   getReviewReplies: (reviewId) => API.request('GET', `/api/reviews/${reviewId}/replies`),
@@ -1054,7 +1055,10 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" },
             h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }),
             h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"),
-            h('button', { onClick: async () => { try { const r = await API.replaceCatalogFromJson(); showToast(`${r.count} jeux importés depuis JeuxVideo.com`); setLoadingCatalog(false); loadCatalog(1, false); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "mt-3 px-3 py-1.5 rounded-xl text-[10px] font-bold text-white", style: { background: GRAD } }, "Remplir le catalogue")
+            h('div', { className: "flex gap-2 mt-3" },
+              h('button', { onClick: async () => { try { const r = await API.replaceCatalogFromJson(); await API.cleanCatalogNonJv(); showToast(`${r.count} jeux importés depuis JeuxVideo.com`); setLoadingCatalog(false); loadCatalog(1, false); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "px-3 py-1.5 rounded-xl text-[10px] font-bold text-white", style: { background: GRAD } }, "Remplir le catalogue"),
+              h('button', { onClick: async () => { try { const r = await API.cleanCatalogNonJv(); showToast(`${r.deleted} jeux non-JV supprimés`); loadCatalog(1, false); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "px-3 py-1.5 rounded-xl text-[10px] font-bold", style: { background: "rgba(239,68,68,0.15)", color: "#ef4444" } }, "Nettoyer")
+            )
           )
         : h('div', null,
             h('div', { className: "flex items-center justify-between mb-3" },

@@ -561,6 +561,7 @@ async function removeGameSuggestion(id, userId) {
 async function ensureCatalogGame(game) {
   const { game_id, title, platform, cover, genre, year, developer, publisher, description } = game;
   if (!game_id || !title) return;
+  if (!game_id.startsWith('jv-')) return;
   const payload = { game_id, title, platform: platform || '', cover: cover || '', genre: genre || '', year: year || 0, developer: developer || '', publisher: publisher || '' };
   if (description) payload.description = description;
   const { error } = await supabaseAdmin
@@ -584,6 +585,8 @@ async function ensureCatalogGame(game) {
 
 async function batchUpsertCatalog(games) {
   if (!games || games.length === 0) return;
+  games = games.filter(g => g.game_id?.startsWith('jv-'));
+  if (games.length === 0) return;
   const payloads = games.map(g => ({
     game_id: g.game_id, title: g.title, platform: g.platform || '',
     cover: g.cover || '', genre: g.genre || '', year: g.year || 0,

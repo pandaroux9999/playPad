@@ -988,8 +988,8 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         h('div', { className: "relative flex-1" }, h(Search, { size: 13, className: "absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" }), h('input', { value: search, onChange: e => setSearch(e.target.value), placeholder: "Chercher dans le catalogue\u2026", className: "w-full bg-secondary/60 border border-border rounded-xl pl-8 pr-4 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none" })),
       ),
     h('div', { className: "flex-1 overflow-y-auto px-4 pb-20", style: { scrollbarWidth: "none" } },
-      // Sections: always visible when not searching (regardless of letter)
-      !search && h('div', { className: "flex flex-col gap-4 mb-3" },
+      // Sections (toujours visibles)
+      h('div', { className: "flex flex-col gap-4 mb-3" },
         // Nouveautés
         newReleases.length > 0 && h('div', null,
           h('h3', { className: "text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "Nouveaut\u00e9s"),
@@ -1027,7 +1027,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
           )
         ),
         // À la une (top rated)
-        !search && featured.length > 0 && h('div', null,
+        featured.length > 0 && h('div', null,
           h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "\u2B50", " \u00c0 la une"),
           h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
             featured.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },

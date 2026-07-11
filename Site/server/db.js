@@ -783,10 +783,11 @@ async function queryCatalog({ search, letter, platform, genre, yearMin, yearMax,
   // Pagination + tri
   const offset = (page - 1) * limit;
   if (!hasScoreFilter) {
+    const total = await getCatalogCount();
     query = query.order('title').range(offset, offset + limit - 1);
-    const { data, count, error } = await query;
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
-    return { data: data || [], total: count || 0, page, limit };
+    return { data: data || [], total, page, limit };
   }
   // Avec filtres de score → chargement + filtre en mémoire
   const all = await getCatalog();

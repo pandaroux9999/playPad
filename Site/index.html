@@ -1041,28 +1041,32 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       // Sections (toujours visibles)
       h('div', { className: "flex flex-col gap-4 mb-3" },
         // Nouveautés
-        newReleases.length > 0 && h('div', null,
+        h('div', null,
           h('h3', { className: "text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "Nouveaut\u00e9s"),
-          h('div', { className: "flex gap-3 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } },
-            newReleases.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-44" },
-              h(GameCard, {
-                game: { ...game, userRating: ratings?.[game.game_id] || 0 },
-                onClick: () => onSelect(game),
-                wishlistIds, onWishlist: onToggleWishlist,
-                topThreeIds, onCrown: onToggleTopThree,
-                boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
-              })
-            ))
-          )
+          newReleases.length === 0
+            ? h('p', { className: "text-[10px] text-muted-foreground italic" }, "Chargement\u2026")
+            : h('div', { className: "flex gap-3 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } },
+                newReleases.map(game => h('div', { key: game.game_id, className: "flex-shrink-0", style: { width: "calc((100vw - 64px)/2)" } },
+                  h(GameCard, {
+                    game: { ...game, userRating: ratings?.[game.game_id] || 0 },
+                    onClick: () => onSelect(game),
+                    wishlistIds, onWishlist: onToggleWishlist,
+                    topThreeIds, onCrown: onToggleTopThree,
+                    boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
+                  })
+                ))
+              )
         ),
         // Boostés de la semaine
-        topBoosted.length > 0 && h('div', null,
+        h('div', null,
           h('h3', { className: "text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "Boost\u00e9s de la semaine"),
-          h('div', { className: "flex gap-3 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } },
-            topBoosted.slice(0, 10).map(b => {
+          topBoosted.length === 0
+            ? h('p', { className: "text-[10px] text-muted-foreground italic mb-3" }, "Aucun boost pour l\u2019instant")
+            : h('div', { className: "flex gap-3 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } },
+                topBoosted.slice(0, 10).map(b => {
               const game = b.game;
               if (!game) return null;
-              return h('div', { key: b.game_id, className: "flex-shrink-0 w-44" },
+              return h('div', { key: b.game_id, className: "flex-shrink-0", style: { width: "calc((100vw - 64px)/2)" } },
                 h(GameCard, {
                   game: { ...game, userRating: ratings?.[game.game_id] || 0 },
                   onClick: () => onSelect(game),
@@ -1077,10 +1081,12 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
           )
         ),
         // À la une (top rated)
-        featured.length > 0 && h('div', null,
-          h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "\u2B50", " \u00c0 la une"),
-          h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
-            featured.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },
+        h('div', null,
+          h('h3', { className: "text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "\u2B50", " \u00c0 la une"),
+          featured.length === 0
+            ? h('p', { className: "text-[10px] text-muted-foreground italic mb-3" }, "Chargement\u2026")
+            : h('div', { className: "flex gap-3 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } },
+                featured.map(game => h('div', { key: game.game_id, className: "flex-shrink-0", style: { width: "calc((100vw - 64px)/2)" } },
               h(GameCard, {
                 game: { ...game, userRating: ratings?.[game.game_id] || 0 },
                 onClick: () => onSelect(game),
@@ -1101,12 +1107,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         : catalog.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" },
             h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }),
-            h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"),
-            h('div', { className: "flex gap-2 mt-3" },
-              h('button', { onClick: async () => { try { const r = await API.replaceCatalogFromJson(); await API.cleanCatalogNonJv(); showToast(`${r.count} jeux importés depuis JeuxVideo.com`); setLoadingCatalog(false); loadCatalog(1, false); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "px-3 py-1.5 rounded-xl text-[10px] font-bold text-white", style: { background: GRAD } }, "Remplir le catalogue"),
-              h('button', { onClick: async () => { try { const r = await API.cleanCatalogNonJv(); showToast(`${r.deleted} jeux non-JV supprimés`); loadCatalog(1, false); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "px-3 py-1.5 rounded-xl text-[10px] font-bold", style: { background: "rgba(239,68,68,0.15)", color: "#ef4444" } }, "Nettoyer"),
-              h('button', { onClick: async () => { try { const r = await API.enrichCatalogFromRawg(); showToast(`${r.enriched} jeux enrichis (RAWG)`); loadCatalog(1, false); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "px-3 py-1.5 rounded-xl text-[10px] font-bold", style: { background: "rgba(59,130,246,0.15)", color: "#3b82f6" } }, "Enrichir")
-            )
+            h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9")
           )
         : h('div', null,
             h('div', { className: "flex items-center justify-between mb-3" },
@@ -2462,6 +2463,15 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
         h('button', { onClick: () => { setSettingsOpen(false); onDeleteAccount(); }, className: "flex items-center gap-2 py-2.5 text-xs font-medium w-full text-left", style: { color: "#ef444488" } },
           h(Trash2, { size: 13, style: { color: "#ef444488" } }),
           "Supprimer mon compte"
+        ),
+        // Admin catalogue
+        h('div', { className: "border-t border-border pt-2.5 mt-2.5" },
+          h('p', { className: "text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-2" }, "Admin catalogue"),
+          h('div', { className: "flex flex-col gap-1.5" },
+            h('button', { onClick: async () => { try { const r = await API.replaceCatalogFromJson(); setSettingsOpen(false); showToast(`${r.count} jeux importés depuis JeuxVideo.com`); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "text-[10px] font-bold text-left py-1.5 px-2 rounded-lg", style: { background: `${P1}10`, color: P1 } }, "Remplir le catalogue"),
+            h('button', { onClick: async () => { try { const r = await API.cleanCatalogNonJv(); setSettingsOpen(false); showToast(`${r.deleted} jeux non-JV supprimés`); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "text-[10px] font-bold text-left py-1.5 px-2 rounded-lg", style: { background: "rgba(239,68,68,0.1)", color: "#ef4444" } }, "Nettoyer"),
+            h('button', { onClick: async () => { try { const r = await API.enrichCatalogFromRawg(); setSettingsOpen(false); showToast(`${r.enriched} jeux enrichis`); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "text-[10px] font-bold text-left py-1.5 px-2 rounded-lg", style: { background: "rgba(59,130,246,0.1)", color: "#3b82f6" } }, "Enrichir"),
+          )
         )
       )
     ),

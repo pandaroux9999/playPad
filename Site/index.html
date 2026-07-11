@@ -2726,9 +2726,6 @@ function HeroBanner({ user, gamesCount, friendsCount, onDismiss }) {
       h('div', { className: "flex items-center gap-4 text-[11px] text-muted-foreground mb-3" },
         h('span', null, h(Gamepad2, { size: 12, className: "inline mr-1" }), `${gamesCount} jeu${gamesCount !== 1 ? 'x' : ''}`),
         h('span', null, h(Users, { size: 12, className: "inline mr-1" }), `${friendsCount} ami${friendsCount !== 1 ? 's' : ''}`)
-      ),
-      gamesCount === 0 && h('p', { className: "text-[11px] leading-relaxed", style: { color: `${P1}cc` } },
-        "Ajoute tes premiers jeux depuis le Catalogue pour constituer ta biblioth\u00e8que \uD83D\uDE80"
       )
     )
   );
@@ -2757,6 +2754,11 @@ function OnboardingModal({ onDismiss }) {
         h('div', { className: "p-4 rounded-2xl mb-4", style: { background: `${P1}15` } }, h(s.icon, { size: 32, style: { color: P1 } })),
         h('h3', { className: "text-lg font-bold text-white mb-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, s.label),
         h('p', { className: "text-sm text-muted-foreground max-w-xs" }, s.desc)
+      ),
+      step >= steps.length - 1 && h('div', { className: "mt-3 p-3 rounded-xl text-center", style: { background: `${P1}10`, border: `1px solid ${P1}20` } },
+        h('p', { className: "text-[11px] leading-relaxed", style: { color: `${P1}cc` } },
+          "Ajoute tes premiers jeux depuis le Catalogue pour constituer ta biblioth\u00e8que \uD83D\uDE80"
+        )
       ),
       h('button', {
         onClick: () => { if (step >= steps.length - 1) onDismiss(); else setStep(step + 1); },
@@ -3131,7 +3133,7 @@ function App() {
     }).then(([gData, wData, tData, rData]) => {
       console.log('[App] Data loaded:', gData.games.length, 'games,', wData.wishlist.length, 'wishlist');
       setGames(gData.games.map(n));
-      if ((gData.games || []).length === 0) setShowOnboarding(true);
+      if ((gData.games || []).length === 0 && !localStorage.getItem('playpad_onboarding_done')) { setShowOnboarding(true); localStorage.setItem('playpad_onboarding_done', '1'); }
       setWishlistIds(new Set(wData.wishlist));
       const t = (tData.topThree || []).map(n);
       setTopThree(t);
@@ -3340,7 +3342,7 @@ function App() {
     setShowHero(true);
     API.getGames().then(d => {
       setGames((d.games || []).map(n));
-      if ((d.games || []).length === 0) setShowOnboarding(true);
+      if ((d.games || []).length === 0 && !localStorage.getItem('playpad_onboarding_done')) { setShowOnboarding(true); localStorage.setItem('playpad_onboarding_done', '1'); }
     }).catch(() => {});
     API.getWishlist().then(d => setWishlistIds(new Set(d.wishlist))).catch(() => {});
     API.getTopThree().then(d => {

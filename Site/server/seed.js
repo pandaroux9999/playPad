@@ -282,10 +282,20 @@ async function seedDemoData() {
 
 async function seedBoosts(userIds) {
   console.log('[Seed] Ajout des boosts communautaires (jeux alÃ©atoires du catalogue)...');
-  // Vérifie/crée la table boosts si absente
+  // Calcule le début de semaine ISO
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(now);
+  monday.setDate(diff);
+  const weekStart = monday.toISOString().split('T')[0];
+
   try { await db.supabaseAdmin.rpc('exec_sql', { query: `CREATE TABLE IF NOT EXISTS boosts (id SERIAL PRIMARY KEY, user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE, game_id TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(user_id, game_id));` }); } catch (e) {}
-  // Nettoie les anciens boosts (> 7 jours) pour garder la table propre
+  try { await db.supabaseAdmin.rpc('exec_sql', { query: `CREATE TABLE IF NOT EXISTS game_boosts (id SERIAL PRIMARY KEY, user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE, game_id TEXT NOT NULL, week_start TEXT NOT NULL, UNIQUE(user_id, game_id, week_start));` }); } catch (e) {}
+
   try { await db.supabaseAdmin.from('boosts').delete().lt('created_at', new Date(Date.now() - 7 * 86400000).toISOString()); } catch (e) {}
+  try { await db.supabaseAdmin.from('game_boosts').delete().neq('week_start', weekStart); } catch (e) {}
+
   let catalogGames = [];
   try {
     const { data } = await db.supabaseAdmin.from('catalog').select('game_id').limit(5000);
@@ -304,11 +314,10 @@ async function seedBoosts(userIds) {
       if (boostPairs.has(key)) continue;
       boostPairs.add(key);
       const daysAgo = Math.floor(Math.random() * 6);
-      const { error } = await db.supabaseAdmin.from('boosts').insert({
-        user_id: u, game_id: g.game_id,
-        created_at: new Date(Date.now() - daysAgo * 86400000).toISOString(),
-      });
-      if (!error) { count++; totalBoosts++; }
+      const created_at = new Date(Date.now() - daysAgo * 86400000).toISOString();
+      try { await db.supabaseAdmin.from('boosts').insert({ user_id: u, game_id: g.game_id, created_at }); } catch (e) {}
+      try { await db.supabaseAdmin.from('game_boosts').insert({ user_id: u, game_id: g.game_id, week_start: weekStart }); } catch (e) {}
+      count++; totalBoosts++;
     }
   }
   console.log(`[Seed] ${totalBoosts} boosts ajoutés pour ${boostedGames.length} jeux`);

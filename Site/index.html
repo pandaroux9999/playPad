@@ -2779,11 +2779,11 @@ function LandingPage({ onLoginSuccess, resetToken, onResetComplete, onEnterAsGue
         h('p', { className: "text-sm text-muted-foreground max-w-md text-center leading-relaxed mb-10" },
           "Suis ta biblioth\u00e8que de jeux, d\u00e9couvre les tendances e-sport, \u00e9change avec la communaut\u00e9 et partage tes critiques."
         ),
-        h('div', { className: "flex flex-col sm:flex-row gap-3 w-full max-w-xs" },
-          h('button', { onClick: () => setMode('register'), className: "w-full py-3.5 rounded-2xl text-sm font-bold text-white transition-all hover:scale-[1.02] active:scale-[0.97]", style: { background: GRAD, boxShadow: "0 8px 30px rgba(139,92,246,0.35)" } }, "Rejoindre gratuitement"),
-          h('button', { onClick: () => setMode('login'), className: "w-full py-3.5 rounded-2xl text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.97]", style: { color: P1, background: `${P1}12`, border: `1px solid ${P1}30` } }, "Se connecter")
+        h('div', { className: "flex flex-col sm:flex-row gap-3 w-full max-w-sm" },
+          h('button', { onClick: () => setMode('register'), className: "flex-1 py-3.5 rounded-2xl text-sm font-bold text-white transition-all hover:scale-[1.02] active:scale-[0.97]", style: { background: GRAD, boxShadow: "0 8px 30px rgba(139,92,246,0.35)" } }, "Rejoindre gratuitement"),
+          h('button', { onClick: () => setMode('login'), className: "flex-1 py-3.5 rounded-2xl text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.97]", style: { color: P1, background: `${P1}12`, border: `1px solid ${P1}30` } }, "Se connecter")
         ),
-        onEnterAsGuest && h('button', { onClick: onEnterAsGuest, className: "mt-4 text-xs font-medium text-muted-foreground hover:text-white transition-colors" }, "Explorer le site en invit\u00e9")
+        onEnterAsGuest && h('button', { onClick: onEnterAsGuest, className: "mt-5 w-full max-w-sm py-3 rounded-2xl text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.97] flex items-center justify-center gap-2", style: { color: "#8888aa", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" } }, h(ArrowLeft, { size: 14, style: { transform: "rotate(180deg)" } }), "Entrer comme invit\u00e9")
       ),
       // Features
       h('div', { className: "px-6 pb-10 max-w-2xl mx-auto w-full" },

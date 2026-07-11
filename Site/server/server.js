@@ -425,7 +425,7 @@ app.post('/api/games/review', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/reviews/feed', requireAuth, async (req, res) => {
+app.get('/api/reviews/feed', async (req, res) => {
   try {
     const reviews = await db.getAllPublicReviews();
     const ids = reviews.map(r => r.id);
@@ -433,7 +433,7 @@ app.get('/api/reviews/feed', requireAuth, async (req, res) => {
     try {
       const results = await Promise.all([
         ids.length ? db.getReviewVotes(ids) : {},
-        db.getUserReviewVotes(req.session.userId),
+        req.session?.userId ? db.getUserReviewVotes(req.session.userId) : {},
       ]);
       votes = results[0];
       userVotes = results[1];

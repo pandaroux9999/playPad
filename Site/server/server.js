@@ -496,6 +496,38 @@ app.get('/api/reviews/:id/replies', requireAuth, async (req, res) => {
   }
 });
 
+app.delete('/api/reviews/game/:gameId', requireAuth, async (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const { data: reviews } = await db.supabaseAdmin
+      .from('community_reviews')
+      .select('id')
+      .eq('game_id', gameId);
+    const ids = (reviews || []).map(r => r.id);
+    if (ids.length > 0) {
+      const { error: voteErr } = await db.supabaseAdmin
+        .from('review_votes')
+        .delete()
+        .in('review_id', ids);
+      if (voteErr) console.error('[DeleteGameReviews] vote error:', voteErr.message);
+      const { error: replyErr } = await db.supabaseAdmin
+        .from('review_replies')
+        .delete()
+        .in('review_id', ids);
+      if (replyErr) console.error('[DeleteGameReviews] reply error:', replyErr.message);
+    }
+    const { error, count } = await db.supabaseAdmin
+      .from('community_reviews')
+      .delete()
+      .eq('game_id', gameId);
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, deleted: count || 0 });
+  } catch (err) {
+    console.error('[DeleteGameReviews] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/games/reviews', requireAuth, async (req, res) => {
   try {
     const { gameId } = req.query;

@@ -825,7 +825,6 @@ app.get('/api/auth/steam/callback', async (req, res) => {
 
 // Récupère les jeux Steam (+ achievements)
 async function fetchSteamGames(apiKey, steamId) {
-  // GetOwnedGames
   const ownedData = await steamApiGet(apiKey, 'IPlayerService', 'GetOwnedGames', { steamid: steamId, include_appinfo: true });
   if (!ownedData?.response?.games) {
     console.error('[SteamAPI] GetOwnedGames réponse inattendue:', JSON.stringify(ownedData).slice(0, 500));
@@ -833,37 +832,22 @@ async function fetchSteamGames(apiKey, steamId) {
   const list = ownedData?.response?.games || [];
   console.log('[SteamAPI] GetOwnedGames OK —', list.length, 'jeux pour steamId', steamId);
 
-  // Pour chaque jeu, tente de récupérer les achievements
-  const gameResults = [];
-  for (const g of list) {
-    const game = {
-      game_id: 'steam-' + g.appid,
-      title: g.name || 'Unknown',
-      platform: 'steam',
-      playtime: Math.round((g.playtime_forever || 0) / 60),
-      cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.appid}/library_600x900.jpg`,
-      genre: '',
-      year: 0,
-      status: g.playtime_forever > 0 ? 'playing' : 'not_started',
-      user_rating: 0,
-      review_text: '',
-      review_public: true,
-      has_review: 0,
-    };
-
-    // Tente achievements (limité aux jeux où l'utilisateur en a)
-    try {
-      const achData = await steamApiGet(apiKey, 'ISteamUserStats', 'GetPlayerAchievements', { steamid: steamId, appid: g.appid, l: 'french' });
-      const achievements = achData?.playerstats?.achievements || [];
-      if (achievements.length > 0) {
-        game.achievements_unlocked = achievements.filter(a => a.achieved === 1).length;
-        game.achievements_total = achievements.length;
-      }
-    } catch { /* ignore — pas d'achievements pour ce jeu */ }
-
-    gameResults.push(game);
-  }
-  return gameResults;
+  return list.map(g => ({
+    game_id: 'steam-' + g.appid,
+    title: g.name || 'Unknown',
+    platform: 'steam',
+    playtime: Math.round((g.playtime_forever || 0) / 60),
+    cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.appid}/library_600x900.jpg`,
+    genre: '',
+    year: 0,
+    status: g.playtime_forever > 0 ? 'playing' : 'not_started',
+    user_rating: 0,
+    review_text: '',
+    review_public: true,
+    has_review: 0,
+    achievements_unlocked: 0,
+    achievements_total: 0,
+  }));
 }
 
 // Route pour re-sync Steam (utilise le steam_id déjà enregistré)
@@ -874,15 +858,14 @@ app.post('/api/platform/steam/resync', requireAuth, async (req, res) => {
     if (!steamId) return res.status(400).json({ error: 'Aucun compte Steam connecté' });
     const apiKey = process.env.STEAM_API_KEY;
     if (!apiKey) return res.status(500).json({ error: 'STEAM_API_KEY non configurée sur le serveur' });
-    console.log('[SteamResync] steamId:', steamId, 'API key defined:', !!apiKey);
     const games = await fetchSteamGames(apiKey, steamId);
     if (games.length === 0) {
       return res.status(400).json({ error: 'Aucun jeu trouvé — ton profil Steam doit être en Public (Paramètres > Confidentialité > Détails du jeu: Public).' });
     }
-    for (const game of games) {
-      await db.upsertGame(req.session.userId, game);
-      await db.ensureCatalogGame(await enrichGameFromSteam(game));
-    }
+    // Batch upsert user games
+    await db.batchUpsertUserGames(req.session.userId, games);
+    // Batch catalog ensure
+    await db.batchUpsertCatalogSteam(games.map(g => ({ game_id: g.game_id, title: g.title, platform: 'steam', cover: g.cover })));
     res.json({ ok: true, count: games.length });
   } catch (err) {
     console.error('[SteamResync] Error:', err.message);

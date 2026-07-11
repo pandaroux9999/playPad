@@ -622,6 +622,39 @@ async function batchUpsertCatalog(games) {
   invalidateCatalogCache();
 }
 
+async function batchUpsertUserGames(userId, games) {
+  if (!games || games.length === 0) return;
+  const payloads = games.map(g => ({
+    user_id: userId, game_id: g.game_id, title: g.title,
+    platform: g.platform || '', genre: g.genre || '',
+    cover: g.cover || '', status: g.status || 'not_started',
+    playtime: g.playtime || 0, year: g.year || 0,
+    user_rating: g.user_rating || 0, review_text: g.review_text || '',
+    review_public: g.review_public !== false,
+    has_review: g.has_review ? true : false,
+    developer: g.developer || '', publisher: g.publisher || '',
+  }));
+  const { error } = await supabaseAdmin.from('games').upsert(payloads, { onConflict: 'user_id, game_id' });
+  if (error && error.message?.includes('developer')) {
+    const basic = payloads.map(p => ({ user_id: p.user_id, game_id: p.game_id, title: p.title, platform: p.platform, genre: p.genre, cover: p.cover, status: p.status, playtime: p.playtime, year: p.year, user_rating: p.user_rating, review_text: p.review_text, review_public: p.review_public, has_review: p.has_review }));
+    const { error: e2 } = await supabaseAdmin.from('games').upsert(basic, { onConflict: 'user_id, game_id' });
+    if (e2) console.error('[batchUpsertUserGames] Error:', e2.message);
+  }
+}
+
+async function batchUpsertCatalogSteam(games) {
+  if (!games || games.length === 0) return;
+  const payloads = games.map(g => ({
+    game_id: g.game_id, title: g.title, platform: g.platform || '',
+    cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
+    developer: g.developer || '', publisher: g.publisher || '',
+    description: g.description || '',
+  }));
+  const { error } = await supabaseAdmin.from('catalog').upsert(payloads, { onConflict: 'game_id', ignoreDuplicates: true });
+  if (error) console.error('[batchUpsertCatalogSteam] Error:', error.message);
+  invalidateCatalogCache();
+}
+
 async function clearCatalog() {
   const { data: all, error: fetchError } = await supabaseAdmin.from('catalog').select('game_id').limit(100000);
   if (fetchError) throw new Error(fetchError.message);
@@ -1658,6 +1691,8 @@ module.exports = {
   resetAllData,
   ensureCatalogGame,
   batchUpsertCatalog,
+  batchUpsertUserGames,
+  batchUpsertCatalogSteam,
   clearCatalog,
   deleteCatalogGame,
   dedupeCatalog,

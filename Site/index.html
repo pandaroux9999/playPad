@@ -610,7 +610,14 @@ const PLATFORM_SYNC_DATA = [
   { platform: "xbox",     gameCount: 0,  lastSync: "\u2014" },
 ];
 
-function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast, user, onAddNotification, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, setView }) {
+function LibraryView({ games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast, user, onAddNotification, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, setView, showAuthModal }) {
+  if (!user) return h('div', { className: "flex flex-col items-center justify-center h-full view-enter p-8" },
+    h(Gamepad2, { size: 48, className: "mb-4", style: { color: `${P1}40` } }),
+    h('h2', { className: "text-lg font-bold text-white mb-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Ta biblioth\u00e8que t'attend"),
+    h('p', { className: "text-sm text-muted-foreground text-center mb-6 max-w-xs" }, "Connecte-toi pour g\u00e9rer ta collection, suivre ta progression et retrouver tous tes jeux."),
+    h('button', { onClick: () => showAuthModal('register'), className: "px-6 py-3 rounded-xl text-sm font-bold text-white hover:scale-[1.02] active:scale-[0.98] transition-all", style: { background: GRAD } }, "Cr\u00e9er un compte"),
+    h('button', { onClick: () => showAuthModal('login'), className: "mt-3 text-xs font-medium hover:opacity-80 transition-opacity", style: { color: `${P1}cc` } }, "D\u00e9j\u00e0 un compte ? Se connecter")
+  );
   const genres = useMemo(() => ["all", ...new Set(games.map(g => g.genre).filter(Boolean))], [games]);
   const [showFilters, setShowFilters] = useState(false);
   const [filterGenre, setFilterGenre] = useState("all");
@@ -2050,7 +2057,14 @@ function ReviewsView({ games, onSelect }) {
   );
 }
 
-function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar, onUpdateEmail, onSyncComplete, showToast }) {
+function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar, onUpdateEmail, onSyncComplete, showToast, showAuthModal }) {
+  if (!user) return h('div', { className: "flex flex-col items-center justify-center h-full view-enter p-8" },
+    h(User, { size: 48, className: "mb-4", style: { color: `${P1}40` } }),
+    h('h2', { className: "text-lg font-bold text-white mb-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Ton profil t'attend"),
+    h('p', { className: "text-sm text-muted-foreground text-center mb-6 max-w-xs" }, "Connecte-toi pour personnaliser ton profil, voir tes statistiques et g\u00e9rer tes r\u00e9glages."),
+    h('button', { onClick: () => showAuthModal('register'), className: "px-6 py-3 rounded-xl text-sm font-bold text-white hover:scale-[1.02] active:scale-[0.98] transition-all", style: { background: GRAD } }, "Cr\u00e9er un compte"),
+    h('button', { onClick: () => showAuthModal('login'), className: "mt-3 text-xs font-medium hover:opacity-80 transition-opacity", style: { color: `${P1}cc` } }, "D\u00e9j\u00e0 un compte ? Se connecter")
+  );
   const [showPsnModal, setShowPsnModal] = useState(false);
   const [psnInput, setPsnInput] = useState('');
   const [psnSaving, setPsnSaving] = useState(false);
@@ -2745,7 +2759,7 @@ function OnboardingModal({ onDismiss }) {
   );
 }
 
-function LandingPage({ onLoginSuccess, resetToken, onResetComplete }) {
+function LandingPage({ onLoginSuccess, resetToken, onResetComplete, onEnterAsGuest }) {
   const [mode, setMode] = useState(null); // 'login' | 'register' | null
   return h('div', { className: "min-h-screen flex flex-col", style: { background: "#030308" } },
     h('div', { className: "fixed inset-0 pointer-events-none overflow-hidden" },
@@ -2768,7 +2782,8 @@ function LandingPage({ onLoginSuccess, resetToken, onResetComplete }) {
         h('div', { className: "flex flex-col sm:flex-row gap-3 w-full max-w-xs" },
           h('button', { onClick: () => setMode('register'), className: "w-full py-3.5 rounded-2xl text-sm font-bold text-white transition-all hover:scale-[1.02] active:scale-[0.97]", style: { background: GRAD, boxShadow: "0 8px 30px rgba(139,92,246,0.35)" } }, "Rejoindre gratuitement"),
           h('button', { onClick: () => setMode('login'), className: "w-full py-3.5 rounded-2xl text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.97]", style: { color: P1, background: `${P1}12`, border: `1px solid ${P1}30` } }, "Se connecter")
-        )
+        ),
+        onEnterAsGuest && h('button', { onClick: onEnterAsGuest, className: "mt-4 text-xs font-medium text-muted-foreground hover:text-white transition-colors" }, "Explorer le site en invit\u00e9")
       ),
       // Features
       h('div', { className: "px-6 pb-10 max-w-2xl mx-auto w-full" },
@@ -3066,6 +3081,8 @@ function App() {
   const [friendsCount, setFriendsCount] = useState(0);
   const [showHero, setShowHero] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [guestMode, setGuestMode] = useState(false);
+  const [authModal, setAuthModal] = useState(null); // null | 'login' | 'register'
   const discoveryTimerRef = useRef(null);
   const refreshBooster = useCallback(async () => {
     try {
@@ -3211,6 +3228,7 @@ function App() {
   };
 
   const handleAddToLibrary = async (game) => {
+    if (!user) { setAuthModal('register'); return; }
     const existing = games.find(g => g.game_id === game.game_id);
     if (existing) { setSelectedGame(existing); return; }
     const newGame = { ...game, user_rating: 0, review_text: "", review_public: 1, has_review: 0, status: "not_started", playtime: 0 };
@@ -3225,6 +3243,7 @@ function App() {
   };
 
   const handleToggleWishlist = async (game) => {
+    if (!user) { setAuthModal('register'); return; }
     const gameId = game.game_id || game.id;
     try {
       const data = await API.toggleWishlist(gameId);
@@ -3238,6 +3257,7 @@ function App() {
   };
 
   const handleToggleTopThree = async (game) => {
+    if (!user) { setAuthModal('register'); return; }
     const id = game.game_id || game.id;
     const already = topThreeIds?.has(id);
     try {
@@ -3262,6 +3282,7 @@ function App() {
   };
 
   const handleBoostGame = async (gameId) => {
+    if (!user) { setAuthModal('register'); return; }
     try {
       console.log('[Booster] Boost Game:', gameId);
       await API.boosterGame(gameId);
@@ -3285,6 +3306,7 @@ function App() {
   };
 
   const handleSaveReview = async (gameId, rating, reviewText, reviewPublic, gameTitle, gameCover) => {
+    if (!user) { setAuthModal('register'); return; }
     console.log('[handleSaveReview] Calling API.saveReview with:', { gameId, rating, reviewText, reviewPublic, gameTitle, gameCover });
     const saveResult = await API.saveReview(gameId, rating, reviewText, reviewPublic, gameTitle, gameCover);
     console.log('[handleSaveReview] API.saveReview response:', saveResult);
@@ -3381,7 +3403,10 @@ function App() {
     );
   }
 
-  if (!user) return h(LandingPage, { onLoginSuccess: handleLoginSuccess, resetToken, onResetComplete: () => setResetToken(null) });
+  if (!user && !guestMode) return h(LandingPage, { onLoginSuccess: handleLoginSuccess, resetToken, onResetComplete: () => setResetToken(null), onEnterAsGuest: () => setGuestMode(true) });
+
+  const showAuthModal = (mode) => setAuthModal(mode);
+  const closeAuthModal = () => setAuthModal(null);
 
   return h('div', { className: "min-h-screen", style: { background: "#030308" } },
     h('div', { className: "fixed inset-0 pointer-events-none overflow-hidden" },
@@ -3392,11 +3417,11 @@ function App() {
       h('div', { className: "flex-1 overflow-hidden" },
         h('div', { className: "h-full overflow-y-auto" },
           showHero && h(HeroBanner, { user, gamesCount: games.length, friendsCount, onDismiss: () => setShowHero(false) }),
-          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); }, wishlistIds, onToggleWishlist: handleToggleWishlist, topThreeIds, onToggleTopThree: handleToggleTopThree, setView }),
+          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); }, wishlistIds, onToggleWishlist: handleToggleWishlist, topThreeIds, onToggleTopThree: handleToggleTopThree, setView, showAuthModal }),
           view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, freshReview, onFreshReviewConsumed: () => setFreshReview(null), onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
           view === "catalogue" && h(CatalogueView, { key: 'cat', refreshKey: catalogRefreshKey, onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
           view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
-          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast })
+          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast, showAuthModal })
         )
       ),
       h(BottomNav, { view, setView }),
@@ -3419,7 +3444,13 @@ function App() {
         onBoostGame: handleBoostGame,
       }),
       selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => setSelectedFriend(null), isOnline, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, friendId: selectedFriend.id, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
-      toast && h('div', { className: "toast", style: { background: GRAD } }, toast)
+      toast && h('div', { className: "toast", style: { background: GRAD } }, toast),
+      authModal && h('div', { className: "fixed inset-0 z-50 flex items-end md:items-center justify-center", style: { animation: "fadeIn 0.2s ease-out" } },
+        h('div', { className: "absolute inset-0", style: { background: "rgba(0,0,0,0.7)" }, onClick: closeAuthModal }),
+        h('div', { className: "relative max-h-[90vh] overflow-y-auto", style: { animation: "slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1)" } },
+          h(AuthPage, { onLoginSuccess: (data) => { closeAuthModal(); handleLoginSuccess(data); }, resetToken, onResetComplete: () => setResetToken(null), initialMode: authModal === 'register', onBack: closeAuthModal })
+        )
+      )
     )
   );
 }

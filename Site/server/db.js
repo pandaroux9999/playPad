@@ -559,10 +559,10 @@ async function removeGameSuggestion(id, userId) {
 }
 
 async function ensureCatalogGame(game) {
-  const { game_id, title, platform, cover, genre, year, developer, publisher, description } = game;
+  const { game_id, title, platform, cover, genre, year, developer, publisher, description, editorial_score, user_score, platforms_raw, jv_url, age_rating } = game;
   if (!game_id || !title) return;
   if (!game_id.startsWith('jv-')) return;
-  const payload = { game_id, title, platform: platform || '', cover: cover || '', genre: genre || '', year: year || 0, developer: developer || '', publisher: publisher || '' };
+  const payload = { game_id, title, platform: platform || '', cover: cover || '', genre: genre || '', year: year || 0, developer: developer || '', publisher: publisher || '', editorial_score: editorial_score || '', user_score: user_score || '', platforms_raw: platforms_raw || '', jv_url: jv_url || '', age_rating: age_rating || 0 };
   if (description) payload.description = description;
   const { error } = await supabaseAdmin
     .from('catalog')
@@ -587,24 +587,43 @@ async function batchUpsertCatalog(games) {
   if (!games || games.length === 0) return;
   games = games.filter(g => g.game_id?.startsWith('jv-'));
   if (games.length === 0) return;
+  const now = new Date().toISOString();
   const payloads = games.map(g => ({
     game_id: g.game_id, title: g.title, platform: g.platform || '',
     cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
     developer: g.developer || '', publisher: g.publisher || '',
-    description: g.description || ''
+    description: g.description || '',
+    editorial_score: g.editorial_score || '',
+    user_score: g.user_score || '',
+    platforms_raw: g.platforms_raw || '',
+    jv_url: g.jv_url || '',
+    age_rating: g.age_rating || 0,
+    updated_at: now,
   }));
   const { error } = await supabaseAdmin.from('catalog').upsert(payloads, { onConflict: 'game_id', ignoreDuplicates: true });
   if (error) {
-    if (error.message && error.message.includes('description')) {
-      const fallback = games.map(g => ({
-        game_id: g.game_id, title: g.title, platform: g.platform || '',
-        cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
-        developer: g.developer || '', publisher: g.publisher || ''
+    // Retry sans les colonnes avancées (si elles n'existent pas encore)
+    const basic = games.map(g => ({
+      game_id: g.game_id, title: g.title, platform: g.platform || '',
+      cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
+      developer: g.developer || '', publisher: g.publisher || '',
+      description: g.description || '',
+    }));
+    const { error: e2 } = await supabaseAdmin.from('catalog').upsert(basic, { onConflict: 'game_id', ignoreDuplicates: true });
+    if (e2) console.error('[batchUpsertCatalog] Fallback error:', e2.message);
+    else {
+      // Mise à jour en 2 passes : d'abord les basics, puis les colonnes avancées
+      const extra = games.map(g => ({
+        game_id: g.game_id,
+        editorial_score: g.editorial_score || '',
+        user_score: g.user_score || '',
+        platforms_raw: g.platforms_raw || '',
+        jv_url: g.jv_url || '',
+        age_rating: g.age_rating || 0,
+        updated_at: now,
       }));
-      const { error: e2 } = await supabaseAdmin.from('catalog').upsert(fallback, { onConflict: 'game_id', ignoreDuplicates: true });
-      if (e2) console.error('[batchUpsertCatalog] Fallback error:', e2.message);
-    } else {
-      console.error('[batchUpsertCatalog] Error:', error.message);
+      const { error: e3 } = await supabaseAdmin.from('catalog').upsert(extra, { onConflict: 'game_id' });
+      if (e3) { /* colonnes pas encore créées, pas grave */ }
     }
   }
   invalidateCatalogCache();

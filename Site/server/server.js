@@ -621,19 +621,34 @@ app.get('/api/games/ratings', async (req, res) => {
 
 app.get('/api/catalog', catalogLimiter, async (req, res) => {
   try {
-    const { search, letter } = req.query;
+    const { search, letter, platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating } = req.query;
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 60, 500);
-    if (search || (letter && letter !== 'all')) {
-      const result = await db.searchCatalog({ search, letter, page, limit });
-      return res.json({ catalog: result.data, total: result.total, page, limit });
+    let catalog = await db.getCatalog();
+    // Filtres
+    if (search) catalog = catalog.filter(g => g.title?.toLowerCase().includes(search.toLowerCase()));
+    if (letter && letter !== 'all') {
+      if (letter === '#') {
+        const letterRe = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/;
+        catalog = catalog.filter(g => !letterRe.test(g.title || ''));
+      } else {
+        catalog = catalog.filter(g => (g.title || '').toLowerCase().startsWith(letter.toLowerCase()));
+      }
     }
-    const catalog = await db.getCatalog();
-    const offset = (page - 1) * limit;
+    if (platform && platform !== 'all') catalog = catalog.filter(g => g.platform === platform || (g.platforms_raw || '').toLowerCase().includes(platform.toLowerCase()));
+    if (genre && genre !== 'all') catalog = catalog.filter(g => (g.genre || '').toLowerCase() === genre.toLowerCase());
+    if (yearMin) catalog = catalog.filter(g => g.year >= parseInt(yearMin));
+    if (yearMax) catalog = catalog.filter(g => g.year <= parseInt(yearMax));
+    if (editorialMin) catalog = catalog.filter(g => parseFloat(g.editorial_score) >= parseFloat(editorialMin));
+    if (editorialMax) catalog = catalog.filter(g => parseFloat(g.editorial_score) <= parseFloat(editorialMax));
+    if (userScoreMin) catalog = catalog.filter(g => parseFloat(g.user_score) >= parseFloat(userScoreMin));
+    if (userScoreMax) catalog = catalog.filter(g => parseFloat(g.user_score) <= parseFloat(userScoreMax));
+    if (ageRating) { const a = parseInt(ageRating); catalog = catalog.filter(g => g.age_rating >= a || (a <= 0)); }
     const total = catalog.length;
+    const offset = (page - 1) * limit;
     res.json({ catalog: catalog.slice(offset, offset + limit), total, page, limit });
   } catch (err) {
-    console.error('[Catalog] Error:', err.message, 'query:', JSON.stringify({ search: req.query.search, letter: req.query.letter, page: req.query.page }));
+    console.error('[Catalog] Error:', err.message, 'query:', JSON.stringify(req.query));
     res.status(500).json({ error: 'Erreur interne' });
   }
 });
@@ -1387,6 +1402,45 @@ app.post('/api/catalog/delete/:gameId', requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[CatalogDelete] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Enrichissement RAWG des jeux JV du catalogue (genre, plateformes, PEGI)
+app.post('/api/catalog/enrich-from-rawg', requireAuth, async (req, res) => {
+  const rawgKey = process.env.RAWG_API_KEY;
+  if (!rawgKey) return res.status(400).json({ error: 'RAWG_API_KEY non configurée' });
+  try {
+    const catalog = await db.getCatalog();
+    const toEnrich = catalog.filter(g => !g.genre && g.game_id?.startsWith('jv-'));
+    const enriched = []; const total = toEnrich.length;
+    for (let i = 0; i < Math.min(toEnrich.length, 500); i++) {
+      const g = toEnrich[i];
+      try {
+        const q = encodeURIComponent(g.title.replace(/-.*$/, '').trim());
+        const data = await rawgApiGet(`https://api.rawg.io/api/games?key=${rawgKey}&search=${q}&page_size=1`);
+        if (data?.results?.[0]) {
+          const r = data.results[0];
+          const genres = (r.genres || []).map(x => x.name).join(', ');
+          const platforms = (r.platforms || []).map(p => p.platform?.slug).filter(Boolean).join(', ');
+          const esrb = r.esrb_rating ? { 'e': 3, 'e10+': 7, 't': 12, 'm': 16, 'ao': 18 }[r.esrb_rating.slug] || 0 : 0;
+          await db.supabaseAdmin.from('catalog').update({
+            genre: genres || g.genre,
+            platforms_raw: platforms || g.platforms_raw,
+            age_rating: esrb,
+            editorial_score: g.editorial_score || (r.metacritic ? `${r.metacritic}/100` : ''),
+            user_score: g.user_score || (r.rating ? `${(r.rating * 5).toFixed(1)}/20` : ''),
+          }).eq('game_id', g.game_id);
+          enriched.push(g.game_id);
+        }
+      } catch (e) { /* skip */ }
+      await new Promise(r => setTimeout(r, 200)); // rate limit
+    }
+    db.invalidateCatalogCache();
+    console.log(`[Enrich] ${enriched.length}/${Math.min(total, 500)} jeux enrichis`);
+    res.json({ ok: true, enriched: enriched.length, total: Math.min(total, 500) });
+  } catch (err) {
+    console.error('[Enrich] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

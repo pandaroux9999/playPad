@@ -158,10 +158,11 @@ const API = {
   sendSuggestion: (toUserId, gameId, gameTitle, gameCover, message) => API.request('POST', '/api/suggestions', { toUserId, gameId, gameTitle, gameCover, message }),
   getSuggestions: () => API.request('GET', '/api/suggestions'),
   dismissSuggestion: (id) => API.request('DELETE', `/api/suggestions/${id}`),
-  getCatalog: (page, limit, search, letter) => {
+  getCatalog: (page, limit, search, letter, filters) => {
     const p = { page: page || 1, limit: limit || 60 };
     if (search) p.search = search;
     if (letter && letter !== 'all') p.letter = letter;
+    if (filters) Object.entries(filters).forEach(([k, v]) => { if (v !== undefined && v !== '' && v !== 'all') p[k] = v; });
     return API.request('GET', '/api/catalog?' + new URLSearchParams(p).toString());
   },
   deleteGame: (gameId) => API.request('DELETE', `/api/games/${gameId}`),
@@ -190,6 +191,7 @@ const API = {
   getNews: () => API.request('GET', '/api/news'),
   getNewReleases: () => API.request('GET', '/api/catalog/new-releases'),
   replaceCatalogFromJson: () => API.request('POST', '/api/catalog/replace-from-json'),
+  enrichCatalogFromRawg: () => API.request('POST', '/api/catalog/enrich-from-rawg'),
   cleanCatalogNonJv: () => API.request('POST', '/api/catalog/clean-non-jv'),
   deleteCatalogGame: (gameId) => API.request('POST', `/api/catalog/delete/${gameId}`),
   replyToReview: (reviewId, text) => API.request('POST', `/api/reviews/${reviewId}/reply`, { text }),
@@ -403,7 +405,11 @@ function GameCard({ game, onClick, wishlistIds, onWishlist, topThreeIds, onCrown
       h(ShoppingCart, { size: 10, stroke: "#22c55e", strokeWidth: 2 })
     ),
     game.downloads > 0 && h('div', { className: "absolute bottom-1 right-1 px-1 py-0.5 rounded-md text-[7px] font-bold flex items-center gap-0.5", style: { background: "rgba(59,130,246,0.8)", color: "#fff" } }, h(Download, { size: 7, stroke: "#fff" }), game.downloads),
-    (game.age_rating || 0) > 0 && h('div', { className: "absolute top-1 right-1 w-4.5 h-4.5 rounded flex items-center justify-center text-[6px] font-black text-white", style: { background: game.age_rating >= 16 ? "#ef4444" : game.age_rating >= 12 ? "#f59e0b" : game.age_rating >= 7 ? "#eab308" : "#22c55e", fontSize: "6px", lineHeight: 1, minWidth: 14, height: 14 } }, game.age_rating),
+    (game.age_rating || 0) > 0 && h('div', { className: "absolute top-1 right-1 rounded flex items-center justify-center text-[6px] font-black text-white", style: { background: game.age_rating >= 16 ? "#ef4444" : game.age_rating >= 12 ? "#f59e0b" : game.age_rating >= 7 ? "#eab308" : "#22c55e", fontSize: "6px", lineHeight: 1, minWidth: 14, height: 14 } }, game.age_rating),
+    (game.editorial_score || game.user_score) && h('div', { className: "absolute top-1 left-1 flex flex-col gap-0.5" },
+      game.editorial_score && h('span', { className: "rounded px-0.5 text-[6px] font-black leading-tight", style: { background: "rgba(139,92,246,0.85)", color: "#fff", fontSize: "5px" } }, "T:" + game.editorial_score.replace('/20','')),
+      game.user_score && h('span', { className: "rounded px-0.5 text-[6px] font-black leading-tight", style: { background: "rgba(59,130,246,0.85)", color: "#fff", fontSize: "5px" } }, "J:" + game.user_score.replace('/20',''))
+    ),
     h('div', { className: "absolute bottom-0 left-0 right-0 p-2.5" },
       h(PlatformBadge, { platform: game.platform, small }),
       h('p', { className: "text-white text-xs font-bold leading-tight mt-1.5 line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, game.title),
@@ -933,12 +939,37 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const sentinelRef = useRef(null);
   const loadLockRef = useRef(false);
   const LETTERS = ["all", "#", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('')];
+  const [filterPlatform, setFilterPlatform] = useState('all');
+  const [filterGenre, setFilterGenre] = useState('all');
+  const [filterYearMin, setFilterYearMin] = useState('');
+  const [filterYearMax, setFilterYearMax] = useState('');
+  const [filterScoreMin, setFilterScoreMin] = useState('');
+  const [filterScoreMax, setFilterScoreMax] = useState('');
+  const [filterEditorialMin, setFilterEditorialMin] = useState('');
+  const [filterEditorialMax, setFilterEditorialMax] = useState('');
+  const [filterAgeRating, setFilterAgeRating] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+
+  const buildFilters = useCallback(() => {
+    const f = {};
+    if (filterPlatform !== 'all') f.platform = filterPlatform;
+    if (filterGenre !== 'all') f.genre = filterGenre;
+    if (filterYearMin) f.yearMin = filterYearMin;
+    if (filterYearMax) f.yearMax = filterYearMax;
+    if (filterScoreMin) f.userScoreMin = filterScoreMin;
+    if (filterScoreMax) f.userScoreMax = filterScoreMax;
+    if (filterEditorialMin) f.editorialMin = filterEditorialMin;
+    if (filterEditorialMax) f.editorialMax = filterEditorialMax;
+    if (filterAgeRating) f.ageRating = filterAgeRating;
+    return f;
+  }, [filterPlatform, filterGenre, filterYearMin, filterYearMax, filterScoreMin, filterScoreMax, filterEditorialMin, filterEditorialMax, filterAgeRating]);
 
   const loadCatalog = useCallback(async (page, append) => {
     if (loadingCatalog) return;
     setLoadingCatalog(true);
     try {
-      const d = await API.getCatalog(page, 60, search || undefined, activeLetter === 'all' ? undefined : activeLetter);
+      const filters = buildFilters();
+      const d = await API.getCatalog(page, 60, search || undefined, activeLetter === 'all' ? undefined : activeLetter, filters);
       const games = d.catalog || [];
       if (append) setCatalog(prev => [...prev, ...games]);
       else { setCatalog(games); setFeatured(games.filter(g => g.rating >= 4).sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 10)); }
@@ -948,7 +979,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       if (!append) setCatalog(CATALOGUE);
     }
     setLoadingCatalog(false);
-  }, [search, activeLetter]);
+  }, [search, activeLetter, buildFilters]);
 
   useEffect(() => { setCatalogPage(1); loadCatalog(1, false); }, [loadCatalog]);
   useEffect(() => { API.getBoosterTop().then(d => setTopBoosted(d.top || [])).catch(() => {}); }, [refreshKey]);
@@ -990,7 +1021,61 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       h('div', { className: "relative mb-3 flex gap-2" },
         h('div', { className: "relative flex-1" }, h(Search, { size: 13, className: "absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" }), h('input', { value: search, onChange: e => setSearch(e.target.value), placeholder: "Chercher dans le catalogue\u2026", className: "w-full bg-secondary/60 border border-border rounded-xl pl-8 pr-4 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none" })),
       ),
-    h('div', { className: "flex-1 overflow-y-auto px-4 pb-20", style: { scrollbarWidth: "none" } },
+      h('div', { className: "flex-1 overflow-y-auto px-4 pb-20", style: { scrollbarWidth: "none" } },
+      // Filtres
+      h('div', { className: "mb-3" },
+        h('button', { onClick: () => setShowFilters(!showFilters), className: "flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground mb-2" }, "\u2699\ufe0f", showFilters ? "Masquer filtres" : "Filtres"),
+        showFilters && h('div', { className: "flex flex-wrap gap-2 p-3 rounded-xl bg-secondary/30 border border-border" },
+          h('div', { className: "flex flex-col gap-1 min-w-[90px]" },
+            h('label', { className: "text-[9px] text-muted-foreground" }, "Plateforme"),
+            h('select', { value: filterPlatform, onChange: e => setFilterPlatform(e.target.value), className: "text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
+              h('option', { value: "all" }, "Toutes"),
+              h('option', { value: "pc" }, "PC"),
+            )
+          ),
+          h('div', { className: "flex flex-col gap-1 min-w-[90px]" },
+            h('label', { className: "text-[9px] text-muted-foreground" }, "Genre"),
+            h('select', { value: filterGenre, onChange: e => setFilterGenre(e.target.value), className: "text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
+              h('option', { value: "all" }, "Tous"),
+            )
+          ),
+          h('div', { className: "flex flex-col gap-1 min-w-[90px]" },
+            h('label', { className: "text-[9px] text-muted-foreground" }, "Année"),
+            h('div', { className: "flex gap-1 items-center" },
+              h('input', { type: "number", placeholder: "Min", value: filterYearMin, onChange: e => setFilterYearMin(e.target.value), className: "w-14 text-[10px] bg-secondary/60 border border-border rounded-lg px-1.5 py-1.5 text-foreground outline-none" }),
+              h('span', { className: "text-[9px] text-muted-foreground" }, "—"),
+              h('input', { type: "number", placeholder: "Max", value: filterYearMax, onChange: e => setFilterYearMax(e.target.value), className: "w-14 text-[10px] bg-secondary/60 border border-border rounded-lg px-1.5 py-1.5 text-foreground outline-none" }),
+            )
+          ),
+          h('div', { className: "flex flex-col gap-1 min-w-[90px]" },
+            h('label', { className: "text-[9px] text-muted-foreground" }, "Note joueurs (/20)"),
+            h('div', { className: "flex gap-1 items-center" },
+              h('input', { type: "number", step: "0.1", placeholder: "Min", value: filterScoreMin, onChange: e => setFilterScoreMin(e.target.value), className: "w-14 text-[10px] bg-secondary/60 border border-border rounded-lg px-1.5 py-1.5 text-foreground outline-none" }),
+              h('span', { className: "text-[9px] text-muted-foreground" }, "—"),
+              h('input', { type: "number", step: "0.1", placeholder: "Max", value: filterScoreMax, onChange: e => setFilterScoreMax(e.target.value), className: "w-14 text-[10px] bg-secondary/60 border border-border rounded-lg px-1.5 py-1.5 text-foreground outline-none" }),
+            )
+          ),
+          h('div', { className: "flex flex-col gap-1 min-w-[90px]" },
+            h('label', { className: "text-[9px] text-muted-foreground" }, "Note test (/20)"),
+            h('div', { className: "flex gap-1 items-center" },
+              h('input', { type: "number", step: "0.1", placeholder: "Min", value: filterEditorialMin, onChange: e => setFilterEditorialMin(e.target.value), className: "w-14 text-[10px] bg-secondary/60 border border-border rounded-lg px-1.5 py-1.5 text-foreground outline-none" }),
+              h('span', { className: "text-[9px] text-muted-foreground" }, "—"),
+              h('input', { type: "number", step: "0.1", placeholder: "Max", value: filterEditorialMax, onChange: e => setFilterEditorialMax(e.target.value), className: "w-14 text-[10px] bg-secondary/60 border border-border rounded-lg px-1.5 py-1.5 text-foreground outline-none" }),
+            )
+          ),
+          h('div', { className: "flex flex-col gap-1 min-w-[90px]" },
+            h('label', { className: "text-[9px] text-muted-foreground" }, "PGI (PEGI)"),
+            h('select', { value: filterAgeRating, onChange: e => setFilterAgeRating(e.target.value), className: "text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
+              h('option', { value: "" }, "Tous"),
+              h('option', { value: "3" }, "3+"),
+              h('option', { value: "7" }, "7+"),
+              h('option', { value: "12" }, "12+"),
+              h('option', { value: "16" }, "16+"),
+              h('option', { value: "18" }, "18+"),
+            )
+          ),
+        )
+      ),
       // Sections (toujours visibles)
       h('div', { className: "flex flex-col gap-4 mb-3" },
         // Nouveautés
@@ -1057,7 +1142,8 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
             h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9"),
             h('div', { className: "flex gap-2 mt-3" },
               h('button', { onClick: async () => { try { const r = await API.replaceCatalogFromJson(); await API.cleanCatalogNonJv(); showToast(`${r.count} jeux importés depuis JeuxVideo.com`); setLoadingCatalog(false); loadCatalog(1, false); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "px-3 py-1.5 rounded-xl text-[10px] font-bold text-white", style: { background: GRAD } }, "Remplir le catalogue"),
-              h('button', { onClick: async () => { try { const r = await API.cleanCatalogNonJv(); showToast(`${r.deleted} jeux non-JV supprimés`); loadCatalog(1, false); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "px-3 py-1.5 rounded-xl text-[10px] font-bold", style: { background: "rgba(239,68,68,0.15)", color: "#ef4444" } }, "Nettoyer")
+              h('button', { onClick: async () => { try { const r = await API.cleanCatalogNonJv(); showToast(`${r.deleted} jeux non-JV supprimés`); loadCatalog(1, false); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "px-3 py-1.5 rounded-xl text-[10px] font-bold", style: { background: "rgba(239,68,68,0.15)", color: "#ef4444" } }, "Nettoyer"),
+              h('button', { onClick: async () => { try { const r = await API.enrichCatalogFromRawg(); showToast(`${r.enriched} jeux enrichis (RAWG)`); loadCatalog(1, false); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "px-3 py-1.5 rounded-xl text-[10px] font-bold", style: { background: "rgba(59,130,246,0.15)", color: "#3b82f6" } }, "Enrichir")
             )
           )
         : h('div', null,

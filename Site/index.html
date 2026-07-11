@@ -248,6 +248,7 @@ const UserX = Icon(["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 7a4 4 0 1 0
 const Send = Icon(["M22 2 11 13", "M22 2l-7 20-4-9-9-4 20-7z"]);
 const ChevronRight = Icon(["M9 18l6-6-6-6"]);
 const ChevronLeft = Icon(["M15 18l-6-6 6-6"]);
+const ChevronUp = Icon(["M18 15l-6-6-6 6"]);
 const Upload = Icon(["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M17 8l-5-5-5 5", "M12 3v12"]);
 const Trash2 = Icon(["M3 6h18", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"]);
 const Mail = Icon(["M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z", "m22 6-10 7L2 6"]);
@@ -2463,6 +2464,15 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
   const [trailerLoading, setTrailerLoading] = useState(false);
   const [buyGame, setBuyGame] = useState(null);
   const [buyOffers, setBuyOffers] = useState([]);
+  const sheetScrollRef = useRef(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  useEffect(() => {
+    const el = sheetScrollRef.current;
+    if (!el) return;
+    const onScroll = () => setShowScrollTop(el.scrollTop > 300);
+    el.addEventListener('scroll', onScroll);
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
   useEffect(() => { API.getDownloadCounts().then(d => setDownloadCount(d.counts?.[game.game_id || game.id] || 0)).catch(() => {}); }, [game.game_id]);
   useEffect(() => {
     setTrailerLoading(true);
@@ -2598,7 +2608,8 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
           downloadCount > 0 && h('span', { className: "inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md text-[9px] font-bold", style: { background: "rgba(59,130,246,0.2)", color: "#60a5fa" } }, h(Download, { size: 9, stroke: "#60a5fa" }), downloadCount, " t\u00e9l\u00e9chargements")
         )
       ),
-      h('div', { className: "overflow-y-auto flex-1", style: { scrollbarWidth: "none" } },
+      showScrollTop && h('button', { onClick: () => sheetScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }), className: "fixed z-10 w-8 h-8 rounded-full flex items-center justify-center shadow-lg", style: { bottom: 100, right: 20, background: `${P1}dd`, color: "#fff" } }, h(ChevronUp, { size: 16 })),
+      h('div', { ref: sheetScrollRef, className: "overflow-y-auto flex-1", style: { scrollbarWidth: "none" } },
         h('div', { className: "px-4 pt-4 pb-8" },
           h('div', { className: "mb-5" },
             h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2.5" }, "Statut"),
@@ -2653,7 +2664,7 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
                 : h('div', { className: "py-8 text-center" }, h(Edit3, { size: 28, className: "text-muted-foreground/20 mx-auto mb-2.5" }), h('p', { className: "text-xs text-muted-foreground" }, "Aucune critique r\u00e9dig\u00e9e"), h('p', { className: "text-xs mt-1", style: { color: "rgba(136,136,170,0.45)" } }, "Appuie sur \"R\u00e9diger\" pour partager ton avis"))
   ),
   communityReviews.length > 0 && h('div', { className: "border-t border-border pt-4 mt-4" },
-    h('h3', { className: "text-sm font-black text-foreground mb-4", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Avis de la communaut\u00e9"),
+    h('h3', { className: "text-sm font-black text-foreground mb-4 flex items-center gap-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Avis de la communaut\u00e9", h('span', { className: "text-xs font-bold px-1.5 py-0.5 rounded-md", style: { background: `${P1}20`, color: P1 } }, communityReviews.length)),
     h('div', { className: "space-y-2.5" }, communityReviews.map((review, i) => {
       return h('div', { key: i, className: "rounded-xl p-3", style: { background: ratingBg(review.rating), border: ratingBorder(review.rating) } },
         h('div', { className: "flex items-center justify-between mb-1.5" },

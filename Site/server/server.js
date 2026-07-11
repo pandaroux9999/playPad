@@ -17,6 +17,7 @@ const {
   getPurchasedGames,
   getUserPlayedGames,
 } = require('psn-api');
+const { scrapeAllJVGames: scrapeJV, getTotalJVGames: getJVTotal } = require('./jeuxvideo-scraper');
 
 const app = express();
 app.disable('x-powered-by');
@@ -1307,29 +1308,14 @@ app.post('/api/catalog/populate', requireAuth, async (req, res) => {
     return res.json({ ok: true, count: 0, cooldown: true });
   }
   lastCatalogPopulate = now;
-  res.json({ ok: true, pending: true, message: "L'import prend plusieurs minutes, il tourne en arrière-plan" });
+  res.json({ ok: true, pending: true, message: "Import JeuxVideo.com en cours (~15 min), tourne en arrière-plan" });
   (async () => {
     try {
-      const rawgKey = process.env.RAWG_API_KEY;
-      const igdbId = process.env.TWITCH_CLIENT_ID;
-      const igdbSecret = process.env.TWITCH_CLIENT_SECRET;
-      const existingCount = await db.getCatalogCount();
-      let steamTotal = 0, igdbTotal = 0;
-      if (existingCount < 500 && rawgKey) {
-        await populateCatalogFromRAWG(rawgKey);
-      }
-      console.log('[Catalog] Démarrage import Steam...');
-      steamTotal = await populateSteamFromAppList();
-      if (igdbId && igdbSecret) {
-        console.log('[Catalog] Démarrage import IGDB...');
-        igdbTotal = await populateCatalogFromIGDB(igdbId, igdbSecret);
-      }
-      if (steamTotal > 0 || igdbTotal > 0) {
-        db.mergeCatalogDuplicatesByTitle().then(n => { if (n > 0) console.log(`[Catalog] ${n} doublons fusionnés`); }).catch(e => console.error('[Catalog] Merge error:', e.message));
-        refreshCatalogDescriptions().catch(() => {});
-      }
+      console.log('[Catalog] Démarrage import JeuxVideo.com...');
+      const result = await scrapeJV(db);
+      await db.mergeCatalogDuplicatesByTitle().catch(() => {});
       db.invalidateCatalogCache();
-      console.log(`[Catalog] Import terminé: ${steamTotal} Steam, ${igdbTotal} IGDB`);
+      console.log(`[Catalog] Import JV.com terminé: ${result.totalImported} jeux`);
     } catch (err) {
       console.error('[CatalogPopulate] Error:', err.message);
     }
@@ -1778,23 +1764,20 @@ async function fixMissingCovers() {
   } catch (e) { console.error('[Covers] Error:', e.message); return 0; }
 }
 
-// Peuple le catalogue au démarrage si vide
+// Peuple le catalogue au démarrage via JeuxVideo.com (RAWG désactivé)
 (async () => {
   try {
-    const rawgKey = process.env.RAWG_API_KEY;
-    if (rawgKey) {
-      const existing = await db.getCatalogCount();
-      if (existing < 100) {
-        console.log('[Catalog] Peuplement initial du catalogue via RAWG...');
-        const count = await populateCatalogFromRAWG(rawgKey);
-        await db.mergeCatalogDuplicatesByTitle().catch(() => {});
-        console.log(`[Catalog] ${count} jeux RAWG ajoutés`);
-      } else {
-        console.log(`[Catalog] Catalogue déjà peuplé (${existing} jeux), skip RAWG`);
-      }
+    const existing = await db.getCatalogCount();
+    if (existing < 100) {
+      console.log('[Catalog] Peuplement initial du catalogue via JeuxVideo.com...');
+      const result = await scrapeJV(db, { startPage: 1 });
+      await db.mergeCatalogDuplicatesByTitle().catch(() => {});
+      console.log(`[Catalog] ${result.totalImported} jeux JV.com importés`);
+    } else {
+      console.log(`[Catalog] Catalogue déjà peuplé (${existing} jeux), skip scraping initial`);
     }
   } catch (e) {
-    console.error('[Catalog] Erreur peuplement initial:', e.message);
+    console.error('[Catalog] Erreur peuplement initial JV.com:', e.message);
   }
   // Steam App List : importé UNIQUEMENT via l'API /api/catalog/populate (pas au démarrage)
   // Jeux cultes : toujours insérés (indépendant du seed)

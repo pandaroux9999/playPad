@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
+    "cheerio": "^1.0.0",
     "express-rate-limit": "^8.5.2",
-    "helmet": "^8.2.0"
+    "helmet": "^8.2.0",
+    "puppeteer-core": "^24.0.0"
   }
+}
 }

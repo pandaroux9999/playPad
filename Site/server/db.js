@@ -842,6 +842,17 @@ async function getCatalogCount() {
   return count || 0;
 }
 
+async function getRecentReleases() {
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .gte('year', 2024)
+    .order('year', { ascending: false })
+    .limit(20);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
 async function deleteAllUserGames(userId) {
   const { error } = await supabaseAdmin
     .from('games')
@@ -1655,6 +1666,7 @@ module.exports = {
   getCatalogCount,
   searchCatalog,
   queryCatalog,
+  getRecentReleases,
   invalidateCatalogCache,
   updateGamePlatform,
   deletePlatformGames,

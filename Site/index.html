@@ -934,7 +934,6 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const [boostPoints, setBoostPoints] = useState(null);
   const [newReleases, setNewReleases] = useState([]);
   const [downloadCounts, setDownloadCounts] = useState({});
-  const [featured, setFeatured] = useState([]);
   const sentinelRef = useRef(null);
   const loadLockRef = useRef(false);
   const LETTERS = ["all", "#", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('')];
@@ -961,7 +960,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       const d = await API.getCatalog(page, 60, search || undefined, activeLetter === 'all' ? undefined : activeLetter, filters);
       const games = d.catalog || [];
       if (append) setCatalog(prev => [...prev, ...games]);
-      else { setCatalog(games); setFeatured(games.filter(g => g.rating >= 4).sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 10)); }
+      else { setCatalog(games); }
       setCatalogTotal(d.total || 0);
       setCatalogPage(page);
     } catch (e) {
@@ -1077,24 +1076,6 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                 })
               );
             })
-          )
-        ),
-        // À la une (top rated)
-        h('div', null,
-          h('h3', { className: "text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "\u2B50", " \u00c0 la une"),
-          featured.length === 0
-            ? h('p', { className: "text-[10px] text-muted-foreground italic mb-3" }, "Chargement\u2026")
-            : h('div', { className: "flex gap-3 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } },
-                featured.map(game => h('div', { key: game.game_id, className: "flex-shrink-0", style: { width: "calc((100vw - 64px)/2)" } },
-              h(GameCard, {
-                game: { ...game, userRating: ratings?.[game.game_id] || 0 },
-                onClick: () => onSelect(game),
-                wishlistIds, onWishlist: onToggleWishlist,
-                topThreeIds, onCrown: onToggleTopThree,
-                boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
-                small: true,
-              })
-            ))
           )
         ),
       ),

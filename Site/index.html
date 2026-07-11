@@ -992,39 +992,35 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       !search && h('div', { className: "flex flex-col gap-4 mb-3" },
         // Nouveautés
         newReleases.length > 0 && h('div', null,
-          h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "Nouveaut\u00e9s"),
-          h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
-            newReleases.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-24" },
-              h(GameCard, {
-                game: { ...game, userRating: ratings?.[game.game_id] || 0 },
-                onClick: () => onSelect(game),
-                wishlistIds, onWishlist: onToggleWishlist,
-                topThreeIds, onCrown: onToggleTopThree,
-                boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
-                small: true,
-              })
-            ))
+          h('h3', { className: "text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "Nouveaut\u00e9s"),
+          h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" },
+            newReleases.map(game => h(GameCard, {
+              key: game.game_id,
+              game: { ...game, userRating: ratings?.[game.game_id] || 0 },
+              onClick: () => onSelect(game),
+              wishlistIds, onWishlist: onToggleWishlist,
+              topThreeIds, onCrown: onToggleTopThree,
+              boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
+            }))
           )
         ),
         // Boostés de la semaine
         topBoosted.length > 0 && h('div', null,
-          h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "Boost\u00e9s de la semaine"),
-          h('div', { className: "flex gap-2 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
+          h('h3', { className: "text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "Boost\u00e9s de la semaine"),
+          h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" },
             topBoosted.slice(0, 10).map(b => {
               const game = b.game;
               if (!game) return null;
-              return h('div', { key: b.game_id, className: "flex-shrink-0 w-24" },
-                h(GameCard, {
-                  game: { ...game, userRating: ratings?.[game.game_id] || 0 },
-                  onClick: () => onSelect(game),
-                  wishlistIds, onWishlist: onToggleWishlist,
-                  topThreeIds, onCrown: onToggleTopThree,
-                  boostCount: b.count,
-                  small: true,
-                  boosterActive: userBoostedSet?.has(b.game_id),
-                  boosterBtn: () => onSelect(game),
-                })
-              );
+              return h(GameCard, {
+                key: b.game_id,
+                game: { ...game, userRating: ratings?.[game.game_id] || 0 },
+                onClick: () => onSelect(game),
+                wishlistIds, onWishlist: onToggleWishlist,
+                topThreeIds, onCrown: onToggleTopThree,
+                boostCount: b.count,
+                boosterActive: userBoostedSet?.has(b.game_id),
+                boosterBtn: () => onSelect(game),
+              });
             })
           )
         ),

@@ -750,10 +750,74 @@ async function getCatalog() {
   return data;
 }
 
-async function getCatalogPage(page = 1, limit = 500) {
-  const all = await getCatalog();
+async function queryCatalog({ search, letter, platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating, page = 1, limit = 60 }) {
+  // Construction de la requête Supabase avec filtres
+  let query = supabaseAdmin.from('catalog').select('*', { count: 'exact' });
+  if (search && search.trim()) {
+    const s = search.trim().toLowerCase();
+    // On filtre en mémoire pour la recherche (fonctionne sur tout le cache)
+    const all = await getCatalog();
+    let filtered = all.filter(g => (g.title || '').toLowerCase().includes(s));
+    if (letter && letter !== 'all') {
+      if (letter === '#') { const lr = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/; filtered = filtered.filter(g => !lr.test(g.title || '')); }
+      else { const l = letter.toLowerCase(); filtered = filtered.filter(g => (g.title || '').toLowerCase().startsWith(l)); }
+    }
+    const total = filtered.length;
+    const offset = (page - 1) * limit;
+    return { data: filtered.slice(offset, offset + limit), total, page, limit };
+  }
+  // Lettre / tri
+  if (letter && letter !== 'all') {
+    if (letter === '#') {
+      const all = await getCatalog();
+      const lr = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/;
+      let filtered = all.filter(g => !lr.test(g.title || ''));
+      filtered = applyExtraFilters(filtered, { platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating });
+      const total = filtered.length;
+      const offset = (page - 1) * limit;
+      return { data: filtered.slice(offset, offset + limit), total, page, limit };
+    }
+    query = query.ilike('title', letter.toLowerCase() + '%');
+  }
+  // Filtres simples (via Supabase)
+  if (platform && platform !== 'all') query = query.or(`platform.eq.${platform},platforms_raw.ilike.%${platform}%`);
+  if (genre && genre !== 'all') query = query.eq('genre', genre);
+  if (yearMin) query = query.gte('year', parseInt(yearMin));
+  if (yearMax) query = query.lte('year', parseInt(yearMax));
+  if (ageRating) { const a = parseInt(ageRating); query = query.gte('age_rating', a); }
+  // Scores (editorial, user) — on les filtre en mémoire car format string "X/20"
+  const hasScoreFilter = editorialMin || editorialMax || userScoreMin || userScoreMax;
+  // Pagination + tri
   const offset = (page - 1) * limit;
-  return all.slice(offset, offset + limit);
+  if (!hasScoreFilter) {
+    query = query.order('title').range(offset, offset + limit - 1);
+    const { data, count, error } = await query;
+    if (error) throw new Error(error.message);
+    return { data: data || [], total: count || 0, page, limit };
+  }
+  // Avec filtres de score → chargement + filtre en mémoire
+  const all = await getCatalog();
+  let filtered = applyExtraFilters(all, { platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating });
+  if (letter && letter !== 'all') {
+    if (letter === '#') { const lr = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/; filtered = filtered.filter(g => !lr.test(g.title || '')); }
+    else { const l = letter.toLowerCase(); filtered = filtered.filter(g => (g.title || '').toLowerCase().startsWith(l)); }
+  }
+  const total = filtered.length;
+  return { data: filtered.slice(offset, offset + limit), total, page, limit };
+}
+
+function applyExtraFilters(games, { platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating }) {
+  let filtered = games;
+  if (platform && platform !== 'all') filtered = filtered.filter(g => g.platform === platform || (g.platforms_raw || '').toLowerCase().includes(platform.toLowerCase()));
+  if (genre && genre !== 'all') filtered = filtered.filter(g => (g.genre || '').toLowerCase() === genre.toLowerCase());
+  if (yearMin) filtered = filtered.filter(g => g.year >= parseInt(yearMin));
+  if (yearMax) filtered = filtered.filter(g => g.year <= parseInt(yearMax));
+  if (ageRating) { const a = parseInt(ageRating); filtered = filtered.filter(g => g.age_rating >= a); }
+  if (editorialMin) filtered = filtered.filter(g => parseFloat(g.editorial_score) >= parseFloat(editorialMin));
+  if (editorialMax) filtered = filtered.filter(g => parseFloat(g.editorial_score) <= parseFloat(editorialMax));
+  if (userScoreMin) filtered = filtered.filter(g => parseFloat(g.user_score) >= parseFloat(userScoreMin));
+  if (userScoreMax) filtered = filtered.filter(g => parseFloat(g.user_score) <= parseFloat(userScoreMax));
+  return filtered;
 }
 
 async function searchCatalog({ search, letter, page = 1, limit = 500 }) {
@@ -1597,6 +1661,7 @@ module.exports = {
   getCatalogPage,
   getCatalogCount,
   searchCatalog,
+  queryCatalog,
   invalidateCatalogCache,
   updateGamePlatform,
   deletePlatformGames,

@@ -624,29 +624,8 @@ app.get('/api/catalog', catalogLimiter, async (req, res) => {
     const { search, letter, platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating } = req.query;
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 60, 500);
-    let catalog = await db.getCatalog();
-    // Filtres
-    if (search) catalog = catalog.filter(g => g.title?.toLowerCase().includes(search.toLowerCase()));
-    if (letter && letter !== 'all') {
-      if (letter === '#') {
-        const letterRe = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/;
-        catalog = catalog.filter(g => !letterRe.test(g.title || ''));
-      } else {
-        catalog = catalog.filter(g => (g.title || '').toLowerCase().startsWith(letter.toLowerCase()));
-      }
-    }
-    if (platform && platform !== 'all') catalog = catalog.filter(g => g.platform === platform || (g.platforms_raw || '').toLowerCase().includes(platform.toLowerCase()));
-    if (genre && genre !== 'all') catalog = catalog.filter(g => (g.genre || '').toLowerCase() === genre.toLowerCase());
-    if (yearMin) catalog = catalog.filter(g => g.year >= parseInt(yearMin));
-    if (yearMax) catalog = catalog.filter(g => g.year <= parseInt(yearMax));
-    if (editorialMin) catalog = catalog.filter(g => parseFloat(g.editorial_score) >= parseFloat(editorialMin));
-    if (editorialMax) catalog = catalog.filter(g => parseFloat(g.editorial_score) <= parseFloat(editorialMax));
-    if (userScoreMin) catalog = catalog.filter(g => parseFloat(g.user_score) >= parseFloat(userScoreMin));
-    if (userScoreMax) catalog = catalog.filter(g => parseFloat(g.user_score) <= parseFloat(userScoreMax));
-    if (ageRating) { const a = parseInt(ageRating); catalog = catalog.filter(g => g.age_rating >= a || (a <= 0)); }
-    const total = catalog.length;
-    const offset = (page - 1) * limit;
-    res.json({ catalog: catalog.slice(offset, offset + limit), total, page, limit });
+    const result = await db.queryCatalog({ search, letter, platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating, page, limit });
+    res.json({ catalog: result.data, total: result.total, page, limit });
   } catch (err) {
     console.error('[Catalog] Error:', err.message, 'query:', JSON.stringify(req.query));
     res.status(500).json({ error: 'Erreur interne' });

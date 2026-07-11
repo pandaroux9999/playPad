@@ -1067,18 +1067,15 @@ async function getTopBoostedGames() {
     .sort(([, a], [, b]) => b - a)
     .slice(0, 10);
 
-  const result = [];
-  for (const [gameId, boostCount] of sorted) {
+  const enriched = await Promise.all(sorted.map(async ([gameId, count]) => {
     const { data: cat } = await supabaseAdmin
       .from('catalog')
       .select('*')
       .eq('game_id', gameId)
       .maybeSingle();
-    if (cat) {
-      result.push({ ...cat, boost_count: boostCount });
-    }
-  }
-  return result;
+    return { game_id: gameId, count, game: cat || null };
+  }));
+  return enriched;
 }
 
 async function voteReview(userId, reviewId, vote) {

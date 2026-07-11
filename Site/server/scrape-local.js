@@ -88,7 +88,7 @@ async function getPage(browser) {
             console.log(`jeu ${g.title} importé`);
           }
 
-          if (pg % 100 === 0 || pg === startPage || pg === totalPages) {
+          if (pg % 25 === 0 || pg === startPage || pg === totalPages) {
             const elapsed = Math.round((Date.now() - startTime) / 1000);
             fs.writeFileSync(OUTPUT_PATH, JSON.stringify(allGames, null, 2));
             console.log(`[PROGRÈS] Page ${pg}/${totalPages}: +25 = ${allGames.length} jeux (${Math.floor(elapsed/60)}m${elapsed%60}s)`);

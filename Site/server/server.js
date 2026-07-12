@@ -2745,8 +2745,8 @@ const ARTICLES_RSS_FEEDS = [
 function extractRssImage(block) {
   const encMatch = block.match(/<enclosure[^>]*url="([^"]+)"/i);
   if (encMatch) return encMatch[1];
-  const imgExtMatch = block.match(/<media:content[^>]+url="([^"]+\.(?:jpg|jpeg|png|webp|gif))"/i);
-  if (imgExtMatch) return imgExtMatch[1];
+  const mediaImg = block.match(/<media:content[^>]*?url="([^"]+\.(?:jpg|jpeg|png|webp|gif))"/i);
+  if (mediaImg) return mediaImg[1];
   const thumbMatch = block.match(/<media:thumbnail[^>]*url="([^"]+)"/i);
   if (thumbMatch) return thumbMatch[1];
   const imgMatch = block.match(/<img[^>]+src="([^"]+)"/i);
@@ -2813,11 +2813,17 @@ async function fetchArticlesFromRSS() {
           return val;
         };
         const title = get('title');
-        const link = get('guid') || get('link');
+        const rawLink = get('link');
+        const guid = get('guid');
+        const link = rawLink && (rawLink.match(/:\/\//g) || []).length > 1 ? (guid || rawLink) : (rawLink || guid);
         if (!title) continue;
         count++;
         const rawHtml = get('description');
-        const plainText = rawHtml.replace(/<[^>]*>/g, '').trim();
+        let plainText = rawHtml.replace(/<[^>]*>/g, '').trim();
+        // Nettoie les boilerplate des descriptions (ActuGaming ajoute 'Source: ... L'article est disponible sur...')
+        plainText = plainText.replace(new RegExp('^' + feed.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'), '');
+        plainText = plainText.replace(/L'article .+? est disponible sur .+?\.?$/i, '').trim();
+        plainText = plainText.replace(/^[\s,;:.!?]+/, '').trim();
         const pubDate = get('pubDate');
         const category = get('category');
         const cover = extractRssImage(block);

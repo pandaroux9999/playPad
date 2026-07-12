@@ -2675,7 +2675,7 @@ function DiscoveryToast({ discoveries, onDiscover, onDismiss }) {
 function BottomNav({ view, setView }) {
   const items = [
     { id: "catalogue", label: "Catalogue",  Icon: Briefcase },
-    { id: "mag",       label: "Le Mag",     Icon: Newspaper },
+    { id: "actus",     label: "Actus",      Icon: Newspaper },
     { id: "community", label: "Communauté", Icon: Users },
     { id: "profil",    label: "Mon Espace", Icon: User },
   ];
@@ -3031,7 +3031,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("catalogue");
   const swipeStartX = useRef(null);
-  const TAB_ORDER = ["catalogue", "mag", "community", "profil"];
+  const TAB_ORDER = ["catalogue", "actus", "community", "profil"];
   const onTouchStart = (e) => {
     swipeStartX.current = e.touches[0].clientX;
   };
@@ -3379,7 +3379,7 @@ function App() {
   const handleDiscover = (section) => {
     setDiscoveries(prev => prev.filter(d => d.id !== section));
     API.dismissDiscovery(section).catch(() => {});
-    const sectionViews = { esport: 'mag', reviews: 'community', community: 'community', top3: 'profil', boost: 'catalogue' };
+    const sectionViews = { esport: 'actus', reviews: 'community', community: 'community', top3: 'profil', boost: 'catalogue' };
     setView(sectionViews[section] || 'catalogue');
   };
 
@@ -3412,7 +3412,7 @@ function App() {
         h('div', { className: "h-full overflow-y-auto" },
           null,
           view === "catalogue" && h(CatalogueView, { key: 'cat', refreshKey: catalogRefreshKey, onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
-          view === "mag" && h(MagView, { onSelectGame: setSelectedGame }),
+          view === "actus" && h(MagView, { onSelectGame: setSelectedGame }),
           view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, freshReview, onFreshReviewConsumed: () => setFreshReview(null), onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); }, showAuthModal, user }),
           view === "profil" && h(ProfilView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast, showAuthModal, setView, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); } })
         )

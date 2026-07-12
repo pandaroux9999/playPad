@@ -190,15 +190,15 @@ async function upsertGame(userId, game) {
 
 async function updateGameStatus(userId, gameId, status) {
   const { error } = await supabaseAdmin
-    .from('games')
-    .upsert({ user_id: userId, game_id: gameId, status, playtime: 0, user_rating: 0, review_text: '', review_public: 1, has_review: false }, { onConflict: 'user_id, game_id' });
+    .from('user_games')
+    .upsert({ user_id: userId, game_id: gameId, status, playtime: 0, user_rating: 0, review_text: '', review_public: 1, has_review: 0 }, { onConflict: 'user_id, game_id' });
   if (error) throw new Error(error.message);
 }
 
 async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic) {
   const hasReview = reviewText && reviewText.trim().length > 0;
   const { error } = await supabaseAdmin
-    .from('games')
+    .from('user_games')
     .upsert({
       user_id: userId,
       game_id: gameId,
@@ -207,7 +207,7 @@ async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic
       user_rating: rating,
       review_text: reviewText,
       review_public: reviewPublic ? 1 : 0,
-      has_review: hasReview,
+      has_review: hasReview ? 1 : 0,
     }, { onConflict: 'user_id, game_id' });
   if (error) throw new Error(error.message);
 }

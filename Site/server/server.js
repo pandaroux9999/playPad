@@ -164,7 +164,8 @@ async function verifyGoogleIdToken(idToken) {
 
 app.post('/api/register', authLimiter, async (req, res) => {
   try {
-    const { username, displayName, password, email } = req.body;
+    const { username, displayName, password } = req.body;
+    const email = (req.body?.email || '').trim().toLowerCase();
     console.log('[Register] Request:', { username, displayName, email: email ? email[0] + '***' : undefined });
     if (!username || !displayName || !password || !email) {
       return res.status(400).json({ error: 'Tous les champs sont requis' });
@@ -2194,7 +2195,7 @@ app.post('/api/account/avatar', requireAuth, async (req, res) => {
 
 app.post('/api/account/email', requireAuth, async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = (req.body?.email || '').trim().toLowerCase();
     if (!email) return res.status(400).json({ error: 'Email requis' });
     if (!validateEmail(email)) return res.status(400).json({ error: 'Format d\'email invalide' });
     const existing = await db.getUserByEmail(email);
@@ -3531,13 +3532,21 @@ app.get('/api/streamers/search', requireAuth, async (req, res) => {
 // ─── CONTACT FORM ───────────────────────────────────────────
 app.post('/api/contact', requireAuth, contactLimiter, async (req, res) => {
   try {
-    const { message, email } = req.body;
+    const { message } = req.body;
+    const inputEmail = (req.body?.email || '').trim().toLowerCase();
     if (!message || !message.trim()) return res.status(400).json({ error: 'Message requis' });
     if (message.trim().length < 5) return res.status(400).json({ error: 'Message trop court' });
-    if (email && !validateEmail(email)) return res.status(400).json({ error: 'Email invalide' });
+
+    // Email auto: priorité au payload, sinon on prend celui du compte connecté
+    let resolvedEmail = inputEmail;
+    if (!resolvedEmail) {
+      const user = await db.getUserById(req.session.userId);
+      resolvedEmail = (user?.email || '').trim().toLowerCase();
+    }
+    if (resolvedEmail && !validateEmail(resolvedEmail)) return res.status(400).json({ error: 'Email invalide' });
 
     const sanitizedMsg = stripHtml(message);
-    const sanitizedEmail = email ? stripHtml(email) : '';
+    const sanitizedEmail = resolvedEmail ? stripHtml(resolvedEmail) : '';
 
     // Stocker en DB immédiatement
     const { error } = await db.supabaseAdmin

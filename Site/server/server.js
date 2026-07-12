@@ -2867,7 +2867,6 @@ async function fetchEsportFromRSS() {
   for (const feed of ESPORT_RSS_FEEDS) {
     try {
       const xml = await httpGet(feed.url);
-      const xml = await httpGet(feed.url);
       const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
       let match;
       let count = 0;

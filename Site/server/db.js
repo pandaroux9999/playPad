@@ -202,7 +202,7 @@ async function updateGameStatus(userId, gameId, status) {
     const { error } = await supabaseAdmin.from('games').update({ status }).eq('id', existing.id);
     if (error) { console.error('[updateGameStatus] updateError:', error); throw new Error(error.message); }
   } else {
-    const { error } = await supabaseAdmin.from('games').insert({ user_id: userId, game_id: gameId, status, playtime: 0 });
+    const { error } = await supabaseAdmin.from('games').insert({ user_id: userId, game_id: gameId, status, playtime: 0, title: gameId });
     if (error) { console.error('[updateGameStatus] insertError:', error); throw new Error(error.message); }
   }
   console.log('[updateGameStatus] OK');
@@ -210,7 +210,7 @@ async function updateGameStatus(userId, gameId, status) {
 
 async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic) {
   console.log('[updateGameRating] userId=%s gameId=%s rating=%s reviewTextLen=%s reviewPublic=%s', userId, gameId, rating, reviewText?.length, reviewPublic);
-  const hasReview = reviewText && reviewText.trim().length > 0;
+  const hasReview = !!(reviewText && reviewText.trim().length > 0);
   const { data: existing, error: findError } = await supabaseAdmin
     .from('games')
     .select('id')

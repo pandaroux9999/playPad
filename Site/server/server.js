@@ -2536,7 +2536,7 @@ app.post('/api/booster/boost', requireAuth, async (req, res) => {
 app.get('/api/booster/top', async (req, res) => {
   try {
     const top = await db.getTopBoostedGames();
-    res.json({ top });
+    res.json({ top: top.filter(b => b.game) });
   } catch (err) {
     console.error('[BoosterTop] Error:', err.message);
     res.status(500).json({ error: 'Erreur interne' });

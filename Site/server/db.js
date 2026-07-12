@@ -1175,11 +1175,28 @@ async function communityBoostGame(userId, gameId) {
   return { remaining: bp.boost_points - 1 };
 }
 
-// Booster individuel (1 point, table game_boosts)
+// Booster individuel (1 point/semaine, table game_boosts)
 async function boosterBoostGame(userId, gameId) {
   const weekStart = getWeekStart();
-  const pointsData = await getBoosterPoints(userId);
-  if (pointsData.points < 1) throw new Error('Pas assez de points booster');
+  let pointsData = await getBoosterPoints(userId);
+
+  // Reset hebdo : si 0 point mais aucun boost cette semaine, redonne 1 point
+  if (pointsData.points < 1) {
+    const { data: weekBoosts } = await supabaseAdmin
+      .from('game_boosts')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('week_start', weekStart);
+    if (!weekBoosts || weekBoosts.length === 0) {
+      await supabaseAdmin
+        .from('booster_points')
+        .update({ points: 1 })
+        .eq('user_id', userId);
+      pointsData.points = 1;
+    } else {
+      throw new Error('Pas assez de points booster');
+    }
+  }
 
   const { data: existing } = await supabaseAdmin
     .from('game_boosts')

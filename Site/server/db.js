@@ -1626,22 +1626,17 @@ async function getUserDiscoveries(userId) {
     const dismissedSet = new Set((dismissed || []).map(d => d.section));
 
     // Fetch user data to determine explored sections
-    const [games, reviews, friends, topThree, booster] = await Promise.all([
-      supabaseAdmin.from('games').select('id').eq('user_id', userId).limit(1),
-      supabaseAdmin.from('community_reviews').select('id').eq('user_id', userId).limit(1),
+    const [friends, topThree, booster] = await Promise.all([
       supabaseAdmin.from('friends').select('id').eq('user_id', userId).eq('status', 'accepted').limit(1),
       supabaseAdmin.from('top_three').select('id').eq('user_id', userId).limit(1),
       supabaseAdmin.from('booster_points').select('points, claimed_first_login').eq('user_id', userId).maybeSingle(),
     ]);
 
-    const hasGames = (games.data || []).length > 0;
-    const hasReviews = (reviews.data || []).length > 0;
     const hasFriends = (friends.data || []).length > 0;
     const hasTopThree = (topThree.data || []).length > 0;
     const hasUsedBooster = booster.data && (booster.data.points > 0 || booster.data.claimed_first_login);
 
     const sections = [
-      { id: 'reviews', label: 'Critiques', desc: 'Partage ton avis et découvre les critiques de la communauté ⭐', icon: '💬', explored: hasReviews },
       { id: 'community', label: 'Communauté', desc: 'Ajoute des amis, discute et suis leur bibliothèque 👥', icon: '👥', explored: hasFriends },
       { id: 'top3', label: 'Top 3', desc: 'Épingle tes 3 jeux préférés sur ton profil 🏅', icon: '🏅', explored: hasTopThree },
       { id: 'boost', label: 'Booster', desc: 'Utilise tes points booster pour mettre un jeu en avant ⚡', icon: '⚡', explored: hasUsedBooster },

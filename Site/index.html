@@ -1131,6 +1131,26 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   ));
 }
 
+function ProfilView({ user, games, wishlistIds, ratings, onToggleWishlist, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar, onUpdateEmail, onSyncComplete, showToast, showAuthModal, setView, onAddNotification, refreshKey }) {
+  const [profilSubTab, setProfilSubTab] = useState("profil");
+  return h('div', { className: "flex flex-col h-full view-enter" },
+    h('div', { className: "flex gap-1.5 px-4 pt-3 pb-2 overflow-x-auto flex-shrink-0" },
+      [
+        { id: "profil", label: "Mon Profil", Icon: User },
+        { id: "bibliotheque", label: "Biblioth\u00e8que", Icon: Gamepad2 },
+      ].map(({ id, label, Icon }) =>
+        h('button', { key: id, onClick: () => setProfilSubTab(id), className: "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all", style: { background: profilSubTab === id ? `${P1}20` : "rgba(255,255,255,0.05)", color: profilSubTab === id ? P1 : "#8888aa", border: profilSubTab === id ? `1px solid ${P1}30` : "1px solid transparent" } },
+          h(Icon, { size: 13 }), label
+        )
+      )
+    ),
+    h('div', { className: "flex-1 overflow-y-auto pb-20", style: { scrollbarWidth: "none" } },
+      profilSubTab === "profil" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist, onSelect, topThreeIds, topThree, onToggleTopThree, onLogout, onDeleteAccount, onUpdateAvatar, onUpdateEmail, onSyncComplete, showToast, showAuthModal }),
+      profilSubTab === "bibliotheque" && h(LibraryView, { games, onSelect, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead, onSyncComplete, showToast, user, onAddNotification, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, setView, showAuthModal })
+    )
+  );
+}
+
 function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelectFriend, onSelectGame, onAddNotification, showAuthModal, user }) {
   const [subTab, setSubTab] = useState("friends");
   const [publicReviews, setPublicReviews] = useState([]);
@@ -1141,24 +1161,9 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
   const [searchResults, setSearchResults] = useState([]);
   const [friendStatuses, setFriendStatuses] = useState({});
   const [searchFocused, setSearchFocused] = useState(false);
-  const [selectedNews, setSelectedNews] = useState(null);
-  const [releases, setReleases] = useState([]);
-  const [esportEvents, setEsportEvents] = useState([]);
-  const [dramaItems, setDramaItems] = useState([]);
-  const [articles, setArticles] = useState([]);
-  const [showArchivedReleases, setShowArchivedReleases] = useState(false);
-  const [showArchivedEsport, setShowArchivedEsport] = useState(false);
-  const [showArchivedDrama, setShowArchivedDrama] = useState(false);
   const [replyState, setReplyState] = useState({ reviewId: null, text: '' });
   const [replies, setReplies] = useState({});
-  const [loadingNews, setLoadingNews] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [esportFavorites, setEsportFavorites] = useState(new Set());
-  const [esportGameFilter, setEsportGameFilter] = useState('');
-  const [esportSearch, setEsportSearch] = useState('');
-  const [esportAllGames, setEsportAllGames] = useState([]);
-  const [favLoading, setFavLoading] = useState(false);
-  const [newsSubTab, setNewsSubTab] = useState("sorties");
   const [playerSearchGame, setPlayerSearchGame] = useState('');
   const [playerResults, setPlayerResults] = useState([]);
   const [playerSearching, setPlayerSearching] = useState(false);
@@ -1182,18 +1187,6 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
       return { ...r, my_vote: newVote, thumbs_up: tu, thumbs_down: td };
     }));
   }, []);
-  const loadNews = useCallback(() => {
-    setLoadingNews(true);
-    Promise.all([
-      API.getNews(),
-      API.getEsportGames().then(d => setEsportAllGames(d.games || [])).catch(() => {})
-    ]).then(([news]) => {
-      setReleases(news.releases || []);
-      setEsportEvents(news.esport || []);
-      setDramaItems(news.drama || []);
-      setArticles(news.articles || []);
-    }).catch(() => {}).finally(() => setLoadingNews(false));
-  }, []);
   useEffect(() => { if (freshReview) { setPublicReviews(prev => [freshReview, ...prev.filter(r => r.game_id !== freshReview.game_id || r.user_id !== freshReview.user_id)]); onFreshReviewConsumed(); } }, [freshReview]);
   useEffect(() => { load(); }, [refreshKey]);
   useEffect(() => {
@@ -1215,24 +1208,6 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
     }, 30000);
     return () => clearInterval(t);
   }, []);
-  useEffect(() => { loadNews(); const t = setInterval(loadNews, 120000); return () => clearInterval(t); }, []);
-  useEffect(() => {
-    setFavLoading(true);
-    API.getEsportFavorites().then(d => {
-      setEsportFavorites(new Set((d.favorites || []).map(f => f.event_title + '::' + f.event_game)));
-    }).catch(() => {}).finally(() => setFavLoading(false));
-  }, []);
-  const toggleFav = async (item) => {
-    try {
-      const res = await API.toggleEsportFavorite(item);
-      const key = (item.event || item.title || '') + '::' + (item.game || '');
-      setEsportFavorites(prev => {
-        const next = new Set(prev);
-        res.favorited ? next.add(key) : next.delete(key);
-        return next;
-      });
-    } catch (e) { console.error(e); }
-  };
   const doSearch = useCallback((q) => {
     API.searchUsers(q).then(d => {
       setSearchResults(d.users || []);
@@ -1257,7 +1232,6 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
   const SUBTABS = [
     { id: "friends", label: "Amis", Icon: User },
     { id: "reviews", label: "Critiques", Icon: MessageSquare },
-    { id: "news", label: "Nouveautes", Icon: Newspaper },
   ];
 
   return h('div', { className: "flex flex-col h-full overflow-y-auto pb-20 view-enter", style: { scrollbarWidth: "none" } },
@@ -1441,270 +1415,180 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
       )
     ),
 
-    // --- ONGLET NOUVEAUTES ---
-    subTab === "news" && h('div', { className: "px-4 pb-4 space-y-4" },
-      // Header + news sub-tabs
-      h('div', { className: "flex items-center justify-between mb-1" },
-        h('p', { className: "text-[9px] text-muted-foreground" }, "Mise \u00e0 jour auto toutes les 2 min"),
-        h('button', { onClick: () => { loadNews(); }, className: "flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold transition-colors", style: { background: `${P1}15`, color: P1 } }, h(RefreshCw, { size: 10 }), "Actualiser")
-      ),
-      h('div', { className: "flex gap-1.5 pb-3 overflow-x-auto flex-shrink-0" },
-        [
-          { id: "sorties", label: "Sorties", icon: Calendar },
-          { id: "esport", label: "E-Sport", icon: Trophy },
-          { id: "actus", label: "Actus", icon: MessageCircle },
-        ].map(({ id, label, icon }) =>
-          h('button', { key: id, onClick: () => setNewsSubTab(id), className: "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all", style: { background: newsSubTab === id ? `${P1}20` : "rgba(255,255,255,0.05)", color: newsSubTab === id ? P1 : "#8888aa", border: newsSubTab === id ? `1px solid ${P1}30` : "1px solid transparent" } },
-            h(icon, { size: 13 }), label
-          )
+
+    // ¯\_(ツ)_/¯
+  );
+}
+
+function MagView({ onSelectGame }) {
+  const [articles, setArticles] = useState([]);
+  const [esportEvents, setEsportEvents] = useState([]);
+  const [dramaItems, setDramaItems] = useState([]);
+  const [loadingNews, setLoadingNews] = useState(true);
+  const [selectedNews, setSelectedNews] = useState(null);
+  const [newsSubTab, setNewsSubTab] = useState("actus");
+  const [esportFavorites, setEsportFavorites] = useState(new Set());
+  const [esportGameFilter, setEsportGameFilter] = useState('');
+  const [esportSearch, setEsportSearch] = useState('');
+  const [esportAllGames, setEsportAllGames] = useState([]);
+  const [showArchivedEsport, setShowArchivedEsport] = useState(false);
+  const [showArchivedDrama, setShowArchivedDrama] = useState(false);
+  const loadNews = useCallback(() => {
+    setLoadingNews(true);
+    Promise.all([
+      API.getNews(),
+      API.getEsportGames().then(d => setEsportAllGames(d.games || [])).catch(() => {})
+    ]).then(([news]) => {
+      setEsportEvents(news.esport || []);
+      setDramaItems(news.drama || []);
+      setArticles(news.articles || []);
+    }).catch(() => {}).finally(() => setLoadingNews(false));
+  }, []);
+  useEffect(() => { loadNews(); const t = setInterval(loadNews, 120000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    API.getEsportFavorites().then(d => {
+      setEsportFavorites(new Set((d.favorites || []).map(f => f.event_title + '::' + f.event_game)));
+    }).catch(() => {});
+  }, []);
+  const toggleFav = async (item) => {
+    try {
+      const res = await API.toggleEsportFavorite(item);
+      const key = (item.event || item.title || '') + '::' + (item.game || '');
+      setEsportFavorites(prev => { const next = new Set(prev); res.favorited ? next.add(key) : next.delete(key); return next; });
+    } catch (e) {}
+  };
+  return h('div', { className: "flex flex-col h-full overflow-y-auto pb-20 view-enter", style: { scrollbarWidth: "none" } },
+    h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
+      h('h1', { className: "text-xl font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Le Mag"),
+      h('p', { className: "text-xs text-muted-foreground mt-0.5" }, "Actualit\u00e9s JV & E-sport")
+    ),
+    h('div', { className: "flex gap-1.5 px-4 pb-3 overflow-x-auto flex-shrink-0" },
+      [
+        { id: "actus", label: "Actus", icon: MessageCircle },
+        { id: "esport", label: "E-Sport", icon: Trophy },
+      ].map(({ id, label, icon }) =>
+        h('button', { key: id, onClick: () => setNewsSubTab(id), className: "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all", style: { background: newsSubTab === id ? `${P1}20` : "rgba(255,255,255,0.05)", color: newsSubTab === id ? P1 : "#8888aa", border: newsSubTab === id ? `1px solid ${P1}30` : "1px solid transparent" } },
+          h(icon, { size: 13 }), label
         )
-      ),
-      loadingNews && h('div', { className: "flex items-center justify-center py-10" }, h(Loader, { size: 20, className: "animate-spin", style: { color: P1 } })),
-
-      // ─── ONGLET SORTIES ──────────────────────────────────
-      newsSubTab === "sorties" && h('div', null,
-        (() => {
-          const items = releases.filter(r => !r._archived);
-          const limit = 5;
-          const visible = items.slice(0, limit);
-          const rest = items.slice(limit);
-          return h('div', null,
-            visible.length === 0 && !loadingNews && h('p', { className: "text-[11px] text-muted-foreground text-center py-6" }, "Aucune sortie récente pour le moment"),
-            visible.map((item, i) => h('div', { key: i, onClick: () => setSelectedNews(item), className: "flex gap-3 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] mb-2", style: { background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.12)" } },
-              h('div', { className: "w-14 h-20 rounded-xl overflow-hidden flex-shrink-0" }, h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover" })),
-              h('div', { className: "flex-1 min-w-0" },
-                h('p', { className: "text-[9px] font-bold", style: { color: P1 } }, item.date),
-                h('p', { className: "text-xs font-bold text-foreground mt-0.5 leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
-                item.genre && h('span', { className: "inline-block mt-1 px-1.5 py-0.5 rounded text-[7px] font-bold mr-1", style: { background: "rgba(139,92,246,0.12)", color: "#a78bfa" } }, item.genre.split(',')[0].trim()),
-                item.platforms && item.platforms.split(',').slice(0, 3).map((p, j) =>
-                  h('span', { key: j, className: "inline-block mt-1 px-1.5 py-0.5 rounded text-[7px] font-bold mr-1", style: { background: "rgba(255,255,255,0.06)", color: "#8888aa" } }, p.trim())
-                ),
-                h('p', { className: "text-[9px] text-muted-foreground mt-1.5 leading-relaxed line-clamp-2" }, item.desc)
+      )
+    ),
+    h('div', { className: "px-4 flex items-center justify-between mb-1" },
+      h('p', { className: "text-[9px] text-muted-foreground" }, "Mise à jour auto toutes les 2 min"),
+      h('button', { onClick: () => { loadNews(); }, className: "flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold transition-colors", style: { background: `${P1}15`, color: P1 } }, h(RefreshCw, { size: 10 }), "Actualiser")
+    ),
+    loadingNews && h('div', { className: "flex items-center justify-center py-10" }, h(Loader, { size: 20, className: "animate-spin", style: { color: P1 } })),
+    // ─── ACTUS ──────────────────────────────────
+    newsSubTab === "actus" && h('div', { className: "px-4 pb-4" },
+      (() => {
+        const items = articles.filter(r => !r._archived);
+        if (items.length === 0 && !loadingNews) return h('p', { className: "text-[11px] text-muted-foreground text-center py-6" }, "Aucune actualité pour le moment");
+        const hero = items[0];
+        const rest = items.slice(1);
+        return h('div', { className: "space-y-3" },
+          hero && h('div', { key: 'hero', onClick: () => setSelectedNews(hero), className: "relative rounded-2xl overflow-hidden cursor-pointer transition-all hover:opacity-90 active:scale-[0.98]", style: { aspectRatio: "16/9" } },
+            h('img', { src: hero.cover || '', alt: hero.title, className: "w-full h-full object-cover", onError: function(e) { e.target.style.display = 'none'; } }),
+            h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" }),
+            h('div', { className: "absolute bottom-0 left-0 right-0 p-4" },
+              h('div', { className: "flex items-center gap-1.5 mb-1.5" },
+                h('span', { className: "px-1.5 py-0.5 rounded text-[8px] sm:text-[10px] font-bold", style: { background: `${P1}30`, color: P1 } }, hero.tag || 'Actu'),
+                h('span', { className: "text-[8px] sm:text-[10px] font-bold", style: { color: "#8888aa" } }, hero.sourceName),
+                hero.pubDate && h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, new Date(hero.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
               ),
-              h(ChevronRight, { size: 14, className: "self-center text-muted-foreground flex-shrink-0" })
-            )),
-            rest.length > 0 && h('button', { onClick: () => setShowArchivedReleases(!showArchivedReleases), className: "flex items-center gap-2 w-full mt-1 p-2.5 rounded-xl text-[10px] font-bold transition-colors", style: { background: "rgba(255,255,255,0.03)", color: "#8888aa" } },
-              h(ChevronRight, { size: 12, className: `transition-transform ${showArchivedReleases ? 'rotate-90' : ''}` }),
-              "Voir plus (", rest.length, " sorties supplémentaires)"
-            ),
-            showArchivedReleases && rest.map((item, i) => h('div', { key: 'r'+i, onClick: () => setSelectedNews(item), className: "flex gap-2 p-2.5 rounded-xl border cursor-pointer transition-all hover:opacity-80 mt-1", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" } },
-              h('div', { className: "w-8 h-11 rounded overflow-hidden flex-shrink-0" }, h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover" })),
-              h('div', { className: "flex-1 min-w-0" },
-                h('p', { className: "text-[9px] font-bold", style: { color: P1 } }, item.date || ''),
-                h('p', { className: "text-[10px] font-bold text-foreground mt-0.5 leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title)
-              )
-            ))
-          );
-        })()
-      ),
-
-      // ─── ONGLET E-SPORT ──────────────────────────────────
-      newsSubTab === "esport" && h('div', null,
-        (() => {
-          const allItems = esportEvents.filter(r => !r._archived);
-          // Apply search filter
-          const q = esportSearch.toLowerCase().trim();
-          const searched = q
-            ? allItems.filter(i =>
-                (i.game || '').toLowerCase().includes(q) ||
-                (i.league || '').toLowerCase().includes(q) ||
-                (i.tournament || '').toLowerCase().includes(q) ||
-                (i.event || '').toLowerCase().includes(q) ||
-                (i.teams || []).some(t => (t.name || '').toLowerCase().includes(q))
-              )
-            : allItems;
-          const filtered = esportGameFilter ? searched.filter(i => i.game === esportGameFilter) : searched;
-          // Unique games for filter pills
-          const games = [...new Set(allItems.map(i => i.game).filter(Boolean))].sort();
-          // Group by League > Tournament
-          const groups = {};
-          filtered.forEach(i => {
-            const league = i.league || 'Autre';
-            const tourney = i.tournament || 'Matchs';
-            if (!groups[league]) groups[league] = {};
-            if (!groups[league][tourney]) groups[league][tourney] = [];
-            groups[league][tourney].push(i);
-          });
-          const sortedLeagues = Object.keys(groups).sort();
-          const hasFilter = games.length > 1;
-          // Show game filter pills when no search; else hide them
-          const showPills = hasFilter && !q;
-          // Game browser: show all games as a grid when no filter and no search
-          const showGameBrowser = !esportGameFilter && !q;
-          const matchCard = (item, idx) => {
-            const favKey = (item.event || item.title || '') + '::' + (item.game || '');
-            const isFav = esportFavorites.has(favKey);
-            const isLive = item.status === 'running' || item.status === 'live';
-            return h('div', { key: idx, onClick: () => setSelectedNews(item), className: "flex items-center gap-2 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] mb-1.5", style: { background: isLive ? "rgba(34,197,94,0.06)" : "rgba(251,191,36,0.06)", border: isLive ? "1px solid rgba(34,197,94,0.2)" : "1px solid rgba(251,191,36,0.1)" } },
-              h('div', { className: "flex items-center gap-2 flex-1 min-w-0" },
-                item.teams && item.teams.length > 0
-                  ? h('div', { className: "flex -space-x-2 flex-shrink-0" },
-                      item.teams.slice(0, 2).map((t, ti) =>
-                        t.logo
-                          ? h('img', { key: ti, src: t.logo, alt: t.name, className: "w-7 h-7 rounded-full object-contain border-2", style: { borderColor: "#1a1a2e", background: "#1a1a2e" } })
-                          : h('div', { key: ti, className: "w-7 h-7 rounded-full flex items-center justify-center text-[8px] font-black text-white border-2", style: { background: GRAD, borderColor: "#1a1a2e" } }, (t.name || '?')[0])
-                      )
-                    )
-                  : h(Trophy, { size: 16, style: { color: "#fbbf24", flexShrink: 0 } }),
-                h('div', { className: "flex-1 min-w-0" },
-                  h('div', { className: "flex items-center gap-1.5" },
-                    h('p', { className: "text-xs font-bold text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event),
-                    isLive && h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold animate-pulse", style: { background: "rgba(34,197,94,0.2)", color: "#22c55e" } }, "EN DIRECT")
-                  ),
-                  h('p', { className: "text-[8px] text-muted-foreground mt-0.5" },
-                    item.game, item.date ? ' \u2022 ' + item.date : ''
+              h('p', { className: "text-base sm:text-lg font-black text-white leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, hero.title),
+              h('p', { className: "text-xs sm:text-sm text-white/70 mt-1 line-clamp-2" }, hero.desc)
+            )
+          ),
+          rest.length > 0 && h('div', { className: "grid grid-cols-1 sm:grid-cols-2 gap-3" },
+            rest.map((item, i) =>
+              h('div', { key: i, onClick: () => setSelectedNews(item), className: "rounded-2xl overflow-hidden cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] border", style: { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" } },
+                item.cover && h('div', { className: "relative", style: { aspectRatio: "16/9" } },
+                  h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover", onError: function(e) { e.target.style.display = 'none'; } }),
+                  h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" }),
+                  h('div', { className: "absolute top-1.5 left-1.5" },
+                    h('span', { className: "px-1 py-0.5 rounded text-[7px] sm:text-[9px] font-bold", style: { background: `${P1}30`, color: P1, backdropFilter: "blur(4px)" } }, item.sourceName)
                   )
                 ),
-                !esportGameFilter && h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold flex-shrink-0", style: { background: `${P1}20`, color: P1 } }, item.game)
-              ),
-              h(Star, {
-                size: 13,
-                fill: isFav ? "#fbbf24" : "none",
-                stroke: isFav ? "#fbbf24" : "#8888aa",
-                className: "flex-shrink-0 cursor-pointer transition-all hover:scale-110",
-                onClick: (e) => { e.stopPropagation(); toggleFav(item); }
-              })
-            );
-          };
-          return h('div', null,
-            // Favorites count
-            h('div', { className: "flex items-center gap-2 mb-3" },
-              h(Trophy, { size: 14, style: { color: "#fbbf24" } }),
-              h('span', { className: "text-[10px] text-muted-foreground" }, esportFavorites.size, " favoris")
-            ),
-            // Search bar
-            h('div', { className: "relative mb-3" },
-              h('input', {
-                value: esportSearch,
-                onChange: e => setEsportSearch(e.target.value),
-                placeholder: "Rechercher un jeu, une ligue, un tournoi, une équipe...",
-                className: "w-full bg-secondary/60 border border-border rounded-xl pl-8 pr-8 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none"
-              }),
-              h(Search, { size: 13, className: "absolute left-2.5 top-1/2 -translate-y-1/2", style: { color: "#8888aa" } }),
-              esportSearch && h('button', {
-                onClick: () => { setEsportSearch(''); setEsportGameFilter(''); },
-                className: "absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold",
-                style: { color: "#8888aa" }
-              }, "✕")
-            ),
-            // Game filter pills (only when no search)
-            showPills && h('div', { className: "flex gap-1.5 mb-3 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
-              h('button', {
-                onClick: () => setEsportGameFilter(''),
-                className: "px-2.5 py-1.5 rounded-lg text-[8px] font-bold whitespace-nowrap transition-all flex-shrink-0",
-                style: { background: !esportGameFilter ? `${P1}30` : "rgba(255,255,255,0.06)", color: !esportGameFilter ? '#fff' : '#8888aa' }
-              }, "Tous les jeux"),
-              games.map(g =>
-                h('button', {
-                  key: g, onClick: () => setEsportGameFilter(g),
-                  className: "px-2.5 py-1.5 rounded-lg text-[8px] font-bold whitespace-nowrap transition-all flex-shrink-0",
-                  style: { background: esportGameFilter === g ? `${P1}30` : "rgba(255,255,255,0.06)", color: esportGameFilter === g ? '#fff' : '#8888aa' }
-                }, g)
-              )
-            ),
-            // Game browser (all games grid, shown when no filter/search)
-            showGameBrowser && esportAllGames.length > 0 && h('div', { className: "mb-4" },
-              h('div', { className: "flex items-center gap-2 mb-2.5" },
-                h(Trophy, { size: 13, style: { color: "#fbbf24" } }),
-                h('span', { className: "text-[10px] font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Tous les jeux e-sport"),
-                h('span', { className: "text-[8px] text-muted-foreground" }, "(", esportAllGames.length, " jeux)")
-              ),
-              h('div', { className: "flex flex-wrap gap-1.5" },
-                esportAllGames.map(g =>
-                  h('button', {
-                    key: g.slug,
-                    onClick: () => { setEsportGameFilter(g.name); setEsportSearch(''); },
-                    className: "px-2.5 py-1.5 rounded-lg text-[8px] font-bold whitespace-nowrap transition-all hover:scale-105 active:scale-95",
-                    style: { background: "rgba(255,255,255,0.04)", color: "#a78bfa", border: "1px solid rgba(139,92,246,0.15)" }
-                  }, g.name)
-                )
-              )
-            ),
-            allItems.length === 0 && !loadingNews && h('p', { className: "text-[11px] text-muted-foreground text-center py-6" }, "Aucun événement e-sport pour le moment"),
-            q && filtered.length === 0 && !showGameBrowser && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucun match trouvé pour «", q, "»"),
-            // Grouped matches
-            sortedLeagues.length > 0 && sortedLeagues.map(league =>
-              h('div', { key: league, className: "mb-4" },
-                h('div', { className: "flex items-center gap-1.5 mb-2" },
-                  h('span', { className: "text-[10px] font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, league),
-                  !esportGameFilter && h('span', { className: "text-[7px] text-muted-foreground" }, '\u2022', ' ' + filtered.find(i => (i.league || 'Autre') === league)?.game || '')
-                ),
-                Object.keys(groups[league]).sort().map(tourney =>
-                  h('div', { key: tourney, className: "mb-2" },
-                    h('p', { className: "text-[8px] text-muted-foreground font-bold mb-1.5 ml-1" }, '\u25B8 ' + tourney),
-                    groups[league][tourney].map((item, idx) => matchCard(item, league + '::' + tourney + '::' + idx))
-                  )
-                )
-              )
-            ),
-          );
-        })()
-      ),
-
-      // ─── ONGLET ACTUS (style Gameblog) ────────────────────
-      newsSubTab === "actus" && h('div', null,
-        (() => {
-          const items = articles.filter(r => !r._archived);
-          if (items.length === 0 && !loadingNews) return h('p', { className: "text-[11px] text-muted-foreground text-center py-6" }, "Aucune actualité pour le moment");
-          const hero = items[0];
-          const rest = items.slice(1);
-          return h('div', { className: "space-y-3" },
-            // Hero article
-            hero && h('div', { key: 'hero', onClick: () => setSelectedNews(hero), className: "relative rounded-2xl overflow-hidden cursor-pointer transition-all hover:opacity-90 active:scale-[0.98]", style: { aspectRatio: "16/9" } },
-              h('img', { src: hero.cover || '', alt: hero.title, className: "w-full h-full object-cover", onError: function(e) { e.target.style.display = 'none'; } }),
-              h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" }),
-              h('div', { className: "absolute bottom-0 left-0 right-0 p-4" },
-                h('div', { className: "flex items-center gap-1.5 mb-1.5" },
-                  h('span', { className: "px-1.5 py-0.5 rounded text-[8px] sm:text-[10px] font-bold", style: { background: `${P1}30`, color: P1 } }, hero.tag || 'Actu'),
-                  h('span', { className: "text-[8px] sm:text-[10px] font-bold", style: { color: "#8888aa" } }, hero.sourceName),
-                  hero.pubDate && h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, new Date(hero.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
-                ),
-                h('p', { className: "text-base sm:text-lg font-black text-white leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, hero.title),
-                h('p', { className: "text-xs sm:text-sm text-white/70 mt-1 line-clamp-2" }, hero.desc)
-              )
-            ),
-            // Article grid (1 col mobile, 2 col desktop) — tous les articles à la suite
-            rest.length > 0 && h('div', { className: "grid grid-cols-1 sm:grid-cols-2 gap-3" },
-              rest.map((item, i) =>
-                h('div', { key: i, onClick: () => setSelectedNews(item), className: "rounded-2xl overflow-hidden cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] border", style: { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" } },
-                  item.cover && h('div', { className: "relative", style: { aspectRatio: "16/9" } },
-                    h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover", onError: function(e) { e.target.style.display = 'none'; } }),
-                    h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" }),
-                    h('div', { className: "absolute top-1.5 left-1.5" },
-                      h('span', { className: "px-1 py-0.5 rounded text-[7px] sm:text-[9px] font-bold", style: { background: `${P1}30`, color: P1, backdropFilter: "blur(4px)" } }, item.sourceName)
-                    )
-                  ),
-                  h('div', { className: "p-3" },
-                    h('p', { className: "text-sm sm:text-base font-bold text-foreground leading-tight line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
-                    h('div', { className: "flex items-center gap-1 mt-1.5" },
-                      h('span', { className: "text-[8px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold", style: { background: "rgba(255,255,255,0.06)", color: "#8888aa" } }, (item.tag || 'Actu').slice(0, 12)),
-                      item.pubDate && h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, new Date(item.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
-                    )
-                  )
-                )
-              )
-            ),
-            // "Voir plus" for drama items (keep existing drama feed as secondary)
-            dramaItems.filter(d => !d._archived).length > 0 && h('div', { className: "mt-4 space-y-2" },
-              h('p', { className: "text-[9px] font-black text-muted-foreground mb-1", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Autres actualit\u00e9s"),
-              dramaItems.filter(d => !d._archived).slice(0, 3).map((item, i) =>
-                h('div', { key: 'd'+i, onClick: () => setSelectedNews(item), className: "rounded-2xl overflow-hidden cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] border", style: { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" } },
-                  h('div', { className: "p-3" },
-                    h('p', { className: "text-sm sm:text-base font-bold text-foreground leading-tight line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
-                    h('div', { className: "flex items-center gap-1 mt-1.5" },
-                      h('span', { className: "text-[8px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.06)", color: item.tag === "Drama" ? "#ef4444" : "#8888aa" } }, (item.tag || 'Actu').slice(0, 12)),
-                      h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, item.sourceName),
-                      item.pubDate && h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, new Date(item.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
-                    )
+                h('div', { className: "p-3" },
+                  h('p', { className: "text-sm sm:text-base font-bold text-foreground leading-tight line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
+                  h('div', { className: "flex items-center gap-1 mt-1.5" },
+                    h('span', { className: "text-[8px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold", style: { background: "rgba(255,255,255,0.06)", color: "#8888aa" } }, (item.tag || 'Actu').slice(0, 12)),
+                    item.pubDate && h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, new Date(item.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
                   )
                 )
               )
             )
-          );
-        })()
-      )
+          ),
+          dramaItems.filter(d => !d._archived).length > 0 && h('div', { className: "mt-4 space-y-2" },
+            h('p', { className: "text-[9px] font-black text-muted-foreground mb-1", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Autres actualit\u00e9s"),
+            dramaItems.filter(d => !d._archived).slice(0, 3).map((item, i) =>
+              h('div', { key: 'd'+i, onClick: () => setSelectedNews(item), className: "rounded-2xl overflow-hidden cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] border", style: { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" } },
+                h('div', { className: "p-3" },
+                  h('p', { className: "text-sm sm:text-base font-bold text-foreground leading-tight line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
+                  h('div', { className: "flex items-center gap-1 mt-1.5" },
+                    h('span', { className: "text-[8px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.06)", color: item.tag === "Drama" ? "#ef4444" : "#8888aa" } }, (item.tag || 'Actu').slice(0, 12)),
+                    h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, item.sourceName),
+                    item.pubDate && h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, new Date(item.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
+                  )
+                )
+              )
+            )
+          )
+        );
+      })()
     ),
-
+    // ─── E-SPORT ──────────────────────────────────
+    newsSubTab === "esport" && h('div', { className: "px-4 pb-4" },
+      (() => {
+        const allItems = esportEvents.filter(r => !r._archived);
+        const q = esportSearch.toLowerCase().trim();
+        const searched = q ? allItems.filter(i => (i.game || '').toLowerCase().includes(q) || (i.league || '').toLowerCase().includes(q) || (i.tournament || '').toLowerCase().includes(q) || (i.event || '').toLowerCase().includes(q) || (i.teams || []).some(t => (t.name || '').toLowerCase().includes(q))) : allItems;
+        const filtered = esportGameFilter ? searched.filter(i => i.game === esportGameFilter) : searched;
+        const games = [...new Set(allItems.map(i => i.game).filter(Boolean))].sort();
+        const groups = {};
+        filtered.forEach(i => { const l = i.league || 'Autre'; const t = i.tournament || 'Matchs'; if (!groups[l]) groups[l] = {}; if (!groups[l][t]) groups[l][t] = []; groups[l][t].push(i); });
+        const sortedLeagues = Object.keys(groups).sort();
+        const showPills = games.length > 1 && !q;
+        const showGameBrowser = !esportGameFilter && !q;
+        const matchCard = (item, idx) => {
+          const favKey = (item.event || item.title || '') + '::' + (item.game || '');
+          const isFav = esportFavorites.has(favKey);
+          const isLive = item.status === 'running' || item.status === 'live';
+          return h('div', { key: idx, onClick: () => setSelectedNews(item), className: "flex items-center gap-2 p-3 rounded-2xl border cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] mb-1.5", style: { background: isLive ? "rgba(34,197,94,0.06)" : "rgba(251,191,36,0.06)", border: isLive ? "1px solid rgba(34,197,94,0.2)" : "1px solid rgba(251,191,36,0.1)" } },
+            h('div', { className: "flex items-center gap-2 flex-1 min-w-0" },
+              item.teams && item.teams.length > 0 ? h('div', { className: "flex -space-x-2 flex-shrink-0" }, item.teams.slice(0, 2).map((t, ti) => t.logo ? h('img', { key: ti, src: t.logo, alt: t.name, className: "w-7 h-7 rounded-full object-contain border-2", style: { borderColor: "#1a1a2e", background: "#1a1a2e" } }) : h('div', { key: ti, className: "w-7 h-7 rounded-full flex items-center justify-center text-[8px] font-black text-white border-2", style: { background: GRAD, borderColor: "#1a1a2e" } }, (t.name || '?')[0]))) : h(Trophy, { size: 16, style: { color: "#fbbf24", flexShrink: 0 } }),
+              h('div', { className: "flex-1 min-w-0" },
+                h('div', { className: "flex items-center gap-1.5" }, h('p', { className: "text-xs font-bold text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event), isLive && h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold animate-pulse", style: { background: "rgba(34,197,94,0.2)", color: "#22c55e" } }, "EN DIRECT")),
+                h('p', { className: "text-[8px] text-muted-foreground mt-0.5" }, item.game, item.date ? ' • ' + item.date : '')
+              ),
+              !esportGameFilter && h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold flex-shrink-0", style: { background: `${P1}20`, color: P1 } }, item.game)
+            ),
+            h(Star, { size: 13, fill: isFav ? "#fbbf24" : "none", stroke: isFav ? "#fbbf24" : "#8888aa", className: "flex-shrink-0 cursor-pointer transition-all hover:scale-110", onClick: (e) => { e.stopPropagation(); toggleFav(item); } })
+          );
+        };
+        return h('div', null,
+          h('div', { className: "flex items-center gap-2 mb-3" }, h(Trophy, { size: 14, style: { color: "#fbbf24" } }), h('span', { className: "text-[10px] text-muted-foreground" }, esportFavorites.size, " favoris")),
+          h('div', { className: "relative mb-3" },
+            h('input', { value: esportSearch, onChange: e => setEsportSearch(e.target.value), placeholder: "Rechercher un jeu, une ligue, un tournoi, une équipe...", className: "w-full bg-secondary/60 border border-border rounded-xl pl-8 pr-8 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none" }),
+            h(Search, { size: 13, className: "absolute left-2.5 top-1/2 -translate-y-1/2", style: { color: "#8888aa" } }),
+            esportSearch && h('button', { onClick: () => { setEsportSearch(''); setEsportGameFilter(''); }, className: "absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold", style: { color: "#8888aa" } }, "✕")
+          ),
+          showPills && h('div', { className: "flex gap-1.5 mb-3 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
+            h('button', { onClick: () => setEsportGameFilter(''), className: "px-2.5 py-1.5 rounded-lg text-[8px] font-bold whitespace-nowrap transition-all flex-shrink-0", style: { background: !esportGameFilter ? `${P1}30` : "rgba(255,255,255,0.06)", color: !esportGameFilter ? '#fff' : '#8888aa' } }, "Tous les jeux"),
+            games.map(g => h('button', { key: g, onClick: () => setEsportGameFilter(g), className: "px-2.5 py-1.5 rounded-lg text-[8px] font-bold whitespace-nowrap transition-all flex-shrink-0", style: { background: esportGameFilter === g ? `${P1}30` : "rgba(255,255,255,0.06)", color: esportGameFilter === g ? '#fff' : '#8888aa' } }, g))
+          ),
+          showGameBrowser && esportAllGames.length > 0 && h('div', { className: "mb-4" },
+            h('div', { className: "flex items-center gap-2 mb-2.5" }, h(Trophy, { size: 13, style: { color: "#fbbf24" } }), h('span', { className: "text-[10px] font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Tous les jeux e-sport"), h('span', { className: "text-[8px] text-muted-foreground" }, "(", esportAllGames.length, " jeux)")),
+            h('div', { className: "flex flex-wrap gap-1.5" }, esportAllGames.map(g => h('button', { key: g.slug, onClick: () => { setEsportGameFilter(g.name); setEsportSearch(''); }, className: "px-2.5 py-1.5 rounded-lg text-[8px] font-bold whitespace-nowrap transition-all hover:scale-105 active:scale-95", style: { background: "rgba(255,255,255,0.04)", color: "#a78bfa", border: "1px solid rgba(139,92,246,0.15)" } }, g.name)))
+          ),
+          allItems.length === 0 && !loadingNews && h('p', { className: "text-[11px] text-muted-foreground text-center py-6" }, "Aucun événement e-sport pour le moment"),
+          q && filtered.length === 0 && !showGameBrowser && h('p', { className: "text-[10px] text-muted-foreground text-center py-4" }, "Aucun match trouvé pour «", q, "»"),
+          sortedLeagues.length > 0 && sortedLeagues.map(league => h('div', { key: league, className: "mb-4" },
+            h('div', { className: "flex items-center gap-1.5 mb-2" }, h('span', { className: "text-[10px] font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, league), !esportGameFilter && h('span', { className: "text-[7px] text-muted-foreground" }, '•', ' ' + filtered.find(i => (i.league || 'Autre') === league)?.game || '')),
+            Object.keys(groups[league]).sort().map(tourney => h('div', { key: tourney, className: "mb-2" }, h('p', { className: "text-[8px] text-muted-foreground font-bold mb-1.5 ml-1" }, '▸ ' + tourney), groups[league][tourney].map((item, idx) => matchCard(item, league + '::' + tourney + '::' + idx))))
+          ))
+        );
+      })()
+    ),
     selectedNews && h(NewsDetailSheet, { item: selectedNews, onClose: () => setSelectedNews(null) })
   );
 }
@@ -2790,11 +2674,10 @@ function DiscoveryToast({ discoveries, onDiscover, onDismiss }) {
 
 function BottomNav({ view, setView }) {
   const items = [
-    { id: "library",   label: "Biblio",     Icon: Gamepad2 },
-    { id: "community", label: "Communaute", Icon: Users },
-    { id: "reviews",   label: "Critiques",  Icon: Edit3 },
     { id: "catalogue", label: "Catalogue",  Icon: Briefcase },
-    { id: "profile",   label: "Profil",     Icon: User },
+    { id: "mag",       label: "Le Mag",     Icon: Newspaper },
+    { id: "community", label: "Communauté", Icon: Users },
+    { id: "profil",    label: "Mon Espace", Icon: User },
   ];
   return h('div', { className: "absolute bottom-0 left-0 right-0 h-20 flex items-start justify-around px-2 pt-3 pb-5 border-t border-border", style: { background: "rgba(15,15,28,0.96)", backdropFilter: "blur(20px)" } },
     items.map(({ id, label, Icon }) => h('button', { key: id, onClick: () => setView(id), className: "nav-btn flex flex-col items-center gap-1 transition-all relative", style: { color: view === id ? P1 : "#8888aa" } },
@@ -3146,9 +3029,9 @@ function ChatBot({ setView }) {
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState("library");
+  const [view, setView] = useState("catalogue");
   const swipeStartX = useRef(null);
-  const TAB_ORDER = ["library", "community", "catalogue", "reviews", "profile"];
+  const TAB_ORDER = ["catalogue", "mag", "community", "profil"];
   const onTouchStart = (e) => {
     swipeStartX.current = e.touches[0].clientX;
   };
@@ -3464,7 +3347,7 @@ function App() {
     setWishlistIds(new Set());
     setTopThree([]);
     setTopThreeIds(new Set());
-    setView("library");
+    setView("profil");
   };
 
   const markAsRead = (id, friendId) => {
@@ -3496,7 +3379,7 @@ function App() {
   const handleDiscover = (section) => {
     setDiscoveries(prev => prev.filter(d => d.id !== section));
     API.dismissDiscovery(section).catch(() => {});
-    const sectionViews = { esport: 'community', reviews: 'reviews', community: 'community', top3: 'profile', boost: 'catalogue' };
+    const sectionViews = { esport: 'mag', reviews: 'community', community: 'community', top3: 'profil', boost: 'catalogue' };
     setView(sectionViews[section] || 'catalogue');
   };
 
@@ -3528,11 +3411,10 @@ function App() {
       h('div', { className: "flex-1 overflow-hidden" },
         h('div', { className: "h-full overflow-y-auto" },
           null,
-          view === "library" && h(LibraryView, { games, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, showToast, onSyncComplete: loadData, user, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); }, wishlistIds, onToggleWishlist: handleToggleWishlist, topThreeIds, onToggleTopThree: handleToggleTopThree, setView, showAuthModal }),
-          view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, freshReview, onFreshReviewConsumed: () => setFreshReview(null), onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); }, showAuthModal, user }),
           view === "catalogue" && h(CatalogueView, { key: 'cat', refreshKey: catalogRefreshKey, onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); setSelectedGame(e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
-          view === "reviews" && h(ReviewsView, { games, onSelect: setSelectedGame }),
-          view === "profile" && h(ProfileView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast, showAuthModal })
+          view === "mag" && h(MagView, { onSelectGame: setSelectedGame }),
+          view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, freshReview, onFreshReviewConsumed: () => setFreshReview(null), onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); }, showAuthModal, user }),
+          view === "profil" && h(ProfilView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: setSelectedGame, search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast, showAuthModal, setView, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); } })
         )
       ),
       h(BottomNav, { view, setView }),

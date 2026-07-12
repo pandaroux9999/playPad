@@ -41,6 +41,12 @@
     .review-card { transition: border-color 0.2s ease; }
     .sheet-close-btn { transition: background 0.2s ease; }
     .sheet-close-btn:hover { background: rgba(0,0,0,0.7) !important; }
+    .article-content img { max-width: 100%; height: auto; border-radius: 12px; margin: 12px 0; }
+    .article-content p { margin-bottom: 10px; }
+    .article-content iframe { max-width: 100%; border-radius: 12px; margin: 12px 0; }
+    .article-content a { color: #a78bfa; text-decoration: underline; }
+    .article-content figure { margin: 12px 0; }
+    .article-content figcaption { font-size: 11px; color: #8888aa; text-align: center; margin-top: 4px; }
     @media (min-width: 768px) {
       .game-card:hover { transform: scale(1.03); }
       .nav-btn { transition: all 0.2s ease; }
@@ -1647,32 +1653,32 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
             hero && h('div', { key: 'hero', onClick: () => setSelectedNews(hero), className: "relative rounded-2xl overflow-hidden cursor-pointer transition-all hover:opacity-90 active:scale-[0.98]", style: { aspectRatio: "16/9" } },
               h('img', { src: hero.cover || '', alt: hero.title, className: "w-full h-full object-cover", onError: function(e) { e.target.style.display = 'none'; } }),
               h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" }),
-              h('div', { className: "absolute bottom-0 left-0 right-0 p-3" },
+              h('div', { className: "absolute bottom-0 left-0 right-0 p-4" },
                 h('div', { className: "flex items-center gap-1.5 mb-1.5" },
-                  h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold", style: { background: `${P1}30`, color: P1 } }, hero.tag || 'Actu'),
-                  h('span', { className: "text-[7px] font-bold", style: { color: "#8888aa" } }, hero.sourceName),
-                  hero.pubDate && h('span', { className: "text-[7px]", style: { color: "#6666aa" } }, new Date(hero.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
+                  h('span', { className: "px-1.5 py-0.5 rounded text-[8px] sm:text-[10px] font-bold", style: { background: `${P1}30`, color: P1 } }, hero.tag || 'Actu'),
+                  h('span', { className: "text-[8px] sm:text-[10px] font-bold", style: { color: "#8888aa" } }, hero.sourceName),
+                  hero.pubDate && h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, new Date(hero.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
                 ),
-                h('p', { className: "text-sm font-black text-white leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, hero.title),
-                h('p', { className: "text-[9px] text-white/70 mt-1 line-clamp-2" }, hero.desc)
+                h('p', { className: "text-base sm:text-lg font-black text-white leading-tight", style: { fontFamily: "'Rajdhani', sans-serif" } }, hero.title),
+                h('p', { className: "text-xs sm:text-sm text-white/70 mt-1 line-clamp-2" }, hero.desc)
               )
             ),
-            // Article grid
-            rest.length > 0 && h('div', { className: "grid grid-cols-2 gap-2" },
+            // Article grid (1 col mobile, 2 col desktop)
+            rest.length > 0 && h('div', { className: "grid grid-cols-1 sm:grid-cols-2 gap-3" },
               rest.slice(0, 8).map((item, i) =>
                 h('div', { key: i, onClick: () => setSelectedNews(item), className: "rounded-2xl overflow-hidden cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] border", style: { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" } },
                   item.cover && h('div', { className: "relative", style: { aspectRatio: "16/9" } },
                     h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover", onError: function(e) { e.target.style.display = 'none'; } }),
                     h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" }),
                     h('div', { className: "absolute top-1.5 left-1.5" },
-                      h('span', { className: "px-1 py-0.5 rounded text-[6px] font-bold", style: { background: `${P1}30`, color: P1, backdropFilter: "blur(4px)" } }, item.sourceName)
+                      h('span', { className: "px-1 py-0.5 rounded text-[7px] sm:text-[9px] font-bold", style: { background: `${P1}30`, color: P1, backdropFilter: "blur(4px)" } }, item.sourceName)
                     )
                   ),
-                  h('div', { className: "p-2" },
-                    h('p', { className: "text-[9px] font-bold text-foreground leading-tight line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
-                    h('div', { className: "flex items-center gap-1 mt-1" },
-                      h('span', { className: "text-[6px] px-1 py-0.5 rounded font-bold", style: { background: "rgba(255,255,255,0.06)", color: "#8888aa" } }, (item.tag || 'Actu').slice(0, 12)),
-                      item.pubDate && h('span', { className: "text-[6px]", style: { color: "#6666aa" } }, new Date(item.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
+                  h('div', { className: "p-3" },
+                    h('p', { className: "text-sm sm:text-base font-bold text-foreground leading-tight line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
+                    h('div', { className: "flex items-center gap-1 mt-1.5" },
+                      h('span', { className: "text-[8px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold", style: { background: "rgba(255,255,255,0.06)", color: "#8888aa" } }, (item.tag || 'Actu').slice(0, 12)),
+                      item.pubDate && h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, new Date(item.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
                     )
                   )
                 )
@@ -1905,8 +1911,12 @@ function NewsDetailSheet({ item, onClose }) {
           }, translating ? "..." : showOriginal ? "Français" : translatedContent ? "Original" : "Traduire") : null
         ),
         // Description (for non-esport)
-        !isEsport && h('p', { className: "text-xs text-foreground/80 mt-4 leading-relaxed" },
-          showOriginal ? (item.details || item.desc) : (translatedContent || item.details || item.desc)
+        !isEsport && (
+          isArticle && item.details && item.details.includes('<')
+            ? h('div', { className: "text-sm sm:text-base text-foreground/80 mt-4 leading-relaxed space-y-3 article-content", dangerouslySetInnerHTML: { __html: showOriginal ? item.details : (translatedContent || item.details) } })
+            : h('p', { className: "text-sm sm:text-base text-foreground/80 mt-4 leading-relaxed whitespace-pre-wrap" },
+                showOriginal ? (item.details || item.desc) : (translatedContent || item.details || item.desc)
+              )
         ),
         // Links
         links.length > 0 && h('div', { className: "mt-5 space-y-2" },

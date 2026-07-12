@@ -2816,22 +2816,23 @@ async function fetchArticlesFromRSS() {
         const link = get('link');
         if (!title) continue;
         count++;
-        const desc = get('description').replace(/<[^>]*>/g, '').trim();
+        const rawHtml = get('description');
+        const plainText = rawHtml.replace(/<[^>]*>/g, '').trim();
         const pubDate = get('pubDate');
         const category = get('category');
         const cover = extractRssImage(block);
-        const lower = (title + ' ' + desc).toLowerCase();
+        const lower = (title + ' ' + plainText).toLowerCase();
         if (NON_GAMING_KEYWORDS.some(kw => lower.includes(kw))) continue;
         items.push({
           type: 'article',
           title,
-          desc: desc.slice(0, 200),
+          desc: plainText.slice(0, 250),
           cover,
           tag: category || 'Actu',
           officialUrl: link,
           sourceUrl: link,
           sourceName: feed.name,
-          details: desc.slice(0, 1000),
+          details: rawHtml,
           pubDate,
         });
       }
@@ -3118,10 +3119,65 @@ async function refreshAllNews(force) {
   return results;
 }
 
+function getWeekStart() {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(now);
+  monday.setDate(diff);
+  return monday.toISOString().split('T')[0];
+}
+
+// ─── BOT : boost aléatoire pour remplir "Boostés de la semaine" ──
+async function seedWeeklyBoosts() {
+  try {
+    const weekStart = getWeekStart();
+    const { count } = await db.supabaseAdmin
+      .from('game_boosts')
+      .select('*', { count: 'exact', head: true })
+      .eq('week_start', weekStart);
+    if (count > 2) return; // déjà assez de boosts cette semaine
+
+    // Récupère un user bot (ou crée-le)
+    let { data: bot } = await db.supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('username', 'playpad_bot')
+      .maybeSingle();
+    if (!bot) {
+      const { data: newBot, error } = await db.supabaseAdmin
+        .from('users')
+        .insert({ username: 'playpad_bot', display_name: 'PlayPad Bot', password: '', email: 'bot@playpad.app' })
+        .select('id')
+        .single();
+      if (error) return console.error('[SeedBoosts] Bot creation error:', error.message);
+      bot = newBot;
+      await db.supabaseAdmin.from('booster_points').insert({ user_id: bot.id, points: 100, claimed_first_login: true });
+    }
+
+    // Prend 8 jeux aléatoires du catalogue
+    const { data: games } = await db.supabaseAdmin
+      .from('catalog')
+      .select('game_id')
+      .limit(100);
+    if (!games || games.length === 0) return;
+    const shuffled = games.sort(() => Math.random() - 0.5).slice(0, 8);
+    const rows = shuffled.map(g => ({ user_id: bot.id, game_id: g.game_id, week_start: weekStart }));
+    const { error: insErr } = await db.supabaseAdmin.from('game_boosts').insert(rows);
+    if (insErr) return console.error('[SeedBoosts] Insert error:', insErr.message);
+    console.log(`[SeedBoosts] ✅ ${rows.length} boosts ajoutés pour la semaine ${weekStart}`);
+  } catch (e) {
+    console.error('[SeedBoosts] Error:', e.message);
+  }
+}
+
 function startNewsRefresh() {
   if (newsRefreshTimer) clearInterval(newsRefreshTimer);
-  // Premier refresh immédiat (force=true pour ignorer le cache et récupérer les données PandaScore)
-  refreshAllNews(true).catch(e => console.error('[News] Erreur premier refresh:', e.message));
+  // Seed les boosts de la semaine si vide + premier refresh immédiat
+  Promise.all([
+    seedWeeklyBoosts(),
+    refreshAllNews(true).catch(e => console.error('[News] Erreur premier refresh:', e.message))
+  ]);
   // Puis toutes les 30 min
   newsRefreshTimer = setInterval(() => {
     refreshAllNews().catch(e => console.error('[News] Erreur refresh périodique:', e.message));

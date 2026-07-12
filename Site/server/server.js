@@ -2347,7 +2347,7 @@ app.get('/api/game-details/:gameId', requireAuth, generalLimiter, async (req, re
   }
 });
 
-app.get('/api/game-videos/:gameTitle', requireAuth, async (req, res) => {
+app.get('/api/game-videos/:gameTitle', async (req, res) => {
   try {
     const title = decodeURIComponent(req.params.gameTitle);
     const igdbId = process.env.TWITCH_CLIENT_ID;
@@ -2813,10 +2813,13 @@ async function fetchArticlesFromRSS() {
           return val;
         };
         const title = get('title');
-        const link = get('link');
+        let link = get('link');
+        const guid = get('guid');
         if (!title) continue;
         count++;
-        const rawHtml = get('description');
+        // Gameblog a un bug : <link> contient l'URL en double, <guid> est correct
+        if (link && link.includes('//' + link.split('/')[2] + '//')) link = guid || link;
+        const rawHtml = get('content:encoded') || get('description');
         const plainText = rawHtml.replace(/<[^>]*>/g, '').trim();
         const pubDate = get('pubDate');
         const category = get('category');
@@ -2829,8 +2832,8 @@ async function fetchArticlesFromRSS() {
           desc: plainText.slice(0, 250),
           cover,
           tag: category || 'Actu',
-          officialUrl: link,
-          sourceUrl: link,
+          officialUrl: link || guid,
+          sourceUrl: link || guid,
           sourceName: feed.name,
           details: rawHtml,
           pubDate,

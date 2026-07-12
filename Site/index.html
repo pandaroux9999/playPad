@@ -2409,6 +2409,9 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   const [emailNotifs, setEmailNotifs] = useState(false);
   const [notifLoading, setNotifLoading] = useState(true);
   const fileInputRef = useRef(null);
+  const CONTACT_MIN_MESSAGE_LEN = 5;
+  const contactMsgLen = (contactMsg || '').trim().length;
+  const canSendContact = !contactSending && contactMsgLen >= CONTACT_MIN_MESSAGE_LEN;
   useEffect(() => { setEmail(user?.email || ''); }, [user?.email]);
   useEffect(() => { API.getNotifPrefs().then(d => { setEmailNotifs(d.emailNotifications); }).catch(() => {}).finally(() => setNotifLoading(false)); }, []);
   const completed  = games.filter(g => g.status === "completed").length;
@@ -2738,17 +2741,23 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
         ),
         h('p', { className: "text-[10px] text-muted-foreground mb-3" }, "Un bug, une id\u00e9e, un retour ? \u00c9cris-nous ici :"),
         h('textarea', {
+          id: "contact-message",
+          name: "contactMessage",
           value: contactMsg,
           onChange: e => setContactMsg(e.target.value),
           placeholder: "Ton message...",
           rows: 4,
           className: "w-full bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none resize-none mb-3"
         }),
+        h('p', {
+          className: "text-[10px] mb-3",
+          style: { color: contactMsgLen > 0 && contactMsgLen < CONTACT_MIN_MESSAGE_LEN ? "#ef4444" : "#8888aa" }
+        }, `${contactMsgLen}/${CONTACT_MIN_MESSAGE_LEN} caractères minimum`),
         h('div', { className: "flex gap-2" },
           h('button', { onClick: () => setContactOpen(false), className: "flex-1 py-2 text-xs font-bold rounded-lg", style: { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, "Annuler"),
           h('button', {
             onClick: async () => {
-              if (!contactMsg.trim()) return;
+              if (contactMsgLen < CONTACT_MIN_MESSAGE_LEN) { showToast(`Message trop court (min ${CONTACT_MIN_MESSAGE_LEN} caractères)`); return; }
               setContactSending(true);
               try {
                 const result = await API.request('POST', '/api/contact', { message: contactMsg, email: user?.email || '' });
@@ -2760,7 +2769,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
               } catch (e) { showToast('Erreur: ' + (e.message || '')); }
               finally { setContactSending(false); }
             },
-            disabled: contactSending || !contactMsg.trim(),
+            disabled: !canSendContact,
             className: "flex-1 py-2 text-xs font-bold rounded-lg text-white", style: { background: GRAD }
           }, contactSending ? h(Loader, { size: 12, className: "animate-spin" }) : "Envoyer")
         )

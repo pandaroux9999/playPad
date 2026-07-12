@@ -3532,10 +3532,11 @@ app.get('/api/streamers/search', requireAuth, async (req, res) => {
 // ─── CONTACT FORM ───────────────────────────────────────────
 app.post('/api/contact', requireAuth, contactLimiter, async (req, res) => {
   try {
+    const CONTACT_MIN_MESSAGE_LEN = 5;
     const { message } = req.body;
     const inputEmail = (req.body?.email || '').trim().toLowerCase();
     if (!message || !message.trim()) return res.status(400).json({ error: 'Message requis' });
-    if (message.trim().length < 5) return res.status(400).json({ error: 'Message trop court' });
+    if (message.trim().length < CONTACT_MIN_MESSAGE_LEN) return res.status(400).json({ error: `Message trop court (min ${CONTACT_MIN_MESSAGE_LEN} caractères)` });
 
     // Email auto: priorité au payload, sinon on prend celui du compte connecté
     let resolvedEmail = inputEmail;

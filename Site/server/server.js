@@ -3558,29 +3558,58 @@ app.post('/api/contact', requireAuth, contactLimiter, async (req, res) => {
     // Email (retourne un statut clair au frontend)
     let mailStatus = 'disabled';
     let mailError = null;
+    let mailProvider = null;
     const smtpUser = (process.env.SMTP_USER || '').trim();
+    const mailPayload = {
+      from: `"PlayPad Contact" <${smtpUser || 'contact@playpad.local'}>`,
+      to: smtpUser || sanitizedEmail || 'contact@playpad.local',
+      subject: `[PlayPad] Message de ${sanitizedEmail || 'utilisateur #' + req.session.userId}`,
+      html: `<p><b>De :</b> ${sanitizedEmail || 'inconnu'}</p><p><b>Message :</b></p><p>${sanitizedMsg}</p>`,
+    };
+
     if (smtpUser) {
       try {
-        const sendResult = await sendMailWithSmtpFallback({
-          from: `"PlayPad Contact" <${smtpUser}>`,
-          to: smtpUser,
-          subject: `[PlayPad] Message de ${sanitizedEmail || 'utilisateur #' + req.session.userId}`,
-          html: `<p><b>De :</b> ${sanitizedEmail || 'inconnu'}</p><p><b>Message :</b></p><p>${sanitizedMsg}</p>`,
-        });
+        const sendResult = await sendMailWithSmtpFallback(mailPayload);
         if (sendResult?.usedFallback) {
           console.warn('[Contact] SMTP fallback utilisé (port alternatif)');
         }
         mailStatus = 'sent';
+        mailProvider = 'smtp';
       } catch (e) {
         mailStatus = 'failed';
         mailError = getMailFailureHint(e);
         console.error('[Contact] Email error:', e.code || e.responseCode || 'UNKNOWN', e.message);
+
+        // Hébergement bloquant SMTP sortant: fallback via API HTTPS Resend
+        if (mailError === 'smtp_connection_timeout' && getResendConfig()) {
+          try {
+            await sendMailWithResend(mailPayload);
+            mailStatus = 'sent';
+            mailError = null;
+            mailProvider = 'resend';
+            console.warn('[Contact] Email envoyé via fallback Resend');
+          } catch (re) {
+            mailStatus = 'failed';
+            mailError = 'resend_send_failed';
+            console.error('[Contact] Resend fallback error:', re.code || 'UNKNOWN', re.message);
+          }
+        }
+      }
+    } else if (getResendConfig()) {
+      try {
+        await sendMailWithResend(mailPayload);
+        mailStatus = 'sent';
+        mailProvider = 'resend';
+      } catch (re) {
+        mailStatus = 'failed';
+        mailError = 'resend_send_failed';
+        console.error('[Contact] Resend send error:', re.code || 'UNKNOWN', re.message);
       }
     } else {
-      console.warn('[Contact] SMTP non configuré: message enregistré en base uniquement');
+      console.warn('[Contact] SMTP et Resend non configurés: message enregistré en base uniquement');
     }
 
-    res.json({ ok: true, mailStatus, ...(mailError ? { mailError } : {}) });
+    res.json({ ok: true, mailStatus, ...(mailProvider ? { mailProvider } : {}), ...(mailError ? { mailError } : {}) });
   } catch (err) {
     console.error('[Contact]', err.message);
     res.status(500).json({ error: 'Erreur interne' });
@@ -3756,6 +3785,46 @@ function createMailTransporter(config = getSmtpConfig()) {
     greetingTimeout: 10000,
     socketTimeout: 15000,
   });
+}
+
+function getResendConfig() {
+  const apiKey = (process.env.RESEND_API_KEY || '').trim();
+  const from = (process.env.RESEND_FROM || '').trim();
+  const to = (process.env.RESEND_TO || '').trim();
+  if (!apiKey || !from || !to) return null;
+  return { apiKey, from, to };
+}
+
+async function sendMailWithResend({ from, to, subject, html }) {
+  const cfg = getResendConfig();
+  if (!cfg) {
+    const err = new Error('Resend config missing');
+    err.code = 'ERESEND_CONFIG';
+    throw err;
+  }
+
+  const payload = {
+    from: cfg.from || from,
+    to: [cfg.to || to],
+    subject,
+    html,
+  };
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${cfg.apiKey}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    const err = new Error(`Resend send failed (${response.status}) ${body}`);
+    err.code = 'ERESEND_SEND';
+    throw err;
+  }
 }
 
 function isGmailHost(host) {

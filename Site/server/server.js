@@ -3001,7 +3001,7 @@ async function fetchEsportFromPandaScore() {
   return items;
 }
 
-// Récupère les détails d'un match (équipes + joueurs via API séparée)
+// Récupère les détails d'un match (équipes, joueurs, streams, maps)
 async function fetchEsportMatchRoster(matchId, game) {
   const key = process.env.PANDASCORE_API_KEY;
   if (!key) return null;
@@ -3019,12 +3019,51 @@ async function fetchEsportMatchRoster(matchId, game) {
         players: players || [],
       };
     }));
+    // Extraire les streams (Twitch/YouTube)
+    const streams = [];
+    if (m.streams_list && Array.isArray(m.streams_list)) {
+      for (const s of m.streams_list) {
+        if (s.raw_url) {
+          const url = s.raw_url;
+          if (url.includes('twitch.tv')) {
+            const ch = url.split('twitch.tv/').pop()?.split('?')[0]?.split('/')[0];
+            if (ch) streams.push({ type: 'twitch', channel: ch, url });
+          } else if (url.includes('youtube.com') || url.includes('youtu.be')) {
+            let vid = '';
+            if (url.includes('youtube.com/watch')) vid = new URL(url).searchParams.get('v') || '';
+            else if (url.includes('youtu.be/')) vid = url.split('youtu.be/').pop()?.split('?')[0] || '';
+            if (vid) streams.push({ type: 'youtube', videoId: vid, url });
+          } else {
+            streams.push({ type: 'other', url });
+          }
+        }
+        if (streams.length > 0 && s.embed_url) {
+          const eu = s.embed_url;
+          if (eu.includes('twitch.tv') && !streams.find(x => x.type === 'twitch')) {
+            const ch = eu.match(/channel=([^&]+)/)?.[1] || '';
+            if (ch) streams.push({ type: 'twitch', channel: ch, url: eu });
+          }
+        }
+      }
+    }
+    // Extraire les games/maps
+    const maps = (m.games || []).map((g, i) => ({
+      name: g.name || `Map ${i + 1}`,
+      status: g.status || 'not_started',
+      winner: g.winner?.id || null,
+      scores: (g.results || []).map(r => r.score || 0),
+    }));
     return {
       teams,
       status: m.status,
       scores: (m.results || []).map(r => r.score),
       league: m.league?.name || '',
       tournament: m.tournament?.name || '',
+      streams,
+      maps,
+      beginAt: m.begin_at || null,
+      endAt: m.end_at || null,
+      liveUrl: m.live_url || m.match_url || '',
     };
   } catch (e) {
     console.error('[News] PandaScore roster error:', e.message);

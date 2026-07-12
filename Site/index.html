@@ -208,6 +208,7 @@ const API = {
   getEsportTeamPlayers: (game, teamId) => API.request('GET', `/api/esport/team/${game}/${teamId}`),
   getEsportPlayer: (game, playerId) => API.request('GET', `/api/esport/player/${game}/${playerId}`),
   getEsportTeamInfo: (teamId) => API.request('GET', `/api/esport/team/info/${teamId}`),
+  getEsportMatchRoster: (game, matchId) => API.request('GET', `/api/esport/match/${game}/${matchId}`),
   getEsportGames: () => API.request('GET', '/api/esport/games'),
   getNotifPrefs: () => API.request('GET', '/api/account/notifications'),
   setNotifPrefs: (emailNotifications) => API.request('POST', '/api/account/notifications', { emailNotifications }),
@@ -1430,14 +1431,14 @@ function MagView({ onSelectGame }) {
   const [esportFavorites, setEsportFavorites] = useState(new Set());
   const [esportGameFilter, setEsportGameFilter] = useState('');
   const [esportSearch, setEsportSearch] = useState('');
-  const [esportAllGames, setEsportAllGames] = useState([]);
+  const [_esportAllGames, _setEsportAllGames] = useState([]);
   const [showArchivedEsport, setShowArchivedEsport] = useState(false);
   const [showArchivedDrama, setShowArchivedDrama] = useState(false);
   const loadNews = useCallback(() => {
     setLoadingNews(true);
     Promise.all([
       API.getNews(),
-      API.getEsportGames().then(d => setEsportAllGames(d.games || [])).catch(() => {})
+      API.getEsportGames().then(d => _setEsportAllGames(d.games || [])).catch(() => {})
     ]).then(([news]) => {
       setEsportEvents(news.esport || []);
       setDramaItems(news.drama || []);
@@ -1675,29 +1676,37 @@ function NewsDetailSheet({ item, onClose }) {
   if (item.sourceUrl && item.sourceUrl !== item.officialUrl) links.push({ label: "Source : " + (item.sourceName || "Article"), url: item.sourceUrl, icon: ExternalLink });
   const { panelRef, overlayRef, onTouchStart, onTouchMove, onTouchEnd } = useSheetSwipe(onClose);
   // Team detail state
-  const [selectedTeam, setSelectedTeam] = useState(null);
-  const [teamPlayers, setTeamPlayers] = useState([]);
-  const [teamLoading, setTeamLoading] = useState(false);
-  const [teamInfo, setTeamInfo] = useState(null);
-  const [expandedPlayer, setExpandedPlayer] = useState(null);
-  const [playerDetail, setPlayerDetail] = useState(null);
+  const [matchDetail, setMatchDetail] = useState(null);
+  const [matchLoading, setMatchLoading] = useState(false);
+  const [matchComments, setMatchComments] = useState([]);
+  const [commentInput, setCommentInput] = useState('');
+  useEffect(() => {
+    if (isEsport && !matchDetail && !matchLoading && item.matchId && item.gameSlug) {
+      setMatchLoading(true);
+      API.getEsportMatchRoster(item.gameSlug, item.matchId).then(d => {
+        if (d && d.match) setMatchDetail(d.match);
+      }).catch(() => {}).finally(() => setMatchLoading(false));
+    }
+    // Charger les commentaires depuis localStorage
+    if (isEsport && item.matchId) {
+      try {
+        const saved = localStorage.getItem('esport_comments_' + item.matchId);
+        if (saved) setMatchComments(JSON.parse(saved));
+      } catch (e) {}
+    }
+  }, [isEsport, item.matchId, item.gameSlug]);
+  const postComment = () => {
+    const txt = commentInput.trim();
+    if (!txt) return;
+    const c = { id: Date.now(), text: txt, author: 'Moi', date: new Date().toISOString() };
+    const updated = [...matchComments, c];
+    setMatchComments(updated);
+    setCommentInput('');
+    try { localStorage.setItem('esport_comments_' + item.matchId, JSON.stringify(updated)); } catch (e) {}
+  };
   const [translatedContent, setTranslatedContent] = useState(null);
   const [showOriginal, setShowOriginal] = useState(false);
   const [translating, setTranslating] = useState(false);
-  const loadTeamPlayers = (team) => {
-    if (!item.gameSlug || !team.id) return;
-    setSelectedTeam(team);
-    setTeamLoading(true);
-    setTeamInfo(null);
-    setExpandedPlayer(null);
-    setPlayerDetail(null);
-    API.getEsportTeamPlayers(item.gameSlug, team.id).then(d => {
-      setTeamPlayers(d.players || []);
-    }).catch(() => {}).finally(() => setTeamLoading(false));
-    API.getEsportTeamInfo(team.id).then(d => {
-      if (d.team) setTeamInfo(d.team);
-    }).catch(() => {});
-  };
   return h('div', { className: "fixed inset-0 z-50" },
     h('div', { ref: overlayRef, className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
     h('div', { ref: panelRef, onTouchStart, onTouchMove, onTouchEnd, className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-y-auto", style: { maxHeight: "85%", scrollbarWidth: "none" } },
@@ -1735,116 +1744,138 @@ function NewsDetailSheet({ item, onClose }) {
             h('span', { key: 'p'+i, className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: "rgba(255,255,255,0.06)", color: "#8888aa" } }, p.trim())
           )
         ),
-        // Game badge + League/Tournament hierarchy for esport
-        isEsport && h('div', { className: "mt-2.5 space-y-1" },
-          h('div', { className: "flex items-center gap-2" },
-            h('span', { className: "px-2 py-0.5 rounded text-[8px] font-bold", style: { background: `${P1}20`, color: P1 } }, item.game),
-            item.league && h('span', { className: "text-[8px] text-muted-foreground" }, "\u25B6 ", item.league),
-            item.tournament && h('span', { className: "text-[8px] text-muted-foreground" }, "\u25B6 ", item.tournament),
+        // ─── E-SPORT: Match Dashboard ──────────────────
+        isEsport && item.sourceName === 'PandaScore' && h('div', { className: "mt-3" },
+          h('button', { onClick: onClose, className: "flex items-center gap-1.5 text-[10px] font-bold mb-3 transition-all hover:opacity-70", style: { color: P1 } },
+            h(ChevronLeft, { size: 14 }), "Retour \u00e0 l'E-sport"
           ),
-          item.event && item.event !== title && h('p', { className: "text-[9px] text-muted-foreground mt-0.5" }, "Match: ", item.event)
-        ),
-        // ─── E-SPORT: Game description ──────────────────────
-        isEsport && h('div', { className: "mt-4 p-3 rounded-2xl", style: { background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.12)" } },
-          h('p', { className: "text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5" }, "\u00c0 propos du jeu"),
-          h('p', { className: "text-xs text-foreground/80 leading-relaxed" }, item.desc || item.details || `Match de ${item.game} organisé par ${item.league || item.tournament || 'un tournoi'}.`)
-        ),
-        // ─── E-SPORT: Teams (clickable) ────────────────────
-        isEsport && item.teams && item.teams.length > 0 && h('div', { className: "mt-4" },
-          h('p', { className: "text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3" }, isLive ? "\u26a1 Match en cours" : "\u00c9quipes participantes"),
-          h('div', { className: "space-y-2" },
-            item.teams.map((t, i) =>
-              h('div', { key: i, onClick: () => loadTeamPlayers(t), className: "flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98]", style: { background: selectedTeam?.id === t.id ? "rgba(139,92,246,0.1)" : "rgba(255,255,255,0.03)", border: selectedTeam?.id === t.id ? "1px solid rgba(139,92,246,0.3)" : "1px solid rgba(255,255,255,0.06)" } },
-                t.logo
-                  ? h('img', { src: t.logo, alt: t.name, className: "w-10 h-10 object-contain rounded-xl flex-shrink-0", style: { background: "rgba(255,255,255,0.05)" } })
-                  : h('div', { className: "w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white flex-shrink-0", style: { background: GRAD } }, (t.name || '?')[0]),
-                h('div', { className: "flex-1 min-w-0" },
-                  h('p', { className: "text-sm font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, t.name),
-                  h('p', { className: "text-[9px] text-muted-foreground mt-0.5" }, "Clique pour voir les joueurs")
-                ),
-                item.scores && item.scores[i] !== undefined && h('span', { className: "text-xl font-black px-2", style: { color: isLive ? "#22c55e" : P1 } }, item.scores[i]),
-                h(ChevronRight, { size: 14, className: "text-muted-foreground flex-shrink-0" })
+          // VS Header
+          h('div', { className: "rounded-2xl p-4 mb-3 text-center", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" } },
+            h('div', { className: "flex items-center justify-center gap-3" },
+              // Team A
+              h('div', { className: "flex flex-col items-center gap-1 w-[80px]" },
+                item.teams?.[0]?.logo
+                  ? h('img', { src: item.teams[0].logo, alt: item.teams[0].name, className: "w-10 h-10 object-contain rounded-xl", style: { background: "rgba(255,255,255,0.05)" } })
+                  : h('div', { className: "w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white", style: { background: GRAD } }, (item.teams?.[0]?.name || '?')[0]),
+                h('span', { className: "text-[9px] font-bold text-foreground truncate w-full text-center" }, item.teams?.[0]?.name || '?')
+              ),
+              // Score VS
+              h('div', { className: "flex items-center gap-2" },
+                h('span', { className: "text-2xl font-black font-mono", style: { color: isLive ? "#22c55e" : tagColor } }, matchDetail?.scores?.[0] ?? item.scores?.[0] ?? '0'),
+                h('span', { className: "text-base font-black text-muted-foreground" }, ":"),
+                h('span', { className: "text-2xl font-black font-mono", style: { color: isLive ? "#22c55e" : tagColor } }, matchDetail?.scores?.[1] ?? item.scores?.[1] ?? '0')
+              ),
+              // Team B
+              h('div', { className: "flex flex-col items-center gap-1 w-[80px]" },
+                item.teams?.[1]?.logo
+                  ? h('img', { src: item.teams[1].logo, alt: item.teams[1].name, className: "w-10 h-10 object-contain rounded-xl", style: { background: "rgba(255,255,255,0.05)" } })
+                  : h('div', { className: "w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white", style: { background: GRAD } }, (item.teams?.[1]?.name || '?')[0]),
+                h('span', { className: "text-[9px] font-bold text-foreground truncate w-full text-center" }, item.teams?.[1]?.name || '?')
               )
+            ),
+            h('div', { className: "flex items-center justify-center gap-2 mt-2" },
+              isLive && h('span', { className: "px-2 py-0.5 rounded text-[8px] font-bold animate-pulse", style: { background: "rgba(34,197,94,0.2)", color: "#22c55e" } }, "EN DIRECT"),
+              item.league && h('span', { className: "text-[8px] text-muted-foreground" }, item.league),
+              item.date && h('span', { className: "text-[8px] text-muted-foreground" }, "\u00B7", item.date)
             )
           ),
-          // ─── Team players roster ──────────────────────────
-          selectedTeam && h('div', { className: "mt-3 p-3 rounded-2xl", style: { background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.15)" } },
-            // Team info header
-            teamInfo && h('div', { className: "flex items-center gap-2 mb-2 p-2 rounded-xl text-[9px]", style: { background: "rgba(255,255,255,0.03)" } },
-              teamInfo.imageUrl && h('img', { src: teamInfo.imageUrl, alt: teamInfo.name, className: "w-6 h-6 object-contain rounded" }),
-              h('div', { className: "flex-1" },
-                h('p', { className: "font-bold text-foreground text-[10px]" }, teamInfo.name, teamInfo.acronym ? ` (${teamInfo.acronym})` : ''),
-                h('p', { className: "text-muted-foreground" },
-                  teamInfo.location ? `${teamInfo.location} ` : '',
-                  teamInfo.currentVideogame ? `\u2022 ${teamInfo.currentVideogame}` : '',
-                  teamInfo.players?.length ? `\u2022 ${teamInfo.players.length} joueurs` : ''
-                )
-              ),
-              h('a', {
-                href: `https://liquipedia.net/${item.gameSlug}/${selectedTeam.name.replace(/ /g, '_')}`,
-                target: "_blank", rel: "noopener noreferrer",
-                className: "px-2 py-1 rounded-lg font-bold transition-colors flex-shrink-0",
-                style: { background: `${P1}20`, color: P1 }
-              }, "Palmar\u00e8s")
-            ),
-            h('div', { className: "flex items-center justify-between mb-3" },
-              h('p', { className: "text-[10px] font-bold uppercase tracking-wider", style: { color: "#a78bfa" } }, 
-                "Joueurs ", selectedTeam.name
-              ),
-              h('button', { onClick: () => setSelectedTeam(null), className: "text-[9px] font-bold px-2 py-1 rounded-lg", style: { background: "rgba(255,255,255,0.06)", color: "#8888aa" } }, "Fermer")
-            ),
-            teamLoading && h('div', { className: "flex justify-center py-4" }, h(Loader, { size: 14, className: "animate-spin", style: { color: P1 } })),
-            !teamLoading && teamPlayers.length === 0 && h('p', { className: "text-[10px] text-muted-foreground text-center py-3" }, "Aucune information sur les joueurs disponible pour cette équipe"),
-              h('div', { className: "space-y-2" }, teamPlayers.map(p =>
-                h('div', { key: p.id },
-                  h('div', { className: "flex items-center gap-2.5 p-2.5 rounded-xl transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.03)" } },
-                    p.imageUrl
-                      ? h('img', { src: p.imageUrl, alt: p.name, className: "w-9 h-9 rounded-full object-cover flex-shrink-0" })
-                      : h('div', { className: "w-9 h-9 rounded-full flex items-center justify-center text-xs font-black text-white flex-shrink-0", style: { background: GRAD } }, (p.name || '?')[0]),
-                    h('div', { className: "flex-1 min-w-0" },
-                      h('p', { className: "text-xs font-bold text-foreground" }, p.name),
-                      h('p', { className: "text-[8px] text-muted-foreground" }, 
-                        [p.firstName, p.lastName].filter(Boolean).join(' '), 
-                        p.role ? ` \u2022 ${p.role}` : '',
-                        p.nationality ? ` \u2022 ${p.nationality}` : ''
+          // ─── STREAM ──────────────────────────────
+          matchDetail?.streams?.length > 0 && h('div', { className: "mb-3 rounded-2xl overflow-hidden border", style: { borderColor: "rgba(255,255,255,0.06)" } },
+            h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground px-3 pt-2 pb-1" }, isLive ? "Regarder en direct" : "Replay / VOD"),
+            h('div', { className: "relative", style: { aspectRatio: "16/9" } },
+              matchDetail.streams[0].type === 'twitch'
+                ? h('iframe', { src: `https://player.twitch.tv/?channel=${matchDetail.streams[0].channel}&parent=localhost`, title: "Stream Twitch", className: "w-full h-full", allow: "autoplay; encrypted-media", allowFullScreen: true })
+                : matchDetail.streams[0].type === 'youtube'
+                  ? h('iframe', { src: `https://www.youtube.com/embed/${matchDetail.streams[0].videoId}?autoplay=0`, title: "Stream YouTube", className: "w-full h-full", allow: "autoplay; encrypted-media", allowFullScreen: true })
+                  : h('div', { className: "flex items-center justify-center w-full h-full bg-secondary/40 text-[10px] text-muted-foreground" }, "Stream non disponible")
+            )
+          ),
+          !matchDetail?.streams?.length && matchDetail?.liveUrl && h('a', { href: matchDetail.liveUrl, target: "_blank", rel: "noopener noreferrer", className: "flex items-center justify-center gap-2 mb-3 px-3 py-2.5 rounded-xl text-[10px] font-bold transition-all", style: { background: `${P1}20`, color: P1 } },
+            h(ExternalLink, { size: 12 }), "Voir le match en direct"
+          ),
+          // ─── MAPS / SCOREBOARD ──────────────────
+          matchDetail?.maps?.length > 0 && h('div', { className: "mb-3" },
+            h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5" }, h(Monitor, { size: 11 }), "Cartes"),
+            h('div', { className: "space-y-1.5" },
+              matchDetail.maps.map((map, i) => {
+                const ms = map.status === 'finished' ? 'Termin\u00e9' : map.status === 'running' ? 'En cours' : '\u00c0 venir';
+                const mc = map.status === 'finished' ? '#22c55e' : map.status === 'running' ? '#fbbf24' : '#6666aa';
+                return h('div', { key: i, className: "flex items-center gap-2 p-2 rounded-xl", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" } },
+                  h('div', { className: "w-1 h-6 rounded-full flex-shrink-0", style: { background: mc } }),
+                  h('span', { className: "text-[9px] font-bold text-foreground flex-1" }, map.name),
+                  h('span', { className: "text-[9px] font-mono font-bold", style: { color: mc } }, map.scores?.join(' - ') || '? - ?'),
+                  h('span', { className: "text-[7px] px-1.5 py-0.5 rounded font-bold", style: { background: mc + '20', color: mc } }, ms)
+                );
+              })
+            )
+          ),
+          // ─── LINE-UPS (par équipe) ──────────────
+          h('div', { className: "mb-3" },
+            h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5" }, h(Users, { size: 11 }), "Line-ups"),
+            matchLoading
+              ? h('div', { className: "flex justify-center py-4" }, h(Loader, { size: 12, className: "animate-spin", style: { color: P1 } }))
+              : !matchDetail?.teams?.some(t => t.players?.length)
+                ? h('p', { className: "text-[9px] text-muted-foreground italic py-2" }, "Compositions non disponibles")
+                : h('div', { className: "space-y-2" },
+                    (matchDetail?.teams || []).map((team, ti) =>
+                      h('div', { key: ti, className: "rounded-xl p-2.5", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" } },
+                        h('div', { className: "flex items-center gap-2 mb-2" },
+                          team.logo ? h('img', { src: team.logo, alt: team.name, className: "w-6 h-6 object-contain rounded" }) : h('div', { className: "w-6 h-6 rounded flex items-center justify-center text-[8px] font-black text-white", style: { background: GRAD } }, (team.name || '?')[0]),
+                          h('span', { className: "text-[9px] font-bold text-foreground" }, team.name)
+                        ),
+                        team.players?.length > 0
+                          ? h('div', { className: "space-y-1" },
+                              team.players.map(p =>
+                                h('div', { key: p.id, className: "flex items-center gap-2 p-1.5 rounded-lg", style: { background: "rgba(255,255,255,0.03)" } },
+                                  p.imageUrl ? h('img', { src: p.imageUrl, alt: p.name, className: "w-7 h-7 rounded-full object-cover flex-shrink-0" }) : h('div', { className: "w-7 h-7 rounded-full flex items-center justify-center text-[7px] font-black text-white flex-shrink-0", style: { background: GRAD } }, (p.name || '?')[0]),
+                                  h('div', { className: "flex-1 min-w-0" },
+                                    h('p', { className: "text-[9px] font-bold text-foreground truncate" }, p.name),
+                                    p.role && h('p', { className: "text-[7px] text-muted-foreground truncate" }, p.role)
+                                  ),
+                                  p.slug && h('a', {
+                                    href: `https://liquipedia.net/${item.gameSlug}/${p.name.replace(/ /g, '_')}`,
+                                    target: "_blank", rel: "noopener noreferrer",
+                                    className: "px-1.5 py-0.5 rounded text-[7px] font-bold transition-colors",
+                                    style: { background: `${P1}20`, color: P1 }
+                                  }, "Profil")
+                                )
+                              )
+                            )
+                          : h('p', { className: "text-[8px] text-muted-foreground italic" }, "Aucun joueur list\u00e9")
                       )
-                    ),
-                    p.slug && h('button', {
-                      onClick: (e) => {
-                        e.stopPropagation();
-                        if (expandedPlayer === p.id) { setExpandedPlayer(null); setPlayerDetail(null); return; }
-                        setExpandedPlayer(p.id);
-                        setPlayerDetail(null);
-                        API.getEsportPlayer(item.gameSlug, p.id).then(d => setPlayerDetail(d.player || {}));
-                      },
-                      className: "px-2 py-1 rounded-lg text-[8px] font-bold transition-colors",
-                      style: { background: expandedPlayer === p.id ? `${P1}40` : `${P1}20`, color: P1 }
-                    }, expandedPlayer === p.id ? "Masquer" : "Plus d'infos")
-                  ),
-                  expandedPlayer === p.id && h('div', { className: "mx-2.5 mb-2 p-2.5 rounded-xl text-[9px]", style: { background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.15)" } },
-                    !playerDetail
-                      ? h('div', { className: "flex items-center gap-2 py-1" }, h(Loader, { size: 10, className: "animate-spin", style: { color: P1 } }), "Chargement...")
-                      : playerDetail.id === undefined
-                        ? h('p', { className: "text-muted-foreground text-center py-1" }, "Aucune information supplémentaire disponible")
-                        : h('div', { className: "space-y-1" },
-                            playerDetail.firstName && playerDetail.lastName && h('p', {}, "\uD83D\uDC64 ", playerDetail.firstName, " ", playerDetail.lastName),
-                            playerDetail.role && h('p', {}, "\uD83C\uDFAE Rôle: ", playerDetail.role),
-                            playerDetail.nationality && h('p', {}, "\uD83C\uDF0D Nationalité: ", playerDetail.nationality),
-                            playerDetail.age && h('p', {}, "\uD83C\uDFC2 Âge: ", playerDetail.age),
-                            playerDetail.hometown && h('p', {}, "\uD83C\uDFE0 Ville: ", playerDetail.hometown),
-                            playerDetail.birthday && h('p', {}, "\uD83C\uDF89 Anniversaire: ", playerDetail.birthday),
-                            playerDetail.currentTeam && h('p', {}, "\uD83C\uDFC6 Équipe: ", playerDetail.currentTeam),
-                            playerDetail.earnings && h('p', {}, "\uD83D\uDCB0 Gains: ", playerDetail.earnings),
-                            playerDetail.slug && h('a', {
-                              href: `https://liquipedia.net/${item.gameSlug}/${playerDetail.name.replace(/ /g, '_')}`,
-                              target: "_blank", rel: "noopener noreferrer",
-                              className: "inline-block mt-1.5 px-2 py-1 rounded-lg text-[8px] font-bold transition-colors",
-                              style: { background: `${P1}20`, color: P1 }
-                            }, "\uD83D\uDD0D Voir le parcours complet")
-                          )
+                    )
                   )
-                )))
+          ),
+          // ─── ESPACE COMMENTAIRES ────────────────
+          h('div', { className: "mt-4 pt-3 border-t", style: { borderColor: "rgba(255,255,255,0.06)" } },
+            h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5" }, h(MessageCircle, { size: 11 }), "Commentaires (", matchComments.length, ")"),
+            h('div', { className: "flex items-center gap-2 mb-2" },
+              h('input', { value: commentInput, onChange: e => setCommentInput(e.target.value), onKeyDown: e => { if (e.key === 'Enter') postComment(); }, placeholder: "Réagis au match...", className: "flex-1 bg-secondary/60 border border-border rounded-xl px-3 py-2 text-[9px] text-foreground placeholder-muted-foreground outline-none" }),
+              h('button', { onClick: postComment, className: "px-3 py-2 rounded-xl text-[9px] font-bold transition-all hover:opacity-80", style: { background: commentInput.trim() ? P1 : `${P1}40`, color: '#fff' } }, "Envoyer")
+            ),
+            matchComments.length === 0
+              ? h('p', { className: "text-[8px] text-muted-foreground italic" }, "Soyez le premier à commenter ce match !")
+              : h('div', { className: "space-y-1.5 max-h-40 overflow-y-auto", style: { scrollbarWidth: "thin" } },
+                  matchComments.slice().reverse().map(c =>
+                    h('div', { key: c.id, className: "flex items-start gap-2 p-2 rounded-xl", style: { background: "rgba(255,255,255,0.02)" } },
+                      h('div', { className: "w-5 h-5 rounded-full flex items-center justify-center text-[6px] font-black text-white flex-shrink-0", style: { background: GRAD } }, (c.author || '?')[0]),
+                      h('div', { className: "flex-1 min-w-0" },
+                        h('div', { className: "flex items-center gap-1.5" },
+                          h('span', { className: "text-[8px] font-bold text-foreground" }, c.author),
+                          h('span', { className: "text-[6px] text-muted-foreground" }, new Date(c.date).toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit' }))
+                        ),
+                        h('p', { className: "text-[8px] text-foreground/80 mt-0.5" }, c.text)
+                      )
+                    )
+                  )
+                )
           )
+        ),
+        // ─── E-SPORT: Article (HLTV etc.) ────────
+        isEsport && item.sourceName !== 'PandaScore' && h('div', { className: "mt-3 p-3 rounded-2xl", style: { background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.12)" } },
+          h('p', { className: "text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5" }, "\u00c0 propos du jeu"),
+          h('p', { className: "text-xs text-foreground/80 leading-relaxed" }, item.desc || item.details || `Actualit\u00e9 ${item.game}`),
+          item.officialUrl && h('a', { href: item.officialUrl, target: "_blank", rel: "noopener noreferrer", className: "inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg text-[9px] font-bold transition-colors", style: { background: `${P1}20`, color: P1 } }, h(ExternalLink, { size: 10 }), "Lire l'article")
         ),
         // Source badge for drama/actus/articles with live link + translate button
         (isDrama || isArticle) && h('div', { className: "flex items-center gap-2 mt-3" },
@@ -1868,8 +1899,8 @@ function NewsDetailSheet({ item, onClose }) {
         !isEsport && h('p', { className: "text-sm sm:text-base text-foreground/80 mt-4 leading-relaxed whitespace-pre-wrap" },
           showOriginal ? (item.details || item.desc) : (translatedContent || item.details || item.desc)
         ),
-        // Links
-        links.length > 0 && h('div', { className: "mt-5 space-y-2" },
+        // Links (pas pour esport, déjà inline)
+        !isEsport && links.length > 0 && h('div', { className: "mt-5 space-y-2" },
           h('p', { className: "text-[10px] font-bold uppercase tracking-wider text-muted-foreground" }, "Liens"),
           links.map((l, i) =>
             h('a', { key: i, href: l.url, target: "_blank", rel: "noopener noreferrer", className: "flex items-center gap-2.5 p-3 rounded-xl text-xs font-bold transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" } },

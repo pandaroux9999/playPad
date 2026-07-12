@@ -337,16 +337,10 @@ async function savePublicReview(userId, gameId, rating, reviewText, gameTitle, g
 }
 
 async function getGameReviews(gameId) {
-  let gameIds = [gameId];
-  const { data: catEntry } = await supabaseAdmin.from('catalog').select('title').eq('game_id', gameId).maybeSingle();
-  if (catEntry?.title) {
-    const { data: related } = await supabaseAdmin.from('catalog').select('game_id').ilike('title', catEntry.title);
-    if (related?.length > 1) gameIds = [...new Set(related.map(r => r.game_id))];
-  }
   const { data, error } = await supabaseAdmin
     .from('community_reviews')
     .select(`*, users(display_name, username)`)
-    .in('game_id', gameIds)
+    .eq('game_id', gameId)
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return data || [];
@@ -559,9 +553,9 @@ async function removeGameSuggestion(id, userId) {
 }
 
 async function ensureCatalogGame(game) {
-  const { game_id, title, platform, cover, genre, year, developer, publisher, description } = game;
+  const { game_id, title, platform, cover, genre, year, developer, publisher, description, editorial_score, user_score, platforms_raw, jv_url, age_rating } = game;
   if (!game_id || !title) return;
-  const payload = { game_id, title, platform: platform || '', cover: cover || '', genre: genre || '', year: year || 0, developer: developer || '', publisher: publisher || '' };
+  const payload = { game_id, title, platform: platform || '', cover: cover || '', genre: genre || '', year: year || 0, developer: developer || '', publisher: publisher || '', editorial_score: editorial_score || '', user_score: user_score || '', platforms_raw: platforms_raw || '', jv_url: jv_url || '', age_rating: age_rating || 0 };
   if (description) payload.description = description;
   const { error } = await supabaseAdmin
     .from('catalog')
@@ -584,15 +578,99 @@ async function ensureCatalogGame(game) {
 
 async function batchUpsertCatalog(games) {
   if (!games || games.length === 0) return;
+  games = games.filter(g => g.game_id?.startsWith('jv-'));
+  if (games.length === 0) return;
+  const now = new Date().toISOString();
   const payloads = games.map(g => ({
     game_id: g.game_id, title: g.title, platform: g.platform || '',
     cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
-    developer: g.developer || '', publisher: g.publisher || ''
+    developer: g.developer || '', publisher: g.publisher || '',
+    description: g.description || '',
+    editorial_score: g.editorial_score || '',
+    user_score: g.user_score || '',
+    platforms_raw: g.platforms_raw || '',
+    jv_url: g.jv_url || '',
+    age_rating: g.age_rating || 0,
+    updated_at: now,
   }));
-  const { error } = await supabaseAdmin
-    .from('catalog')
-    .upsert(payloads, { onConflict: 'game_id', ignoreDuplicates: false });
-  if (error) console.error('[batchUpsertCatalog] Error:', error.message);
+  const { error } = await supabaseAdmin.from('catalog').upsert(payloads, { onConflict: 'game_id', ignoreDuplicates: true });
+  if (error) {
+    // Retry sans les colonnes avancées (si elles n'existent pas encore)
+    const basic = games.map(g => ({
+      game_id: g.game_id, title: g.title, platform: g.platform || '',
+      cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
+      developer: g.developer || '', publisher: g.publisher || '',
+      description: g.description || '',
+    }));
+    const { error: e2 } = await supabaseAdmin.from('catalog').upsert(basic, { onConflict: 'game_id', ignoreDuplicates: true });
+    if (e2) console.error('[batchUpsertCatalog] Fallback error:', e2.message);
+    else {
+      // Mise à jour en 2 passes : d'abord les basics, puis les colonnes avancées
+      const extra = games.map(g => ({
+        game_id: g.game_id,
+        editorial_score: g.editorial_score || '',
+        user_score: g.user_score || '',
+        platforms_raw: g.platforms_raw || '',
+        jv_url: g.jv_url || '',
+        age_rating: g.age_rating || 0,
+        updated_at: now,
+      }));
+      const { error: e3 } = await supabaseAdmin.from('catalog').upsert(extra, { onConflict: 'game_id' });
+      if (e3) { /* colonnes pas encore créées, pas grave */ }
+    }
+  }
+  invalidateCatalogCache();
+}
+
+async function batchUpsertUserGames(userId, games) {
+  if (!games || games.length === 0) return;
+  const payloads = games.map(g => ({
+    user_id: userId, game_id: g.game_id, title: g.title,
+    platform: g.platform || '', genre: g.genre || '',
+    cover: g.cover || '', status: g.status || 'not_started',
+    playtime: g.playtime || 0, year: g.year || 0,
+    user_rating: g.user_rating || 0, review_text: g.review_text || '',
+    review_public: g.review_public !== false,
+    has_review: g.has_review ? true : false,
+    developer: g.developer || '', publisher: g.publisher || '',
+  }));
+  const { error } = await supabaseAdmin.from('games').upsert(payloads, { onConflict: 'user_id, game_id' });
+  if (error && error.message?.includes('developer')) {
+    const basic = payloads.map(p => ({ user_id: p.user_id, game_id: p.game_id, title: p.title, platform: p.platform, genre: p.genre, cover: p.cover, status: p.status, playtime: p.playtime, year: p.year, user_rating: p.user_rating, review_text: p.review_text, review_public: p.review_public, has_review: p.has_review }));
+    const { error: e2 } = await supabaseAdmin.from('games').upsert(basic, { onConflict: 'user_id, game_id' });
+    if (e2) console.error('[batchUpsertUserGames] Error:', e2.message);
+  }
+}
+
+async function batchUpsertCatalogSteam(games) {
+  if (!games || games.length === 0) return;
+  const payloads = games.map(g => ({
+    game_id: g.game_id, title: g.title, platform: g.platform || '',
+    cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
+    developer: g.developer || '', publisher: g.publisher || '',
+    description: g.description || '',
+  }));
+  const { error } = await supabaseAdmin.from('catalog').upsert(payloads, { onConflict: 'game_id', ignoreDuplicates: true });
+  if (error) console.error('[batchUpsertCatalogSteam] Error:', error.message);
+  invalidateCatalogCache();
+}
+
+async function clearCatalog() {
+  const { data: all, error: fetchError } = await supabaseAdmin.from('catalog').select('game_id').limit(100000);
+  if (fetchError) throw new Error(fetchError.message);
+  if (!all || all.length === 0) return;
+  const ids = all.map(r => r.game_id).filter(Boolean);
+  for (let i = 0; i < ids.length; i += 500) {
+    const batch = ids.slice(i, i + 500);
+    const { error } = await supabaseAdmin.from('catalog').delete().in('game_id', batch);
+    if (error) throw new Error(error.message);
+  }
+  invalidateCatalogCache();
+}
+
+async function deleteCatalogGame(gameId) {
+  const { error } = await supabaseAdmin.from('catalog').delete().eq('game_id', gameId);
+  if (error) throw new Error(error.message);
   invalidateCatalogCache();
 }
 
@@ -698,10 +776,75 @@ async function getCatalog() {
   return data;
 }
 
-async function getCatalogPage(page = 1, limit = 500) {
-  const all = await getCatalog();
+async function queryCatalog({ search, letter, platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating, page = 1, limit = 60 }) {
+  // Construction de la requête Supabase avec filtres
+  let query = supabaseAdmin.from('catalog').select('*', { count: 'exact' });
+  if (search && search.trim()) {
+    const s = search.trim().toLowerCase();
+    // On filtre en mémoire pour la recherche (fonctionne sur tout le cache)
+    const all = await getCatalog();
+    let filtered = all.filter(g => (g.title || '').toLowerCase().includes(s));
+    if (letter && letter !== 'all') {
+      if (letter === '#') { const lr = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/; filtered = filtered.filter(g => !lr.test(g.title || '')); }
+      else { const l = letter.toLowerCase(); filtered = filtered.filter(g => (g.title || '').toLowerCase().startsWith(l)); }
+    }
+    const total = filtered.length;
+    const offset = (page - 1) * limit;
+    return { data: filtered.slice(offset, offset + limit), total, page, limit };
+  }
+  // Lettre / tri
+  if (letter && letter !== 'all') {
+    if (letter === '#') {
+      const all = await getCatalog();
+      const lr = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/;
+      let filtered = all.filter(g => !lr.test(g.title || ''));
+      filtered = applyExtraFilters(filtered, { platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating });
+      const total = filtered.length;
+      const offset = (page - 1) * limit;
+      return { data: filtered.slice(offset, offset + limit), total, page, limit };
+    }
+    query = query.ilike('title', letter.toLowerCase() + '%');
+  }
+  // Filtres simples (via Supabase)
+  if (platform && platform !== 'all') query = query.or(`platform.eq.${platform},platforms_raw.ilike.%${platform}%`);
+  if (genre && genre !== 'all') query = query.eq('genre', genre);
+  if (yearMin) query = query.gte('year', parseInt(yearMin));
+  if (yearMax) query = query.lte('year', parseInt(yearMax));
+  if (ageRating) { const a = parseInt(ageRating); query = query.gte('age_rating', a); }
+  // Scores (editorial, user) — on les filtre en mémoire car format string "X/20"
+  const hasScoreFilter = editorialMin || editorialMax || userScoreMin || userScoreMax;
+  // Pagination + tri
   const offset = (page - 1) * limit;
-  return all.slice(offset, offset + limit);
+  if (!hasScoreFilter) {
+    const total = await getCatalogCount();
+    query = query.order('title').range(offset, offset + limit - 1);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return { data: data || [], total, page, limit };
+  }
+  // Avec filtres de score → chargement + filtre en mémoire
+  const all = await getCatalog();
+  let filtered = applyExtraFilters(all, { platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating });
+  if (letter && letter !== 'all') {
+    if (letter === '#') { const lr = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/; filtered = filtered.filter(g => !lr.test(g.title || '')); }
+    else { const l = letter.toLowerCase(); filtered = filtered.filter(g => (g.title || '').toLowerCase().startsWith(l)); }
+  }
+  const total = filtered.length;
+  return { data: filtered.slice(offset, offset + limit), total, page, limit };
+}
+
+function applyExtraFilters(games, { platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating }) {
+  let filtered = games;
+  if (platform && platform !== 'all') filtered = filtered.filter(g => g.platform === platform || (g.platforms_raw || '').toLowerCase().includes(platform.toLowerCase()));
+  if (genre && genre !== 'all') filtered = filtered.filter(g => (g.genre || '').toLowerCase() === genre.toLowerCase());
+  if (yearMin) filtered = filtered.filter(g => g.year >= parseInt(yearMin));
+  if (yearMax) filtered = filtered.filter(g => g.year <= parseInt(yearMax));
+  if (ageRating) { const a = parseInt(ageRating); filtered = filtered.filter(g => g.age_rating >= a); }
+  if (editorialMin) filtered = filtered.filter(g => parseFloat(g.editorial_score) >= parseFloat(editorialMin));
+  if (editorialMax) filtered = filtered.filter(g => parseFloat(g.editorial_score) <= parseFloat(editorialMax));
+  if (userScoreMin) filtered = filtered.filter(g => parseFloat(g.user_score) >= parseFloat(userScoreMin));
+  if (userScoreMax) filtered = filtered.filter(g => parseFloat(g.user_score) <= parseFloat(userScoreMax));
+  return filtered;
 }
 
 async function searchCatalog({ search, letter, page = 1, limit = 500 }) {
@@ -730,6 +873,17 @@ async function getCatalogCount() {
     .select('*', { count: 'exact', head: true });
   if (error) throw new Error(error.message);
   return count || 0;
+}
+
+async function getRecentReleases() {
+  const { data, error } = await supabaseAdmin
+    .from('catalog')
+    .select('*')
+    .gte('year', 2024)
+    .order('year', { ascending: false })
+    .limit(20);
+  if (error) throw new Error(error.message);
+  return data || [];
 }
 
 async function deleteAllUserGames(userId) {
@@ -1537,12 +1691,17 @@ module.exports = {
   resetAllData,
   ensureCatalogGame,
   batchUpsertCatalog,
+  batchUpsertUserGames,
+  batchUpsertCatalogSteam,
+  clearCatalog,
+  deleteCatalogGame,
   dedupeCatalog,
   mergeCatalogDuplicatesByTitle,
   getCatalog,
-  getCatalogPage,
   getCatalogCount,
   searchCatalog,
+  queryCatalog,
+  getRecentReleases,
   invalidateCatalogCache,
   updateGamePlatform,
   deletePlatformGames,

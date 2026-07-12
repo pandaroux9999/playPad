@@ -496,6 +496,38 @@ app.get('/api/reviews/:id/replies', requireAuth, async (req, res) => {
   }
 });
 
+app.delete('/api/reviews/game/:gameId', requireAuth, async (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const { data: reviews } = await db.supabaseAdmin
+      .from('community_reviews')
+      .select('id')
+      .eq('game_id', gameId);
+    const ids = (reviews || []).map(r => r.id);
+    if (ids.length > 0) {
+      const { error: voteErr } = await db.supabaseAdmin
+        .from('review_votes')
+        .delete()
+        .in('review_id', ids);
+      if (voteErr) console.error('[DeleteGameReviews] vote error:', voteErr.message);
+      const { error: replyErr } = await db.supabaseAdmin
+        .from('review_replies')
+        .delete()
+        .in('review_id', ids);
+      if (replyErr) console.error('[DeleteGameReviews] reply error:', replyErr.message);
+    }
+    const { error, count } = await db.supabaseAdmin
+      .from('community_reviews')
+      .delete()
+      .eq('game_id', gameId);
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, deleted: count || 0 });
+  } catch (err) {
+    console.error('[DeleteGameReviews] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/games/reviews', requireAuth, async (req, res) => {
   try {
     const { gameId } = req.query;
@@ -589,31 +621,21 @@ app.get('/api/games/ratings', async (req, res) => {
 
 app.get('/api/catalog', catalogLimiter, async (req, res) => {
   try {
-    const { search, letter } = req.query;
+    const { search, letter, platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating } = req.query;
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 60, 500);
-    if (search || (letter && letter !== 'all')) {
-      const result = await db.searchCatalog({ search, letter, page, limit });
-      return res.json({ catalog: result.data, total: result.total, page, limit });
-    }
-    const catalog = await db.getCatalog();
-    const offset = (page - 1) * limit;
-    const total = catalog.length;
-    res.json({ catalog: catalog.slice(offset, offset + limit), total, page, limit });
+    const result = await db.queryCatalog({ search, letter, platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating, page, limit });
+    res.json({ catalog: result.data, total: result.total, page, limit });
   } catch (err) {
-    console.error('[Catalog] Error:', err.message, 'query:', JSON.stringify({ search: req.query.search, letter: req.query.letter, page: req.query.page }));
+    console.error('[Catalog] Error:', err.message, 'query:', JSON.stringify(req.query));
     res.status(500).json({ error: 'Erreur interne' });
   }
 });
 
 app.get('/api/catalog/new-releases', async (req, res) => {
   try {
-    const now = Date.now();
-    if (now - lastNewReleasesFetch > NEW_RELEASES_TTL || newReleasesCache.length === 0) {
-      newReleasesCache = await fetchNewReleases();
-      lastNewReleasesFetch = now;
-    }
-    res.json({ releases: newReleasesCache });
+    const releases = await db.getRecentReleases();
+    res.json({ releases });
   } catch (err) {
     console.error('[NewReleases] Error:', err.message);
     res.status(500).json({ error: 'Erreur interne' });
@@ -803,7 +825,6 @@ app.get('/api/auth/steam/callback', async (req, res) => {
 
 // Récupère les jeux Steam (+ achievements)
 async function fetchSteamGames(apiKey, steamId) {
-  // GetOwnedGames
   const ownedData = await steamApiGet(apiKey, 'IPlayerService', 'GetOwnedGames', { steamid: steamId, include_appinfo: true });
   if (!ownedData?.response?.games) {
     console.error('[SteamAPI] GetOwnedGames réponse inattendue:', JSON.stringify(ownedData).slice(0, 500));
@@ -811,37 +832,22 @@ async function fetchSteamGames(apiKey, steamId) {
   const list = ownedData?.response?.games || [];
   console.log('[SteamAPI] GetOwnedGames OK —', list.length, 'jeux pour steamId', steamId);
 
-  // Pour chaque jeu, tente de récupérer les achievements
-  const gameResults = [];
-  for (const g of list) {
-    const game = {
-      game_id: 'steam-' + g.appid,
-      title: g.name || 'Unknown',
-      platform: 'steam',
-      playtime: Math.round((g.playtime_forever || 0) / 60),
-      cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.appid}/library_600x900.jpg`,
-      genre: '',
-      year: 0,
-      status: g.playtime_forever > 0 ? 'playing' : 'not_started',
-      user_rating: 0,
-      review_text: '',
-      review_public: true,
-      has_review: 0,
-    };
-
-    // Tente achievements (limité aux jeux où l'utilisateur en a)
-    try {
-      const achData = await steamApiGet(apiKey, 'ISteamUserStats', 'GetPlayerAchievements', { steamid: steamId, appid: g.appid, l: 'french' });
-      const achievements = achData?.playerstats?.achievements || [];
-      if (achievements.length > 0) {
-        game.achievements_unlocked = achievements.filter(a => a.achieved === 1).length;
-        game.achievements_total = achievements.length;
-      }
-    } catch { /* ignore — pas d'achievements pour ce jeu */ }
-
-    gameResults.push(game);
-  }
-  return gameResults;
+  return list.map(g => ({
+    game_id: 'steam-' + g.appid,
+    title: g.name || 'Unknown',
+    platform: 'steam',
+    playtime: Math.round((g.playtime_forever || 0) / 60),
+    cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.appid}/library_600x900.jpg`,
+    genre: '',
+    year: 0,
+    status: g.playtime_forever > 0 ? 'playing' : 'not_started',
+    user_rating: 0,
+    review_text: '',
+    review_public: true,
+    has_review: 0,
+    achievements_unlocked: 0,
+    achievements_total: 0,
+  }));
 }
 
 // Route pour re-sync Steam (utilise le steam_id déjà enregistré)
@@ -852,15 +858,14 @@ app.post('/api/platform/steam/resync', requireAuth, async (req, res) => {
     if (!steamId) return res.status(400).json({ error: 'Aucun compte Steam connecté' });
     const apiKey = process.env.STEAM_API_KEY;
     if (!apiKey) return res.status(500).json({ error: 'STEAM_API_KEY non configurée sur le serveur' });
-    console.log('[SteamResync] steamId:', steamId, 'API key defined:', !!apiKey);
     const games = await fetchSteamGames(apiKey, steamId);
     if (games.length === 0) {
       return res.status(400).json({ error: 'Aucun jeu trouvé — ton profil Steam doit être en Public (Paramètres > Confidentialité > Détails du jeu: Public).' });
     }
-    for (const game of games) {
-      await db.upsertGame(req.session.userId, game);
-      await db.ensureCatalogGame(await enrichGameFromSteam(game));
-    }
+    // Batch upsert user games
+    await db.batchUpsertUserGames(req.session.userId, games);
+    // Batch catalog ensure
+    await db.batchUpsertCatalogSteam(games.map(g => ({ game_id: g.game_id, title: g.title, platform: 'steam', cover: g.cover })));
     res.json({ ok: true, count: games.length });
   } catch (err) {
     console.error('[SteamResync] Error:', err.message);
@@ -1322,6 +1327,112 @@ app.post('/api/catalog/populate', requireAuth, async (req, res) => {
   })();
 });
 
+app.post('/api/catalog/replace-from-json', requireAuth, async (req, res) => {
+  try {
+    const jvPath = path.join(__dirname, 'data', 'jv-catalog.json');
+    const fs = require('fs');
+    if (!fs.existsSync(jvPath)) {
+      return res.status(404).json({ error: 'Fichier jv-catalog.json introuvable' });
+    }
+    const raw = fs.readFileSync(jvPath, 'utf-8');
+    const games = JSON.parse(raw);
+    if (!Array.isArray(games) || games.length === 0) {
+      return res.status(400).json({ error: 'Fichier JSON invalide ou vide' });
+    }
+    console.log(`[Catalog] Remplacement du catalogue par ${games.length} jeux JV...`);
+    await db.clearCatalog();
+    const batchSize = 200;
+    for (let i = 0; i < games.length; i += batchSize) {
+      const batch = games.slice(i, i + batchSize);
+      await db.batchUpsertCatalog(batch);
+    }
+    console.log(`[Catalog] Catalogue remplacé: ${games.length} jeux importés`);
+    res.json({ ok: true, count: games.length });
+  } catch (err) {
+    console.error('[CatalogReplace] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/catalog/delete/:gameId', requireAuth, async (req, res) => {
+  try {
+    await db.deleteCatalogGame(req.params.gameId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[CatalogDelete] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Enrichissement RAWG des jeux JV du catalogue (genre, plateformes, PEGI)
+app.post('/api/catalog/enrich-from-rawg', requireAuth, async (req, res) => {
+  const rawgKey = process.env.RAWG_API_KEY;
+  if (!rawgKey) return res.status(400).json({ error: 'RAWG_API_KEY non configurée' });
+  try {
+    const catalog = await db.getCatalog();
+    const toEnrich = catalog.filter(g => !g.genre && g.game_id?.startsWith('jv-'));
+    const enriched = []; const total = toEnrich.length;
+    for (let i = 0; i < Math.min(toEnrich.length, 500); i++) {
+      const g = toEnrich[i];
+      try {
+        const q = encodeURIComponent(g.title.replace(/-.*$/, '').trim());
+        const data = await rawgApiGet(`https://api.rawg.io/api/games?key=${rawgKey}&search=${q}&page_size=1`);
+        if (data?.results?.[0]) {
+          const r = data.results[0];
+          const genres = (r.genres || []).map(x => x.name).join(', ');
+          const platforms = (r.platforms || []).map(p => p.platform?.slug).filter(Boolean).join(', ');
+          const esrb = r.esrb_rating ? { 'e': 3, 'e10+': 7, 't': 12, 'm': 16, 'ao': 18 }[r.esrb_rating.slug] || 0 : 0;
+          await db.supabaseAdmin.from('catalog').update({
+            genre: genres || g.genre,
+            platforms_raw: platforms || g.platforms_raw,
+            age_rating: esrb,
+            editorial_score: g.editorial_score || (r.metacritic ? `${r.metacritic}/100` : ''),
+            user_score: g.user_score || (r.rating ? `${(r.rating * 5).toFixed(1)}/20` : ''),
+          }).eq('game_id', g.game_id);
+          enriched.push(g.game_id);
+        }
+      } catch (e) { /* skip */ }
+      await new Promise(r => setTimeout(r, 200)); // rate limit
+    }
+    db.invalidateCatalogCache();
+    console.log(`[Enrich] ${enriched.length}/${Math.min(total, 500)} jeux enrichis`);
+    res.json({ ok: true, enriched: enriched.length, total: Math.min(total, 500) });
+  } catch (err) {
+    console.error('[Enrich] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/catalog/clean-non-jv', requireAuth, async (req, res) => {
+  try {
+    const catalog = await db.getCatalog();
+    const nonJv = catalog.filter(g => !g.game_id?.startsWith('jv-'));
+    const ids = nonJv.map(g => g.game_id).filter(Boolean);
+    for (let i = 0; i < ids.length; i += 200) {
+      const batch = ids.slice(i, i + 200);
+      const { error } = await db.supabaseAdmin.from('catalog').delete().in('game_id', batch);
+      if (error) console.error('[CleanNonJV] batch error:', error.message);
+    }
+    db.invalidateCatalogCache();
+    console.log(`[Catalog] Nettoyage: ${ids.length} jeux non-JV supprimés`);
+    res.json({ ok: true, deleted: ids.length });
+  } catch (err) {
+    console.error('[CleanNonJV] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/catalog/no-covers', requireAuth, async (req, res) => {
+  try {
+    const catalog = await db.getCatalog();
+    const noCover = catalog.filter(g => !g.cover).map(g => ({ game_id: g.game_id, title: g.title, platform: g.platform }));
+    res.json({ games: noCover, total: noCover.length });
+  } catch (err) {
+    console.error('[CatalogNoCovers] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 let lastDescriptionRefresh = 0;
 const DESCRIPTION_REFRESH_COOLDOWN = 300000; // 5 min
 
@@ -1352,135 +1463,6 @@ function clearScanProgress(key) {
     delete data[key];
     require('fs').writeFileSync(SCAN_PROGRESS_PATH, JSON.stringify(data, null, 2));
   } catch {}
-}
-
-// ─── Nouveautés (new releases) ────────────────────────────
-let newReleasesCache = [];
-let lastNewReleasesFetch = 0;
-const NEW_RELEASES_TTL = 900000; // 15 min
-
-// Helper : appel Steam Store featured categories (gratuit, sans clé API)
-function steamStoreFeatured() {
-  return new Promise((resolve, reject) => {
-    https.get('https://store.steampowered.com/api/featuredcategories?l=french', { headers: { 'User-Agent': 'PlayPad/1.0' } }, (resp) => {
-      let d = '';
-      resp.on('data', c => d += c);
-      resp.on('end', () => {
-        try { resolve(JSON.parse(d)); }
-        catch (e) { reject(e); }
-      });
-    }).on('error', reject);
-  });
-}
-
-async function fetchNewReleases() {
-  const tStart = Date.now();
-  const rawgKey = process.env.RAWG_API_KEY;
-  let allGames = [];
-  const seenIds = new Set();
-
-  // ── Source 1 : RAWG (jeux récents toutes plateformes) ──
-  if (rawgKey) {
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-    const startDate = threeMonthsAgo.toISOString().split('T')[0];
-    const endDate = new Date().toISOString().split('T')[0];
-    const tRawg = Date.now();
-    const progressKey = 'rawg_newreleases_page';
-    let startPage = getScanProgress(progressKey) || 1;
-    if (startPage < 1) startPage = 1;
-    console.log(`[NewReleases] RAWG : jeux sortis entre ${startDate} et ${endDate} (reprise page ${startPage})`);
-    for (let page = startPage; page <= 10; page++) {
-      const url = `https://api.rawg.io/api/games?key=${rawgKey}&dates=${startDate},${endDate}&ordering=-released&page=${page}&page_size=40`;
-      try {
-        const tPage = Date.now();
-        const data = await rawgApiGet(url);
-        if (!data || !data.results) { clearScanProgress(progressKey); break; }
-        for (const item of data.results) {
-          if (!item.name || seenIds.has(item.id)) continue;
-          seenIds.add(item.id);
-          const stores = item.stores || [];
-          const steamStore = stores.find(s => s.store?.id === 1);
-          const steamId = steamStore?.url?.match(/\/app\/(\d+)/)?.[1];
-          const game = {
-            game_id: steamId ? `steam-${steamId}` : `rawg-${item.id}`,
-            title: item.name,
-            platform: steamId ? 'steam' : 'pc',
-            cover: item.background_image || '',
-            genre: (item.genres || []).map(g => g.name).join(', '),
-            year: item.released ? parseInt(item.released.split('-')[0]) : 0,
-            release_date: item.released || '',
-            description: item.description_raw || '',
-            developer: '',
-            publisher: '',
-          };
-          if (steamId) game.cover = `https://cdn.cloudflare.steamstatic.com/steam/apps/${steamId}/library_600x900.jpg`;
-          await db.ensureCatalogGame(game).catch(() => {});
-          allGames.push(game);
-        }
-        if (!data.next) { clearScanProgress(progressKey); break; }
-        setScanProgress(progressKey, page + 1);
-        console.log(`[NewReleases] RAWG page ${page} : ${data.results.length} jeux, ${Date.now() - tPage}ms`);
-        await new Promise(r => setTimeout(r, 200));
-      } catch (e) {
-        console.error(`[NewReleases] RAWG page ${page} :`, e.message);
-        break;
-      }
-    }
-    clearScanProgress(progressKey);
-    console.log(`[NewReleases] RAWG terminé : ${allGames.length} jeux en ${Date.now() - tRawg}ms`);
-  }
-
-  // ── Source 2 : Steam Store (nouveautés officielles Steam) ──
-  const tSteam = Date.now();
-  try {
-    const featured = await steamStoreFeatured();
-    const steamItems = featured?.new_releases?.items || [];
-    console.log(`[NewReleases] Steam Store : ${steamItems.length} nouveautés en ${Date.now() - tSteam}ms`);
-    for (const item of steamItems) {
-      if (!item.name || seenIds.has('steam-' + item.id)) continue;
-      seenIds.add('steam-' + item.id);
-      const game = {
-        game_id: `steam-${item.id}`,
-        title: item.name,
-        platform: 'steam',
-        cover: `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.id}/library_600x900.jpg`,
-        genre: (item.genres || []).map(g => g.description || g.name || '').join(', '),
-        year: item.release_date ? parseInt(item.release_date.date?.match(/\d{4}/)?.[0]) : 0,
-        release_date: item.release_date?.date || '',
-        description: item.short_description || '',
-        developer: (item.developers || []).join(', '),
-        publisher: (item.publishers || []).join(', '),
-      };
-      await db.ensureCatalogGame(game).catch(() => {});
-      allGames.push(game);
-    }
-  } catch (e) {
-    console.error('[NewReleases] Steam Store :', e.message);
-  }
-
-  // ── Source 3 : détails Steam pour les jeux sans description ──
-  const tDesc = Date.now();
-  const noDesc = allGames.filter(g => !g.description && g.game_id.startsWith('steam-'));
-  for (const game of noDesc.slice(0, 20)) {
-    try {
-      const appid = game.game_id.replace('steam-', '');
-      const d = await steamStoreGet(appid);
-      if (d?.data) {
-        game.description = d.data.short_description || d.data.about_the_game || '';
-        game.developer = (d.data.developers || []).join(', ');
-        game.publisher = (d.data.publishers || []).join(', ');
-        if (!game.genre && d.data.genres) game.genre = d.data.genres.map(g => g.description).join(', ');
-        await db.ensureCatalogGame(game).catch(() => {});
-      }
-    } catch (e) { /* ignore */ }
-    await new Promise(r => setTimeout(r, 100));
-  }
-  if (noDesc.length > 0) console.log(`[NewReleases] Descriptions : ${Math.min(noDesc.length, 20)} jeux enrichis en ${Date.now() - tDesc}ms`);
-
-  const totalMs = Date.now() - tStart;
-  console.log(`[NewReleases] Terminé : ${allGames.length} jeux récents (RAWG + Steam Store) en ${totalMs}ms`);
-  return allGames;
 }
 
 async function refreshCatalogDescriptions() {
@@ -1806,10 +1788,6 @@ async function fixMissingCovers() {
   // Démarre le rafraîchissement périodique des actualités
   startNewsRefresh();
   // Premier chargement des nouveautés + refresh toutes les heures
-  fetchNewReleases().then(r => { newReleasesCache = r; lastNewReleasesFetch = Date.now(); console.log(`[NewReleases] ${r.length} jeux chargés au démarrage`); }).catch(e => console.error('[NewReleases] Erreur démarrage:', e.message));
-  setInterval(() => {
-    fetchNewReleases().then(r => { newReleasesCache = r; lastNewReleasesFetch = Date.now(); }).catch(e => console.error('[NewReleases] Erreur refresh:', e.message));
-  }, NEW_RELEASES_TTL);
   console.log('[Startup] Prêt');
 })();
 

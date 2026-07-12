@@ -141,7 +141,7 @@ const API = {
   connectXbox: (gamertag) => API.request('POST', '/api/platform/xbox/connect', { gamertag }),
   xboxDiagnostic: (gamertag) => API.request('GET', '/api/platform/xbox/diagnostic?gamertag=' + encodeURIComponent(gamertag)),
   populateCatalog: () => API.request('POST', '/api/catalog/populate'),
-  setStatus: (gameId, status) => API.request('POST', '/api/games/status', { gameId, status }),
+  setStatus: (gameId, status, extra = {}) => API.request('POST', '/api/games/status', { gameId, status, ...extra }),
   saveReview: (gameId, rating, reviewText, reviewPublic, gameTitle, gameCover) => API.request('POST', '/api/games/review', { gameId, rating, reviewText, reviewPublic, gameTitle, gameCover }),
   getWishlist: () => API.request('GET', '/api/wishlist'),
   toggleWishlist: (gameId) => API.request('POST', '/api/wishlist/toggle', { gameId }),
@@ -2756,10 +2756,11 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
   const handleStatusChange = async (s) => {
     setStatus(s);
     try {
-      await API.setStatus(gameId, s);
+      await API.setStatus(gameId, s, { title: game.title, cover: game.cover, platform: game.platform, genre: game.genre, year: game.year });
       game._inLibrary = true;
+      game.status = s;
       onStatusChange?.();
-    } catch (e) {}
+    } catch (e) { console.error('[StatusChange] Error:', e); }
   };
 
   const handleTopThree = (g) => {

@@ -390,9 +390,9 @@ app.post('/api/games/sync', requireAuth, async (req, res) => {
 
 app.post('/api/games/status', requireAuth, async (req, res) => {
   try {
-    const { gameId, status } = req.body;
+    const { gameId, status, title, cover, platform, genre, year } = req.body;
     console.log('[Status] userId=%s gameId=%s status=%s', req.session.userId, gameId, status);
-    await db.updateGameStatus(req.session.userId, gameId, status);
+    await db.updateGameStatus(req.session.userId, gameId, status, { title, cover, platform, genre, year });
     res.json({ ok: true });
   } catch (err) {
     console.error('[Status] Error:', err.message, err.stack);
@@ -408,7 +408,7 @@ app.post('/api/games/review', requireAuth, async (req, res) => {
     const sanitizedCover = gameCover && isValidUrl(gameCover) ? gameCover : '';
     const isPublic = reviewPublic !== false;
     console.log('[Review] Incoming review:', { userId: req.session.userId, gameId, rating, reviewTextLength: sanitizedReview.length, isPublic, gameTitle: sanitizedTitle });
-    await db.updateGameRating(req.session.userId, gameId, rating || 0, sanitizedReview, isPublic);
+    await db.updateGameRating(req.session.userId, gameId, rating || 0, sanitizedReview, isPublic, sanitizedTitle);
     console.log('[Review] updateGameRating OK');
     if (isPublic) {
       await db.savePublicReview(req.session.userId, gameId, rating || 0, sanitizedReview, sanitizedTitle, sanitizedCover);

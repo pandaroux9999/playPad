@@ -188,8 +188,8 @@ async function upsertGame(userId, game) {
   }
 }
 
-async function updateGameStatus(userId, gameId, status) {
-  console.log('[updateGameStatus] userId=%s gameId=%s status=%s', userId, gameId, status);
+async function updateGameStatus(userId, gameId, status, extra = {}) {
+  console.log('[updateGameStatus] userId=%s gameId=%s status=%s extra=%j', userId, gameId, status, extra);
   const { data: existing, error: findError } = await supabaseAdmin
     .from('games')
     .select('id')
@@ -199,16 +199,29 @@ async function updateGameStatus(userId, gameId, status) {
   if (findError) { console.error('[updateGameStatus] findError:', findError); throw new Error(findError.message); }
   console.log('[updateGameStatus] existing:', existing ? existing.id : 'null');
   if (existing) {
-    const { error } = await supabaseAdmin.from('games').update({ status }).eq('id', existing.id);
+    const updates = { status };
+    if (extra.title) updates.title = extra.title;
+    if (extra.cover) updates.cover = extra.cover;
+    if (extra.platform) updates.platform = extra.platform;
+    if (extra.genre) updates.genre = extra.genre;
+    if (extra.year) updates.year = extra.year;
+    const { error } = await supabaseAdmin.from('games').update(updates).eq('id', existing.id);
     if (error) { console.error('[updateGameStatus] updateError:', error); throw new Error(error.message); }
   } else {
-    const { error } = await supabaseAdmin.from('games').insert({ user_id: userId, game_id: gameId, status, playtime: 0, title: gameId });
+    const { error } = await supabaseAdmin.from('games').insert({
+      user_id: userId, game_id: gameId, status, playtime: 0,
+      title: extra.title || gameId,
+      cover: extra.cover || '',
+      platform: extra.platform || '',
+      genre: extra.genre || '',
+      year: extra.year || 0,
+    });
     if (error) { console.error('[updateGameStatus] insertError:', error); throw new Error(error.message); }
   }
   console.log('[updateGameStatus] OK');
 }
 
-async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic) {
+async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic, gameTitle) {
   console.log('[updateGameRating] userId=%s gameId=%s rating=%s reviewTextLen=%s reviewPublic=%s', userId, gameId, rating, reviewText?.length, reviewPublic);
   const hasReview = !!(reviewText && reviewText.trim().length > 0) || rating > 0;
   const { data: existing, error: findError } = await supabaseAdmin
@@ -220,15 +233,17 @@ async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic
   if (findError) { console.error('[updateGameRating] findError:', findError); throw new Error(findError.message); }
   console.log('[updateGameRating] existing:', existing ? existing.id : 'null', 'hasReview:', hasReview);
   if (existing) {
+    const updates = { user_rating: rating, review_text: reviewText, review_public: reviewPublic, has_review: hasReview };
+    if (gameTitle) updates.title = gameTitle;
     const { error } = await supabaseAdmin
       .from('games')
-      .update({ user_rating: rating, review_text: reviewText, review_public: reviewPublic, has_review: hasReview })
+      .update(updates)
       .eq('id', existing.id);
     if (error) { console.error('[updateGameRating] updateError:', error); throw new Error(error.message); }
   } else {
     const { error } = await supabaseAdmin
       .from('games')
-      .insert({ user_id: userId, game_id: gameId, status: 'not_started', playtime: 0, user_rating: rating, review_text: reviewText, review_public: reviewPublic, has_review: hasReview });
+      .insert({ user_id: userId, game_id: gameId, title: gameTitle || gameId, status: 'not_started', playtime: 0, user_rating: rating, review_text: reviewText, review_public: reviewPublic, has_review: hasReview });
     if (error) { console.error('[updateGameRating] insertError:', error); throw new Error(error.message); }
   }
   console.log('[updateGameRating] OK');

@@ -1048,7 +1048,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       };
 
     return h('div', { className: "flex flex-col h-full view-enter" },
-      h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
+      h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0 relative" },
         h('div', { className: "flex items-center gap-2.5 mb-3" },
         h('img', { src: "img/logo_hackaton.png", alt: "PlayPad", className: "w-9 h-9 object-contain" }),
         h('div', null,
@@ -1065,6 +1065,8 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         h('div', { className: "relative flex-1" },
           h(Search, { size: 13, className: "absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" }),
           h('input', {
+            id: "catalog-search",
+            name: "catalogSearch",
             value: search,
             onChange: e => setSearch(e.target.value),
             placeholder: "Chercher un jeu, un genre, un studio…",
@@ -1108,9 +1110,9 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
           border: `1px solid ${P1}30`,
           position: "absolute",
           zIndex: 20,
-          top: "100%",
-          left: 16,
-          right: 16,
+          top: "calc(100% - 4px)",
+          left: 0,
+          right: 0,
           marginTop: 4
         }
       },
@@ -1121,7 +1123,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         h('div', { className: "grid grid-cols-2 gap-2.5" },
           h('div', null,
             h('p', { className: "text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1" }, "Plateforme"),
-            h('select', { value: filterPlatform, onChange: e => setFilterPlatform(e.target.value), className: "w-full text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
+            h('select', { id: "catalog-filter-platform", name: "catalogFilterPlatform", value: filterPlatform, onChange: e => setFilterPlatform(e.target.value), className: "w-full text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
               h('option', { value: "all" }, "Toutes"),
               ...(catalogFilters.platforms.length > 0 ? catalogFilters.platforms : ['pc', 'ps5', 'ps4', 'ps3', 'xbox', 'xbox360', 'nintendo', 'ios', 'android'])
                 .map(p => h('option', { value: p }, PLATFORM_CONFIG[p]?.name || PLATFORM_CONFIG[p]?.label || p.toUpperCase()))
@@ -1129,14 +1131,14 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
           ),
           h('div', null,
             h('p', { className: "text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1" }, "Genre"),
-            h('select', { value: filterGenre, onChange: e => setFilterGenre(e.target.value), className: "w-full text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
+            h('select', { id: "catalog-filter-genre", name: "catalogFilterGenre", value: filterGenre, onChange: e => setFilterGenre(e.target.value), className: "w-full text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
               h('option', { value: "all" }, "Tous"),
               ...catalogFilters.genres.map(g => h('option', { value: g }, g))
             )
           ),
           h('div', null,
             h('p', { className: "text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1" }, "Année min"),
-            h('select', { value: filterYearMin, onChange: e => setFilterYearMin(e.target.value), className: "w-full text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
+            h('select', { id: "catalog-filter-year-min", name: "catalogFilterYearMin", value: filterYearMin, onChange: e => setFilterYearMin(e.target.value), className: "w-full text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
               h('option', { value: "" }, "Toutes"),
               ...(catalogFilters.years.length > 0 ? catalogFilters.years : [2026,2025,2024,2023,2022,2021,2020,2019,2018,2017,2016,2015,2014,2013,2012,2011,2010])
                 .map(y => h('option', { value: String(y) }, y))
@@ -1144,7 +1146,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
           ),
           h('div', null,
             h('p', { className: "text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1" }, "PEGI"),
-            h('select', { value: filterAgeRating, onChange: e => setFilterAgeRating(e.target.value), className: "w-full text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
+            h('select', { id: "catalog-filter-age-rating", name: "catalogFilterAgeRating", value: filterAgeRating, onChange: e => setFilterAgeRating(e.target.value), className: "w-full text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
               h('option', { value: "" }, "Tous"),
               ...(catalogFilters.ageRatings.length > 0 ? catalogFilters.ageRatings : [3, 7, 12, 16, 18]).map(v => h('option', { value: String(v) }, `${v}+`))
             )

@@ -210,7 +210,7 @@ async function updateGameStatus(userId, gameId, status) {
 
 async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic) {
   console.log('[updateGameRating] userId=%s gameId=%s rating=%s reviewTextLen=%s reviewPublic=%s', userId, gameId, rating, reviewText?.length, reviewPublic);
-  const hasReview = !!(reviewText && reviewText.trim().length > 0);
+  const hasReview = !!(reviewText && reviewText.trim().length > 0) || rating > 0;
   const { data: existing, error: findError } = await supabaseAdmin
     .from('games')
     .select('id')

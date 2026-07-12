@@ -2234,7 +2234,7 @@ function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification }) {
 }
 
 function ReviewsView({ games, onSelect }) {
-  const reviewed = games.filter(g => g.hasReview);
+  const reviewed = games.filter(g => g.hasReview || (g.userRating || 0) > 0);
   const publicCount = reviewed.filter(g => g.review_public || g.reviewPublic).length;
   return h('div', { className: "flex flex-col h-full view-enter" },
     h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
@@ -2928,7 +2928,7 @@ function BottomNav({ view, setView }) {
     { id: "catalogue", label: "Catalogue",  Icon: Briefcase },
     { id: "actus",     label: "Actus",      Icon: Newspaper },
     { id: "community", label: "Communauté", Icon: Users },
-    { id: "critiques", label: "Critiques",  Icon: Edit3 },
+    { id: "critiques", label: "Mes critiques",  Icon: Edit3 },
     { id: "profil",    label: "Mon Espace", Icon: User },
   ];
   return h('div', { className: "absolute bottom-0 left-0 right-0 h-20 flex items-start justify-around px-2 pt-3 pb-5 border-t border-border", style: { background: "rgba(15,15,28,0.96)", backdropFilter: "blur(20px)" } },

@@ -2858,6 +2858,8 @@ async function fetchArticlesFromRSS() {
 const ESPORT_RSS_FEEDS = [
   { url: 'https://www.hltv.org/rss/news', name: 'HLTV', game: 'Counter-Strike 2' },
   { url: 'https://www.millenium.org/rss', name: 'Millenium', game: 'Multi' },
+  { url: 'https://www.dexerto.com/esports/feed/', name: 'Dexerto', game: 'Multi' },
+  { url: 'https://estnn.com/feed/', name: 'Esports.net', game: 'Multi' },
 ];
 
 async function fetchEsportFromRSS() {
@@ -2865,24 +2867,38 @@ async function fetchEsportFromRSS() {
   for (const feed of ESPORT_RSS_FEEDS) {
     try {
       const xml = await httpGet(feed.url);
-      const parsed = parseRSS(xml);
-      for (const p of parsed.slice(0, 8)) {
-        const lower = (p.title + ' ' + p.desc).toLowerCase();
-        let event = p.title;
-        let date = '';
-        const dateMatch = p.title.match(/(\d{4})/);
-        if (dateMatch) date = dateMatch[1];
+      const xml = await httpGet(feed.url);
+      const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+      let match;
+      let count = 0;
+      while ((match = itemRegex.exec(xml)) !== null && count < 10) {
+        const block = match[1];
+        const get = (tag) => {
+          const m = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i').exec(block);
+          let val = m ? m[1].trim() : '';
+          val = val.replace(/<!\[CDATA\[/g, '').replace(/\]\]>/g, '');
+          val = val.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+          return val;
+        };
+        const title = get('title');
+        const desc = get('description');
+        const link = get('link');
+        const pubDate = get('pubDate');
+        const cover = extractRssImage(block);
+        if (!title) continue;
+        count++;
         items.push({
           type: 'esport',
-          event,
+          event: title,
           game: feed.game,
-          date,
-          desc: p.desc.slice(0, 120) || `Actualité ${feed.game}`,
-          officialUrl: p.link,
-          sourceUrl: p.link,
+          date: pubDate ? new Date(pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
+          cover,
+          desc: desc.replace(/<[^>]*>/g, '').trim().slice(0, 120) || `Actualité ${feed.game}`,
+          officialUrl: link,
+          sourceUrl: link,
           sourceName: feed.name,
-          details: p.desc.slice(0, 500),
-          pubDate: p.pubDate,
+          details: desc.replace(/<[^>]*>/g, '').trim().slice(0, 500),
+          pubDate,
         });
       }
     } catch (e) {

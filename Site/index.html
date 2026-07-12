@@ -262,6 +262,8 @@ const Upload = Icon(["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M17 8l-5-5-5 
 const Trash2 = Icon(["M3 6h18", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"]);
 const Mail = Icon(["M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z", "m22 6-10 7L2 6"]);
 const Monitor = Icon(["M20 3H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z", "M8 21h8", "M12 17v4"]);
+const Tv = Icon(["M2 8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8z", "M8 2l4 4 4-4"]);
+const Youtube = Icon(["M22 8.6a3.4 3.4 0 0 0-2.3-2.3C17.5 5.5 12 5.5 12 5.5s-5.5 0-7.7.8A3.4 3.4 0 0 0 2 8.6C1.7 10.2 1.5 12 1.5 13.5s.2 3.3.5 4.9a3.4 3.4 0 0 0 2.3 2.3c2.2.8 7.7.8 7.7.8s5.5 0 7.7-.8a3.4 3.4 0 0 0 2.3-2.3c.3-1.6.5-3.4.5-4.9s-.2-3.3-.5-4.9z", "M9.8 17.2l5.3-3.7-5.3-3.7v7.4z"]);
 const Settings = Icon(["M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"]);
 const Sliders = Icon(["M4 21v-7", "M4 10V3", "M12 21v-9", "M12 8V3", "M20 21v-5", "M20 12V3", "M1 14h6", "M9 8h6", "M17 16h6"]);
 const MessageCircle = Icon(["M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"]);
@@ -1606,7 +1608,7 @@ function MagView({ onSelectGame }) {
                   h('div', { className: "lg:w-[70%] space-y-2" },
                     h('span', { className: "text-[11px] font-black text-foreground uppercase tracking-wider flex items-center gap-1.5", style: { fontFamily: "'Rajdhani', sans-serif" } }, h(MessageCircle, { size: 12, style: { color: P1 } }), "Actualit\u00e9s e-sport"),
                     (() => {
-                      const esportNews = filtered.filter(i => i.desc || i.details);
+                      const esportNews = filtered.filter(i => i.sourceName !== 'PandaScore' && (i.desc || i.details));
                       return esportNews.length === 0
                         ? h('p', { className: "text-[10px] text-muted-foreground italic py-4" }, "Aucune actualit\u00e9 e-sport r\u00e9cente")
                         : h('div', { className: "grid grid-cols-1 sm:grid-cols-2 gap-2" },
@@ -1680,6 +1682,10 @@ function NewsDetailSheet({ item, onClose }) {
   const [matchLoading, setMatchLoading] = useState(false);
   const [matchComments, setMatchComments] = useState([]);
   const [commentInput, setCommentInput] = useState('');
+  const [teamDetail, setTeamDetail] = useState(null);
+  const [teamDetailLoading, setTeamDetailLoading] = useState(false);
+  const [teamPlayers, setTeamPlayers] = useState([]);
+  const [teamInfo, setTeamInfo] = useState(null);
   useEffect(() => {
     if (isEsport && !matchDetail && !matchLoading && item.matchId && item.gameSlug) {
       setMatchLoading(true);
@@ -1695,6 +1701,15 @@ function NewsDetailSheet({ item, onClose }) {
       } catch (e) {}
     }
   }, [isEsport, item.matchId, item.gameSlug]);
+  const openTeamDetail = (team) => {
+    if (!team || !item.gameSlug || !team.id) return;
+    setTeamDetail(team);
+    setTeamDetailLoading(true);
+    setTeamPlayers([]);
+    setTeamInfo(null);
+    API.getEsportTeamPlayers(item.gameSlug, team.id).then(d => setTeamPlayers(d.players || [])).catch(() => {}).finally(() => setTeamDetailLoading(false));
+    API.getEsportTeamInfo(team.id).then(d => { if (d.team) setTeamInfo(d.team); }).catch(() => {});
+  };
   const postComment = () => {
     const txt = commentInput.trim();
     if (!txt) return;
@@ -1703,6 +1718,36 @@ function NewsDetailSheet({ item, onClose }) {
     setMatchComments(updated);
     setCommentInput('');
     try { localStorage.setItem('esport_comments_' + item.matchId, JSON.stringify(updated)); } catch (e) {}
+  };
+  const KNOWN_STREAMS = {
+    'VCT': { type: 'twitch', channel: 'valorant' },
+    'VCT Americas': { type: 'twitch', channel: 'valorant' },
+    'VCT EMEA': { type: 'twitch', channel: 'valorant_emea' },
+    'VCT Pacific': { type: 'twitch', channel: 'valorant_pacific' },
+    'VCT China': { type: 'twitch', channel: 'valorant_china' },
+    'LCS': { type: 'twitch', channel: 'lcs' },
+    'LCK': { type: 'twitch', channel: 'lck' },
+    'LPL': { type: 'twitch', channel: 'lpl' },
+    'LEC': { type: 'twitch', channel: 'lec' },
+    'ESL': { type: 'twitch', channel: 'esl_csgo' },
+    'ESL Pro League': { type: 'twitch', channel: 'esl_csgo' },
+    'BLAST': { type: 'twitch', channel: 'blasttv' },
+    'BLAST Premier': { type: 'twitch', channel: 'blasttv' },
+    'RLCS': { type: 'twitch', channel: 'rocketleague' },
+    'CDL': { type: 'youtube', channel: 'callofduty' },
+    'Overwatch League': { type: 'youtube', channel: 'overwatchleague' },
+    'Dota 2': { type: 'twitch', channel: 'dota2ti' },
+    'The International': { type: 'twitch', channel: 'dota2ti' },
+    'Fortnite': { type: 'twitch', channel: 'fortnite' },
+  };
+  const getStreamInfo = () => {
+    if (matchDetail?.streams?.length > 0) return matchDetail.streams[0];
+    if (matchDetail?.liveUrl) return { type: 'link', url: matchDetail.liveUrl };
+    const league = item.league || item.tournament || '';
+    for (const [key, val] of Object.entries(KNOWN_STREAMS)) {
+      if (league.includes(key)) return val;
+    }
+    return null;
   };
   const [translatedContent, setTranslatedContent] = useState(null);
   const [showOriginal, setShowOriginal] = useState(false);
@@ -1752,25 +1797,28 @@ function NewsDetailSheet({ item, onClose }) {
           // VS Header
           h('div', { className: "rounded-2xl p-4 mb-3 text-center", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" } },
             h('div', { className: "flex items-center justify-center gap-3" },
-              // Team A
-              h('div', { className: "flex flex-col items-center gap-1 w-[80px]" },
+              // Team A (cliquable)
+              h('button', { onClick: () => openTeamDetail(item.teams?.[0]), className: "flex flex-col items-center gap-1 w-[80px] transition-all hover:scale-105 active:scale-95" },
                 item.teams?.[0]?.logo
                   ? h('img', { src: item.teams[0].logo, alt: item.teams[0].name, className: "w-10 h-10 object-contain rounded-xl", style: { background: "rgba(255,255,255,0.05)" } })
                   : h('div', { className: "w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white", style: { background: GRAD } }, (item.teams?.[0]?.name || '?')[0]),
-                h('span', { className: "text-[9px] font-bold text-foreground truncate w-full text-center" }, item.teams?.[0]?.name || '?')
+                h('span', { className: "text-[9px] font-bold text-foreground truncate w-full text-center" }, item.teams?.[0]?.name || 'TBD')
               ),
               // Score VS
-              h('div', { className: "flex items-center gap-2" },
-                h('span', { className: "text-2xl font-black font-mono", style: { color: isLive ? "#22c55e" : tagColor } }, matchDetail?.scores?.[0] ?? item.scores?.[0] ?? '0'),
-                h('span', { className: "text-base font-black text-muted-foreground" }, ":"),
-                h('span', { className: "text-2xl font-black font-mono", style: { color: isLive ? "#22c55e" : tagColor } }, matchDetail?.scores?.[1] ?? item.scores?.[1] ?? '0')
+              h('div', { className: "flex flex-col items-center" },
+                h('div', { className: "flex items-center gap-2" },
+                  h('span', { className: "text-2xl font-black font-mono", style: { color: isLive ? "#22c55e" : tagColor } }, matchDetail?.scores?.[0] ?? item.scores?.[0] ?? '0'),
+                  h('span', { className: "text-base font-black text-muted-foreground" }, ":"),
+                  h('span', { className: "text-2xl font-black font-mono", style: { color: isLive ? "#22c55e" : tagColor } }, matchDetail?.scores?.[1] ?? item.scores?.[1] ?? '0')
+                ),
+                matchLoading && h('span', { className: "text-[7px] text-muted-foreground mt-1" }, "Chargement...")
               ),
-              // Team B
-              h('div', { className: "flex flex-col items-center gap-1 w-[80px]" },
+              // Team B (cliquable)
+              h('button', { onClick: () => openTeamDetail(item.teams?.[1]), className: "flex flex-col items-center gap-1 w-[80px] transition-all hover:scale-105 active:scale-95" },
                 item.teams?.[1]?.logo
                   ? h('img', { src: item.teams[1].logo, alt: item.teams[1].name, className: "w-10 h-10 object-contain rounded-xl", style: { background: "rgba(255,255,255,0.05)" } })
                   : h('div', { className: "w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white", style: { background: GRAD } }, (item.teams?.[1]?.name || '?')[0]),
-                h('span', { className: "text-[9px] font-bold text-foreground truncate w-full text-center" }, item.teams?.[1]?.name || '?')
+                h('span', { className: "text-[9px] font-bold text-foreground truncate w-full text-center" }, item.teams?.[1]?.name || 'TBD')
               )
             ),
             h('div', { className: "flex items-center justify-center gap-2 mt-2" },
@@ -1780,19 +1828,34 @@ function NewsDetailSheet({ item, onClose }) {
             )
           ),
           // ─── STREAM ──────────────────────────────
-          matchDetail?.streams?.length > 0 && h('div', { className: "mb-3 rounded-2xl overflow-hidden border", style: { borderColor: "rgba(255,255,255,0.06)" } },
-            h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground px-3 pt-2 pb-1" }, isLive ? "Regarder en direct" : "Replay / VOD"),
-            h('div', { className: "relative", style: { aspectRatio: "16/9" } },
-              matchDetail.streams[0].type === 'twitch'
-                ? h('iframe', { src: `https://player.twitch.tv/?channel=${matchDetail.streams[0].channel}&parent=localhost`, title: "Stream Twitch", className: "w-full h-full", allow: "autoplay; encrypted-media", allowFullScreen: true })
-                : matchDetail.streams[0].type === 'youtube'
-                  ? h('iframe', { src: `https://www.youtube.com/embed/${matchDetail.streams[0].videoId}?autoplay=0`, title: "Stream YouTube", className: "w-full h-full", allow: "autoplay; encrypted-media", allowFullScreen: true })
-                  : h('div', { className: "flex items-center justify-center w-full h-full bg-secondary/40 text-[10px] text-muted-foreground" }, "Stream non disponible")
-            )
-          ),
-          !matchDetail?.streams?.length && matchDetail?.liveUrl && h('a', { href: matchDetail.liveUrl, target: "_blank", rel: "noopener noreferrer", className: "flex items-center justify-center gap-2 mb-3 px-3 py-2.5 rounded-xl text-[10px] font-bold transition-all", style: { background: `${P1}20`, color: P1 } },
-            h(ExternalLink, { size: 12 }), "Voir le match en direct"
-          ),
+          (() => {
+            const stream = getStreamInfo();
+            if (!stream) {
+              const gameSearch = item.game || item.league || '';
+              return h('div', { className: "mb-3 rounded-2xl p-3 text-center", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" } },
+                h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-2" }, "Aucun flux trouv\u00e9"),
+                h('p', { className: "text-[8px] text-muted-foreground mb-2" }, "Chercher le match sur Twitch ou YouTube :"),
+                h('div', { className: "flex items-center justify-center gap-2" },
+                  h('a', { href: `https://www.twitch.tv/search?term=${encodeURIComponent(gameSearch)}`, target: "_blank", rel: "noopener noreferrer", className: "px-3 py-1.5 rounded-lg text-[8px] font-bold transition-all hover:opacity-80 flex items-center gap-1", style: { background: "#9146ff30", color: "#9146ff" } }, h(Tv, { size: 10 }), "Twitch"),
+                  h('a', { href: `https://www.youtube.com/results?search_query=${encodeURIComponent(gameSearch + ' live')}`, target: "_blank", rel: "noopener noreferrer", className: "px-3 py-1.5 rounded-lg text-[8px] font-bold transition-all hover:opacity-80 flex items-center gap-1", style: { background: "#ff000030", color: "#ff0000" } }, h(Youtube, { size: 10 }), "YouTube")
+                )
+              );
+            }
+            if (stream.type === 'link') {
+              return h('div', { className: "mb-3" },
+                h('a', { href: stream.url, target: "_blank", rel: "noopener noreferrer", className: "flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[10px] font-bold transition-all", style: { background: `${P1}20`, color: P1 } }, h(ExternalLink, { size: 12 }), isLive ? "Voir le match en direct" : "Voir le replay")
+              );
+            }
+            const isTwitch = stream.type === 'twitch';
+            const src = isTwitch ? `https://player.twitch.tv/?channel=${stream.channel}&parent=localhost` : `https://www.youtube.com/embed/${stream.videoId}?autoplay=0`;
+            const name = isTwitch ? 'Twitch' : 'YouTube';
+            return h('div', { className: "mb-3 rounded-2xl overflow-hidden border", style: { borderColor: "rgba(255,255,255,0.06)" } },
+              h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground px-3 pt-2 pb-1 flex items-center gap-1.5" }, isLive ? "Regarder en direct" : "Replay / VOD", h('span', { className: "text-[7px] font-normal text-muted-foreground" }, "via ", name)),
+              h('div', { className: "relative", style: { aspectRatio: "16/9" } },
+                h('iframe', { src, title: "Stream " + name, className: "w-full h-full", allow: "autoplay; encrypted-media", allowFullScreen: true })
+              )
+            );
+          })(),
           // ─── MAPS / SCOREBOARD ──────────────────
           matchDetail?.maps?.length > 0 && h('div', { className: "mb-3" },
             h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5" }, h(Monitor, { size: 11 }), "Cartes"),
@@ -1809,43 +1872,71 @@ function NewsDetailSheet({ item, onClose }) {
               })
             )
           ),
-          // ─── LINE-UPS (par équipe) ──────────────
-          h('div', { className: "mb-3" },
-            h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5" }, h(Users, { size: 11 }), "Line-ups"),
-            matchLoading
-              ? h('div', { className: "flex justify-center py-4" }, h(Loader, { size: 12, className: "animate-spin", style: { color: P1 } }))
-              : !matchDetail?.teams?.some(t => t.players?.length)
-                ? h('p', { className: "text-[9px] text-muted-foreground italic py-2" }, "Compositions non disponibles")
-                : h('div', { className: "space-y-2" },
-                    (matchDetail?.teams || []).map((team, ti) =>
-                      h('div', { key: ti, className: "rounded-xl p-2.5", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" } },
-                        h('div', { className: "flex items-center gap-2 mb-2" },
-                          team.logo ? h('img', { src: team.logo, alt: team.name, className: "w-6 h-6 object-contain rounded" }) : h('div', { className: "w-6 h-6 rounded flex items-center justify-center text-[8px] font-black text-white", style: { background: GRAD } }, (team.name || '?')[0]),
-                          h('span', { className: "text-[9px] font-bold text-foreground" }, team.name)
-                        ),
-                        team.players?.length > 0
-                          ? h('div', { className: "space-y-1" },
-                              team.players.map(p =>
-                                h('div', { key: p.id, className: "flex items-center gap-2 p-1.5 rounded-lg", style: { background: "rgba(255,255,255,0.03)" } },
-                                  p.imageUrl ? h('img', { src: p.imageUrl, alt: p.name, className: "w-7 h-7 rounded-full object-cover flex-shrink-0" }) : h('div', { className: "w-7 h-7 rounded-full flex items-center justify-center text-[7px] font-black text-white flex-shrink-0", style: { background: GRAD } }, (p.name || '?')[0]),
-                                  h('div', { className: "flex-1 min-w-0" },
-                                    h('p', { className: "text-[9px] font-bold text-foreground truncate" }, p.name),
-                                    p.role && h('p', { className: "text-[7px] text-muted-foreground truncate" }, p.role)
-                                  ),
-                                  p.slug && h('a', {
-                                    href: `https://liquipedia.net/${item.gameSlug}/${p.name.replace(/ /g, '_')}`,
-                                    target: "_blank", rel: "noopener noreferrer",
-                                    className: "px-1.5 py-0.5 rounded text-[7px] font-bold transition-colors",
-                                    style: { background: `${P1}20`, color: P1 }
-                                  }, "Profil")
-                                )
-                              )
-                            )
-                          : h('p', { className: "text-[8px] text-muted-foreground italic" }, "Aucun joueur list\u00e9")
-                      )
+          // ─── TEAM DETAIL / LINE-UPS ──────────────
+          teamDetail
+            ? h('div', { className: "mb-3 rounded-xl p-3", style: { background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.15)" } },
+                h('div', { className: "flex items-center justify-between mb-2" },
+                  h('div', { className: "flex items-center gap-2" },
+                    teamDetail.logo ? h('img', { src: teamDetail.logo, alt: teamDetail.name, className: "w-7 h-7 object-contain rounded" }) : h('div', { className: "w-7 h-7 rounded flex items-center justify-center text-[9px] font-black text-white", style: { background: GRAD } }, (teamDetail.name || '?')[0]),
+                    h('span', { className: "text-[10px] font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, teamDetail.name)
+                  ),
+                  h('button', { onClick: () => setTeamDetail(null), className: "text-[8px] font-bold px-2 py-1 rounded-lg", style: { background: "rgba(255,255,255,0.06)", color: "#8888aa" } }, "Fermer")
+                ),
+                teamInfo && h('div', { className: "flex items-center gap-1.5 mb-2 p-1.5 rounded-lg text-[8px]", style: { background: "rgba(255,255,255,0.03)" } },
+                  h('span', { className: "text-muted-foreground" }, teamInfo.location || ''),
+                  teamInfo.currentVideogame && h('span', { className: "text-muted-foreground" }, "\u2022", teamInfo.currentVideogame),
+                  teamInfo.acronym && h('span', { className: "px-1 py-0.5 rounded font-bold", style: { background: `${P1}20`, color: P1 } }, teamInfo.acronym)
+                ),
+                teamDetailLoading && h('div', { className: "flex justify-center py-3" }, h(Loader, { size: 11, className: "animate-spin", style: { color: P1 } })),
+                !teamDetailLoading && teamPlayers.length === 0 && h('p', { className: "text-[8px] text-muted-foreground italic text-center py-2" }, "Aucune information sur les joueurs"),
+                !teamDetailLoading && teamPlayers.length > 0 && h('div', { className: "space-y-1" },
+                  teamPlayers.map(p =>
+                    h('div', { key: p.id, className: "flex items-center gap-2 p-1.5 rounded-lg", style: { background: "rgba(255,255,255,0.03)" } },
+                      p.imageUrl ? h('img', { src: p.imageUrl, alt: p.name, className: "w-6 h-6 rounded-full object-cover flex-shrink-0" }) : h('div', { className: "w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-black text-white flex-shrink-0", style: { background: GRAD } }, (p.name || '?')[0]),
+                      h('div', { className: "flex-1 min-w-0" },
+                        h('p', { className: "text-[8px] font-bold text-foreground truncate" }, p.name),
+                        h('p', { className: "text-[7px] text-muted-foreground truncate" }, p.role || 'Joueur')
+                      ),
+                      p.slug && h('a', {
+                        href: `https://liquipedia.net/${item.gameSlug}/${p.name.replace(/ /g, '_')}`,
+                        target: "_blank", rel: "noopener noreferrer",
+                        className: "px-1.5 py-0.5 rounded text-[7px] font-bold transition-colors",
+                        style: { background: `${P1}20`, color: P1 }
+                      }, "Profil")
                     )
                   )
-          ),
+                )
+              )
+            : h('div', { className: "mb-3" },
+                h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5" }, h(Users, { size: 11 }), "Line-ups"),
+                matchLoading
+                  ? h('div', { className: "flex justify-center py-4" }, h(Loader, { size: 12, className: "animate-spin", style: { color: P1 } }))
+                  : !matchDetail?.teams?.some(t => t.players?.length)
+                    ? h('p', { className: "text-[9px] text-muted-foreground italic py-2" }, "Clique sur une \u00e9quipe ci-dessus pour voir sa composition")
+                    : h('div', { className: "space-y-2" },
+                        (matchDetail?.teams || []).map((team, ti) =>
+                          h('div', { key: ti, className: "rounded-xl p-2.5 cursor-pointer transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }, onClick: () => openTeamDetail(team) },
+                            h('div', { className: "flex items-center gap-2 mb-2" },
+                              team.logo ? h('img', { src: team.logo, alt: team.name, className: "w-6 h-6 object-contain rounded" }) : h('div', { className: "w-6 h-6 rounded flex items-center justify-center text-[8px] font-black text-white", style: { background: GRAD } }, (team.name || '?')[0]),
+                              h('span', { className: "text-[9px] font-bold text-foreground flex-1" }, team.name),
+                              h(ChevronRight, { size: 10, style: { color: "#8888aa" } })
+                            ),
+                            team.players?.length > 0
+                              ? h('div', { className: "space-y-1" },
+                                  team.players.slice(0, 3).map(p =>
+                                    h('div', { key: p.id, className: "flex items-center gap-1.5 p-1 rounded-lg", style: { background: "rgba(255,255,255,0.03)" } },
+                                      p.imageUrl ? h('img', { src: p.imageUrl, alt: p.name, className: "w-5 h-5 rounded-full object-cover flex-shrink-0" }) : h('div', { className: "w-5 h-5 rounded-full flex items-center justify-center text-[6px] font-black text-white flex-shrink-0", style: { background: GRAD } }, (p.name || '?')[0]),
+                                      h('span', { className: "text-[7px] text-foreground truncate" }, p.name),
+                                      p.role && h('span', { className: "text-[6px] text-muted-foreground ml-auto" }, p.role)
+                                    )
+                                  ),
+                                  team.players.length > 3 && h('p', { className: "text-[7px] text-muted-foreground text-center pt-1" }, "+", team.players.length - 3, " autres joueurs")
+                                )
+                              : h('p', { className: "text-[7px] text-muted-foreground italic" }, "Clique pour charger les joueurs")
+                          )
+                        )
+                      )
+              ),
           // ─── ESPACE COMMENTAIRES ────────────────
           h('div', { className: "mt-4 pt-3 border-t", style: { borderColor: "rgba(255,255,255,0.06)" } },
             h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5" }, h(MessageCircle, { size: 11 }), "Commentaires (", matchComments.length, ")"),

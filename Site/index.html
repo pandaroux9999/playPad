@@ -1601,30 +1601,32 @@ function MagView({ onSelectGame }) {
                 ),
                 // 3. Deux colonnes : Actus (70%) + Agenda (30%)
                 h('div', { className: "flex flex-col lg:flex-row gap-4" },
-                  // Colonne principale : Actus
+                  // Colonne principale : Actus e-sport (issues du RSS esport)
                   h('div', { className: "lg:w-[70%] space-y-2" },
                     h('span', { className: "text-[11px] font-black text-foreground uppercase tracking-wider flex items-center gap-1.5", style: { fontFamily: "'Rajdhani', sans-serif" } }, h(MessageCircle, { size: 12, style: { color: P1 } }), "Actualit\u00e9s e-sport"),
-                    articles.filter(a => !a._archived).slice(0, 6).length === 0
-                      ? h('p', { className: "text-[10px] text-muted-foreground italic py-4" }, "Aucune actualit\u00e9 r\u00e9cente")
-                      : h('div', { className: "grid grid-cols-1 sm:grid-cols-2 gap-2" },
-                          articles.filter(a => !a._archived).slice(0, 6).map((item, i) => {
-                            const gameTag = item.tag || '';
-                            const color = gc(gameTag);
-                            return h('div', { key: i, onClick: () => setSelectedNews(item), className: "rounded-xl overflow-hidden cursor-pointer transition-all hover:opacity-80 border", style: { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" } },
-                              item.cover && h('div', { className: "relative", style: { aspectRatio: "16/9" } },
-                                h('img', { src: item.cover, alt: item.title, className: "w-full h-full object-cover", onError: function(e) { e.target.style.display = 'none'; } }),
-                                h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" })
-                              ),
-                              h('div', { className: "p-2.5" },
-                                h('div', { className: "flex items-center gap-1 mb-1" },
-                                  h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold", style: { background: color + '25', color: color } }, (gameTag || 'Actu').slice(0, 10)),
-                                  item.pubDate && h('span', { className: "text-[7px]", style: { color: "#6666aa" } }, new Date(item.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
+                    (() => {
+                      const esportNews = filtered.filter(i => i.desc || i.details);
+                      return esportNews.length === 0
+                        ? h('p', { className: "text-[10px] text-muted-foreground italic py-4" }, "Aucune actualit\u00e9 e-sport r\u00e9cente")
+                        : h('div', { className: "grid grid-cols-1 sm:grid-cols-2 gap-2" },
+                            esportNews.slice(0, 6).map((item, i) => {
+                              const c = gc(item.game);
+                              return h('div', { key: i, onClick: () => setSelectedNews(item), className: "rounded-xl overflow-hidden cursor-pointer transition-all hover:opacity-80 border", style: { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" } },
+                                item.cover && h('div', { className: "relative", style: { aspectRatio: "16/9" } },
+                                  h('img', { src: item.cover, alt: item.event, className: "w-full h-full object-cover", onError: function(e) { e.target.style.display = 'none'; } }),
+                                  h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" })
                                 ),
-                                h('p', { className: "text-xs font-bold text-foreground leading-tight line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title)
-                              )
-                            );
-                          })
-                        )
+                                h('div', { className: "p-2.5" },
+                                  h('div', { className: "flex items-center gap-1 mb-1" },
+                                    h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold", style: { background: c + '25', color: c } }, (item.game || 'Esport').slice(0, 10)),
+                                    item.pubDate && h('span', { className: "text-[7px]", style: { color: "#6666aa" } }, new Date(item.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
+                                  ),
+                                  h('p', { className: "text-xs font-bold text-foreground leading-tight line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event || item.title)
+                                )
+                              );
+                            })
+                          );
+                    })()
                   ),
                   // Barre latérale : Agenda & Résultats
                   h('div', { className: "lg:w-[30%] space-y-2" },

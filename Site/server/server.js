@@ -2857,6 +2857,7 @@ async function fetchArticlesFromRSS() {
 // ─── 3. FETCH : E-Sport via RSS ────────────────────────────
 const ESPORT_RSS_FEEDS = [
   { url: 'https://www.hltv.org/rss/news', name: 'HLTV', game: 'Counter-Strike 2' },
+  { url: 'https://www.millenium.org/rss', name: 'Millenium', game: 'Multi' },
 ];
 
 async function fetchEsportFromRSS() {
@@ -3098,6 +3099,11 @@ async function refreshAllNews(force) {
   // Esport via PandaScore (matches en direct/à venir)
   const esportPs = await fetchEsportFromPandaScore();
   let esport = [...esportPs];
+  // Merge esport RSS articles (HLTV, etc.)
+  const esportRss = await fetchEsportFromRSS();
+  if (esportRss.length > 0) {
+    esport = [...esport, ...esportRss];
+  }
   // Si PandaScore n'a rien renvoyé, on utilise les données statiques (avec logos et équipes)
   if (esport.length === 0) {
     try {

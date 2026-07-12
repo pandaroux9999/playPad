@@ -395,8 +395,23 @@ async function getAllPublicReviews() {
     console.error('[getAllPublicReviews] Supabase error:', error);
     throw new Error(error.message);
   }
-  console.log('[getAllPublicReviews] Result count:', data?.length, 'rows:', JSON.stringify(data?.map(r => ({ id: r.id, user_id: r.user_id, game_id: r.game_id, rating: r.rating, review_text_length: r.review_text?.length }))));
-  return (data || []).map(r => ({ ...r, reply_count: 0 }));
+  const reviews = data || [];
+  if (reviews.length > 0) {
+    const ids = reviews.map(r => r.id);
+    const { data: counts } = await supabaseAdmin
+      .from('review_replies')
+      .select('review_id')
+      .in('review_id', ids);
+    const countMap = {};
+    if (counts) {
+      for (const c of counts) {
+        countMap[c.review_id] = (countMap[c.review_id] || 0) + 1;
+      }
+    }
+    console.log('[getAllPublicReviews] Reply counts:', countMap);
+    return reviews.map(r => ({ ...r, reply_count: countMap[r.id] || 0 }));
+  }
+  return [];
 }
 
 async function saveReviewReply(userId, reviewId, text) {

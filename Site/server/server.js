@@ -1329,25 +1329,50 @@ app.post('/api/catalog/populate', requireAuth, async (req, res) => {
 
 app.post('/api/catalog/replace-from-json', requireAuth, async (req, res) => {
   try {
-    const jvPath = path.join(__dirname, 'data', 'jv-catalog.json');
     const fs = require('fs');
-    if (!fs.existsSync(jvPath)) {
-      return res.status(404).json({ error: 'Fichier jv-catalog.json introuvable' });
+    const dataDir = path.join(__dirname, 'data');
+    let allGames = [];
+    // Charger JV
+    const jvPath = path.join(dataDir, 'jv-catalog.json');
+    if (fs.existsSync(jvPath)) {
+      const games = JSON.parse(fs.readFileSync(jvPath, 'utf-8'));
+      if (Array.isArray(games)) allGames.push(...games);
     }
-    const raw = fs.readFileSync(jvPath, 'utf-8');
-    const games = JSON.parse(raw);
-    if (!Array.isArray(games) || games.length === 0) {
-      return res.status(400).json({ error: 'Fichier JSON invalide ou vide' });
+    // Charger RAWG et fusionner (un jeu RAWG remplace un JV si même game_id)
+    const rawgPath = path.join(dataDir, 'rawg-catalog.json');
+    if (fs.existsSync(rawgPath)) {
+      const raws = JSON.parse(fs.readFileSync(rawgPath, 'utf-8'));
+      if (Array.isArray(raws)) {
+        const rawgMap = new Map();
+        for (const g of raws) rawgMap.set(g.game_id, g);
+        // On remplace les game_id existants qui commencent par rawg-
+        // et on ajoute les nouveaux
+        const seen = new Set();
+        for (const g of allGames) seen.add(g.game_id);
+        for (const [id, g] of rawgMap) {
+          if (seen.has(id)) {
+            // Remplacer l'entrée existante
+            const idx = allGames.findIndex(x => x.game_id === id);
+            if (idx !== -1) allGames[idx] = g;
+          } else {
+            allGames.push(g);
+          }
+        }
+      }
     }
-    console.log(`[Catalog] Remplacement du catalogue par ${games.length} jeux JV...`);
+    if (allGames.length === 0) {
+      return res.status(400).json({ error: 'Aucun jeu trouvé dans jv-catalog.json ou rawg-catalog.json' });
+    }
+    console.log(`[Catalog] Remplacement du catalogue par ${allGames.length} jeux (JV + RAWG)...`);
     await db.clearCatalog();
     const batchSize = 200;
-    for (let i = 0; i < games.length; i += batchSize) {
-      const batch = games.slice(i, i + batchSize);
+    for (let i = 0; i < allGames.length; i += batchSize) {
+      const batch = allGames.slice(i, i + batchSize);
       await db.batchUpsertCatalog(batch);
     }
-    console.log(`[Catalog] Catalogue remplacé: ${games.length} jeux importés`);
-    res.json({ ok: true, count: games.length });
+    console.log(`[Catalog] Catalogue remplacé: ${allGames.length} jeux importés`);
+    db.invalidateCatalogCache();
+    res.json({ ok: true, count: allGames.length });
   } catch (err) {
     console.error('[CatalogReplace] Error:', err.message);
     res.status(500).json({ error: err.message });

@@ -806,7 +806,7 @@ async function queryCatalog({ search, letter, platform, genre, yearMin, yearMax,
     query = query.ilike('title', letter.toLowerCase() + '%');
   }
   // Filtres simples (via Supabase)
-  if (platform && platform !== 'all') query = query.or(`platform.eq.${platform},platforms_raw.ilike.%${platform}%`);
+  if (platform && platform !== 'all') query = query.or(`platform.ilike.%${platform}%,platforms_raw.ilike.%${platform}%`);
   if (genre && genre !== 'all') query = query.eq('genre', genre);
   if (yearMin) query = query.gte('year', parseInt(yearMin));
   if (yearMax) query = query.lte('year', parseInt(yearMax));

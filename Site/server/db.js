@@ -207,7 +207,7 @@ async function updateGameStatus(userId, gameId, status) {
   } else {
     const { error } = await supabaseAdmin
       .from('games')
-      .insert({ user_id: userId, game_id: gameId, status });
+      .insert({ user_id: userId, game_id: gameId, status, playtime: 0 });
     if (error) throw new Error(error.message);
   }
 }
@@ -231,7 +231,7 @@ async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic
   } else {
     const { error } = await supabaseAdmin
       .from('games')
-      .insert({ user_id: userId, game_id: gameId, user_rating: rating, review_text: reviewText, review_public: reviewPublic, has_review: hasReview });
+      .insert({ user_id: userId, game_id: gameId, status: 'not_started', playtime: 0, user_rating: rating, review_text: reviewText, review_public: reviewPublic, has_review: hasReview });
     if (error) throw new Error(error.message);
   }
 }

@@ -414,7 +414,7 @@ app.post('/api/games/review', requireAuth, async (req, res) => {
       console.log('[Review] savePublicReview OK');
       const me = await db.getUserById(req.session.userId).catch(() => {});
       if (isPublic && me) {
-        notifyOtherReviewers(req.session.userId, gameId, me.display_name, sTitle).catch(() => {});
+        notifyOtherReviewers(req.session.userId, gameId, me.display_name, sanitizedTitle).catch(() => {});
       }
     }
     res.json({ ok: true });

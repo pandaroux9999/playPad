@@ -2929,7 +2929,6 @@ function BottomNav({ view, setView }) {
     { id: "catalogue", label: "Catalogue",  Icon: Briefcase },
     { id: "actus",     label: "Actus",      Icon: Newspaper },
     { id: "community", label: "Communauté", Icon: Users },
-    { id: "critiques", label: "Mes critiques",  Icon: Edit3 },
     { id: "profil",    label: "Mon Espace", Icon: User },
   ];
   return h('div', { className: "absolute bottom-0 left-0 right-0 h-20 flex items-start justify-around px-2 pt-3 pb-5 border-t border-border", style: { background: "rgba(15,15,28,0.96)", backdropFilter: "blur(20px)" } },
@@ -3285,7 +3284,7 @@ function App() {
   const [view, setView] = useState("catalogue");
   const swipeStartX = useRef(null);
   const swipeIndicator = useRef(null);
-  const TAB_ORDER = ["catalogue", "actus", "community", "critiques", "profil"];
+  const TAB_ORDER = ["catalogue", "actus", "community", "profil"];
   const onTouchStart = (e) => {
     swipeStartX.current = e.touches[0].clientX;
   };
@@ -3684,7 +3683,6 @@ function App() {
           view === "catalogue" && h(CatalogueView, { key: 'cat', refreshKey: catalogRefreshKey, onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); const sg = e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }; sg._inLibrary = Boolean(e); setSelectedGame(sg); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
           view === "actus" && h(MagView, { onSelectGame: setSelectedGame }),
           view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, freshReview, onFreshReviewConsumed: () => setFreshReview(null), onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); }, showAuthModal, user }),
-          view === "critiques" && h(ReviewsView, { games, onSelect: game => setSelectedGame({ ...game, _inLibrary: true }) }),
           view === "profil" && h(ProfilView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: game => setSelectedGame({ ...game, _inLibrary: true }), search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast, showAuthModal, setView, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); } })
         )
       ),

@@ -3558,18 +3558,18 @@ app.post('/api/contact', requireAuth, contactLimiter, async (req, res) => {
     // Email (retourne un statut clair au frontend)
     let mailStatus = 'disabled';
     let mailError = null;
-    const transporter = createMailTransporter();
-    if (transporter) {
+    const smtpUser = (process.env.SMTP_USER || '').trim();
+    if (smtpUser) {
       try {
-        await Promise.race([
-          transporter.sendMail({
-            from: `"PlayPad Contact" <${process.env.SMTP_USER}>`,
-            to: process.env.SMTP_USER,
-            subject: `[PlayPad] Message de ${sanitizedEmail || 'utilisateur #' + req.session.userId}`,
-            html: `<p><b>De :</b> ${sanitizedEmail || 'inconnu'}</p><p><b>Message :</b></p><p>${sanitizedMsg}</p>`,
-          }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP timeout')), 12000)),
-        ]);
+        const sendResult = await sendMailWithSmtpFallback({
+          from: `"PlayPad Contact" <${smtpUser}>`,
+          to: smtpUser,
+          subject: `[PlayPad] Message de ${sanitizedEmail || 'utilisateur #' + req.session.userId}`,
+          html: `<p><b>De :</b> ${sanitizedEmail || 'inconnu'}</p><p><b>Message :</b></p><p>${sanitizedMsg}</p>`,
+        });
+        if (sendResult?.usedFallback) {
+          console.warn('[Contact] SMTP fallback utilisé (port alternatif)');
+        }
         mailStatus = 'sent';
       } catch (e) {
         mailStatus = 'failed';
@@ -3728,7 +3728,7 @@ Réponds de façon concise et utile en français. Quand c'est pertinent, termine
 // ─── EMAIL NOTIFICATION SYSTEM ──────────────────────────────
 const nodemailer = require('nodemailer');
 
-function createMailTransporter() {
+function getSmtpConfig() {
   const smtpHost = (process.env.SMTP_HOST || '').trim();
   const smtpPort = (process.env.SMTP_PORT || '587').trim();
   const smtpUser = (process.env.SMTP_USER || '').trim();
@@ -3736,15 +3736,67 @@ function createMailTransporter() {
   if (!smtpHost || !smtpUser || !smtpPass) return null;
   const parsedPort = Number.parseInt(smtpPort, 10);
   if (!Number.isFinite(parsedPort)) return null;
-  return nodemailer.createTransport({
+  return {
     host: smtpHost,
     port: parsedPort,
+    user: smtpUser,
+    pass: smtpPass,
     secure: parsedPort === 465,
-    auth: { user: smtpUser, pass: smtpPass },
+  };
+}
+
+function createMailTransporter(config = getSmtpConfig()) {
+  if (!config) return null;
+  return nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: { user: config.user, pass: config.pass },
     connectionTimeout: 10000,
     greetingTimeout: 10000,
     socketTimeout: 15000,
   });
+}
+
+function isGmailHost(host) {
+  const h = String(host || '').toLowerCase();
+  return h.includes('gmail.com') || h.includes('googlemail.com');
+}
+
+function withTimeout(promise, timeoutMs) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      const err = new Error('SMTP timeout');
+      err.code = 'ETIMEDOUT';
+      setTimeout(() => reject(err), timeoutMs);
+    }),
+  ]);
+}
+
+async function sendMailWithSmtpFallback(mailOptions) {
+  const baseCfg = getSmtpConfig();
+  if (!baseCfg) {
+    const err = new Error('SMTP config missing');
+    err.code = 'ECONFIG';
+    throw err;
+  }
+
+  const primaryTransporter = createMailTransporter(baseCfg);
+  try {
+    await withTimeout(primaryTransporter.sendMail(mailOptions), 12000);
+    return { usedFallback: false };
+  } catch (primaryError) {
+    const hint = getMailFailureHint(primaryError);
+    const canTryGmailFallback = isGmailHost(baseCfg.host) && (baseCfg.port === 587 || baseCfg.port === 465) && hint === 'smtp_connection_timeout';
+    if (!canTryGmailFallback) throw primaryError;
+
+    const fallbackPort = baseCfg.port === 587 ? 465 : 587;
+    const fallbackCfg = { ...baseCfg, port: fallbackPort, secure: fallbackPort === 465 };
+    const fallbackTransporter = createMailTransporter(fallbackCfg);
+    await withTimeout(fallbackTransporter.sendMail(mailOptions), 12000);
+    return { usedFallback: true };
+  }
 }
 
 function getMailFailureHint(err) {
@@ -3768,8 +3820,7 @@ function getMailFailureHint(err) {
 }
 
 async function sendEsportNotificationEmail(user, event, action) {
-  const transporter = createMailTransporter();
-  if (!transporter || !user.email) return;
+  if (!getSmtpConfig() || !user.email) return;
   try {
     const subject = action === 'favorite'
       ? `Nouvel événement e-sport : ${event.event || event.title}`
@@ -3783,12 +3834,15 @@ async function sendEsportNotificationEmail(user, event, action) {
         <hr style="border-color:#333;" />
         <p style="font-size:12px;color:#666;">Tu reçois cet email car tu as activé les notifications e-sport dans ton profil PlayPad.</p>
       </div>`;
-    await transporter.sendMail({
+    const sendResult = await sendMailWithSmtpFallback({
       from: `"PlayPad" <${process.env.SMTP_USER}>`,
       to: user.email,
       subject,
       html,
     });
+    if (sendResult?.usedFallback) {
+      console.warn(`[Email] Fallback SMTP utilisé pour ${user.email}`);
+    }
     console.log(`[Email] Notification e-sport envoyée à ${user.email}`);
   } catch (e) {
     console.error('[Email] Send error:', e.message);

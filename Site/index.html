@@ -2780,7 +2780,10 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
                 setContactOpen(false);
                 setContactMsg('');
                 if (result.mailStatus === 'sent') showToast('Message envoyé par email.');
-                else if (result.mailStatus === 'failed') showToast('Message enregistré, mais email non envoyé.');
+                else if (result.mailStatus === 'failed') {
+                  const hint = result.mailError ? ` (${result.mailError})` : '';
+                  showToast('Message enregistré, mais email non envoyé.' + hint);
+                }
                 else showToast('Message enregistré (email non configuré).');
               } catch (e) { showToast('Erreur: ' + (e.message || '')); }
               finally { setContactSending(false); }

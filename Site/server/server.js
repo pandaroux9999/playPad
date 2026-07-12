@@ -3557,6 +3557,7 @@ app.post('/api/contact', requireAuth, contactLimiter, async (req, res) => {
 
     // Email (retourne un statut clair au frontend)
     let mailStatus = 'disabled';
+    let mailError = null;
     const transporter = createMailTransporter();
     if (transporter) {
       try {
@@ -3572,13 +3573,14 @@ app.post('/api/contact', requireAuth, contactLimiter, async (req, res) => {
         mailStatus = 'sent';
       } catch (e) {
         mailStatus = 'failed';
-        console.error('[Contact] Email error:', e.message);
+        mailError = getMailFailureHint(e);
+        console.error('[Contact] Email error:', e.code || e.responseCode || 'UNKNOWN', e.message);
       }
     } else {
       console.warn('[Contact] SMTP non configuré: message enregistré en base uniquement');
     }
 
-    res.json({ ok: true, mailStatus });
+    res.json({ ok: true, mailStatus, ...(mailError ? { mailError } : {}) });
   } catch (err) {
     console.error('[Contact]', err.message);
     res.status(500).json({ error: 'Erreur interne' });
@@ -3727,20 +3729,42 @@ Réponds de façon concise et utile en français. Quand c'est pertinent, termine
 const nodemailer = require('nodemailer');
 
 function createMailTransporter() {
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = process.env.SMTP_PORT;
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
+  const smtpHost = (process.env.SMTP_HOST || '').trim();
+  const smtpPort = (process.env.SMTP_PORT || '587').trim();
+  const smtpUser = (process.env.SMTP_USER || '').trim();
+  const smtpPass = (process.env.SMTP_PASS || '').trim();
   if (!smtpHost || !smtpUser || !smtpPass) return null;
+  const parsedPort = Number.parseInt(smtpPort, 10);
+  if (!Number.isFinite(parsedPort)) return null;
   return nodemailer.createTransport({
     host: smtpHost,
-    port: parseInt(smtpPort || '587'),
-    secure: smtpPort === '465',
+    port: parsedPort,
+    secure: parsedPort === 465,
     auth: { user: smtpUser, pass: smtpPass },
     connectionTimeout: 10000,
     greetingTimeout: 10000,
     socketTimeout: 15000,
   });
+}
+
+function getMailFailureHint(err) {
+  const code = String(err?.code || '').toUpperCase();
+  const responseCode = Number(err?.responseCode || 0);
+  const message = String(err?.message || '').toLowerCase();
+
+  if (code === 'EAUTH' || responseCode === 535 || message.includes('invalid login')) {
+    return 'auth_failed_gmail_app_password';
+  }
+  if (code === 'ESOCKET' || code === 'ETIMEDOUT' || code === 'ECONNECTION') {
+    return 'smtp_connection_timeout';
+  }
+  if (code === 'ENOTFOUND') {
+    return 'smtp_host_not_found';
+  }
+  if (responseCode === 534 || responseCode === 530) {
+    return 'gmail_requires_2fa_or_app_password';
+  }
+  return 'smtp_send_failed';
 }
 
 async function sendEsportNotificationEmail(user, event, action) {

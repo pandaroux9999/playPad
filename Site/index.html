@@ -2048,11 +2048,6 @@ function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification }) {
                       })
                     )
                   ),
-                  h('div', { className: "px-4 grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" },
-                    [{ label: "Jeux", value: friendGames.length, color: P1, Icon: Gamepad2 },{ label: "Heures", value: `${totalHours}h`, color: P2, Icon: Clock },{ label: "Termin\u00e9s", value: completed, color: "#22c55e", Icon: Trophy },{ label: "Critiques", value: reviewed, color: "#f59e0b", Icon: Edit3 }].map(({ label, value, color, Icon }) =>
-                      h('div', { key: label, className: "bg-card border border-border rounded-2xl p-3.5" }, h('div', { className: "flex items-center gap-1.5 mb-2" }, h(Icon, { size: 13, style: { color } }), h('span', { className: "text-xs font-medium text-muted-foreground" }, label)), h('span', { className: "text-2xl font-black", style: { fontFamily: "'Rajdhani', sans-serif", color } }, value))
-                    )
-                  ),
                   friendGames.length > 0 && h('div', { className: "px-4 mb-4" },
                     h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Biblioth\u00e8que"),
                     h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" }, friendGames.map(game => h(GameCard, { key: game.game_id || game.id, game, onClick: onClose, small: true })))
@@ -3168,6 +3163,13 @@ function App() {
     const dx = e.changedTouches[0].clientX - swipeStartX.current;
     swipeStartX.current = null;
     if (Math.abs(dx) < 120) return;
+    // don't swipe if target is in a horizontally scrollable area
+    let el = e.target;
+    while (el && el !== e.currentTarget) {
+      const style = window.getComputedStyle(el);
+      if (style.overflowX === 'auto' || style.overflowX === 'scroll') return;
+      el = el.parentElement;
+    }
     const idx = TAB_ORDER.indexOf(view);
     if (idx === -1) return;
     if (dx < 0 && idx < TAB_ORDER.length - 1) setView(TAB_ORDER[idx + 1]);

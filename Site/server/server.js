@@ -2857,9 +2857,7 @@ async function fetchArticlesFromRSS() {
 // ─── 3. FETCH : E-Sport via RSS ────────────────────────────
 const ESPORT_RSS_FEEDS = [
   { url: 'https://www.hltv.org/rss/news', name: 'HLTV', game: 'Counter-Strike 2' },
-  { url: 'https://www.millenium.org/rss', name: 'Millenium', game: 'Multi' },
-  { url: 'https://www.dexerto.com/esports/feed/', name: 'Dexerto', game: 'Multi' },
-  { url: 'https://estnn.com/feed/', name: 'Esports.net', game: 'Multi' },
+  { url: 'https://dotesports.com/feed', name: 'Dot Esports', game: 'Multi' },
 ];
 
 async function fetchEsportFromRSS() {

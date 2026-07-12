@@ -998,8 +998,10 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     return () => observer.disconnect();
   }, [loadingCatalog, catalog.length, catalogTotal, catalogPage, loadCatalog]);
 
-  const hasMore = catalog.length < catalogTotal;
+      const hasMore = catalog.length < catalogTotal;
   const label = activeLetter === 'all' ? 'Tout le catalogue' : `Lettre ${activeLetter}`;
+  const q = search.toLowerCase().trim();
+  const filterBySearch = (items, getTitle) => !q ? items : items.filter(item => (getTitle(item) || '').toLowerCase().includes(q));
 
     return h('div', { className: "flex flex-col h-full view-enter" },
       h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0" },
@@ -1053,7 +1055,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
           newReleases.length === 0
             ? h('p', { className: "text-[10px] text-muted-foreground italic" }, "Chargement\u2026")
             : h('div', { className: "flex gap-3 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } },
-                newReleases.map(game => h('div', { key: game.game_id, className: "flex-shrink-0 w-36" },
+                filterBySearch(newReleases, g => g.title).map(game => h('div', { key: game.game_id, className: `flex-shrink-0 ${q ? 'w-28' : 'w-36'}` },
                   h(GameCard, {
                     game: { ...game, userRating: ratings?.[game.game_id] || 0 },
                     onClick: () => onSelect(game),
@@ -1062,6 +1064,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                     boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
                     boosterActive: userBoostedSet?.has(game.game_id),
                     boosterBtn: () => onSelect(game),
+                    small: !!q,
                   })
                 ))
               )
@@ -1072,10 +1075,10 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
           topBoosted.length === 0
             ? h('p', { className: "text-[10px] text-muted-foreground italic mb-3" }, "Aucun boost pour l\u2019instant")
             : h('div', { className: "flex gap-3 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } },
-                topBoosted.slice(0, 10).map(b => {
+                filterBySearch(topBoosted, b => b.game?.title).slice(0, 10).map(b => {
               const game = b.game;
               if (!game) return null;
-              return h('div', { key: b.game_id, className: "flex-shrink-0 w-36" },
+              return h('div', { key: b.game_id, className: `flex-shrink-0 ${q ? 'w-28' : 'w-36'}` },
                 h(GameCard, {
                   game: { ...game, userRating: ratings?.[game.game_id] || 0 },
                   onClick: () => onSelect(game),
@@ -1084,9 +1087,26 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                   boostCount: b.count,
                   boosterActive: userBoostedSet?.has(b.game_id),
                   boosterBtn: () => onSelect(game),
+                  small: !!q,
                 })
               );
             })
+          )
+        ),
+        // À la une (top rated)
+        featured.length > 0 && h('div', null,
+          h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "\u2B50", " \u00c0 la une"),
+          h('div', { className: "flex gap-3 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } },
+            filterBySearch(featured, g => g.title).map(game => h('div', { key: game.game_id, className: `flex-shrink-0 ${q ? 'w-28' : 'w-36'}` },
+              h(GameCard, {
+                game: { ...game, userRating: ratings?.[game.game_id] || 0 },
+                onClick: () => onSelect(game),
+                wishlistIds, onWishlist: onToggleWishlist,
+                topThreeIds, onCrown: onToggleTopThree,
+                boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
+                small: !!q,
+              })
+            ))
           )
         ),
       ),
@@ -1749,6 +1769,23 @@ function NewsDetailSheet({ item, onClose }) {
     }
     return null;
   };
+  const [manualUrl, setManualUrl] = useState('');
+  const [embedSrc, setEmbedSrc] = useState('');
+  const handleManualEmbed = () => {
+    const u = manualUrl.trim();
+    if (!u) return;
+    if (u.includes('twitch.tv')) {
+      const ch = u.split('twitch.tv/').pop()?.split('?')[0]?.split('/')[0];
+      if (ch) { setEmbedSrc(`https://player.twitch.tv/?channel=${ch}&parent=localhost`); return; }
+    }
+    if (u.includes('youtube.com/watch') || u.includes('youtu.be')) {
+      let vid = '';
+      if (u.includes('youtube.com/watch')) vid = new URL(u).searchParams.get('v') || '';
+      else if (u.includes('youtu.be/')) vid = u.split('youtu.be/').pop()?.split('?')[0] || '';
+      if (vid) { setEmbedSrc(`https://www.youtube.com/embed/${vid}?autoplay=0`); return; }
+    }
+    setEmbedSrc(`https://www.youtube.com/embed?search=${encodeURIComponent(u)}`);
+  };
   const [translatedContent, setTranslatedContent] = useState(null);
   const [showOriginal, setShowOriginal] = useState(false);
   const [translating, setTranslating] = useState(false);
@@ -1829,15 +1866,23 @@ function NewsDetailSheet({ item, onClose }) {
           ),
           // ─── STREAM ──────────────────────────────
           (() => {
+            // Si l'utilisateur a collé un lien manuel, afficher l'embed
+            if (embedSrc) {
+              return h('div', { className: "mb-3 rounded-2xl overflow-hidden border", style: { borderColor: "rgba(255,255,255,0.06)" } },
+                h('div', { className: "relative", style: { aspectRatio: "16/9" } },
+                  h('iframe', { src: embedSrc, title: "Video", className: "w-full h-full", allow: "autoplay; encrypted-media", allowFullScreen: true })
+                ),
+                h('button', { onClick: () => { setEmbedSrc(''); setManualUrl(''); }, className: "text-[8px] font-bold p-2 transition-all hover:opacity-70", style: { color: P1 } }, "← Changer de vidéo")
+              );
+            }
             const stream = getStreamInfo();
             if (!stream) {
-              const gameSearch = item.game || item.league || '';
-              return h('div', { className: "mb-3 rounded-2xl p-3 text-center", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" } },
-                h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-2" }, "Aucun flux trouv\u00e9"),
-                h('p', { className: "text-[8px] text-muted-foreground mb-2" }, "Chercher le match sur Twitch ou YouTube :"),
-                h('div', { className: "flex items-center justify-center gap-2" },
-                  h('a', { href: `https://www.twitch.tv/search?term=${encodeURIComponent(gameSearch)}`, target: "_blank", rel: "noopener noreferrer", className: "px-3 py-1.5 rounded-lg text-[8px] font-bold transition-all hover:opacity-80 flex items-center gap-1", style: { background: "#9146ff30", color: "#9146ff" } }, h(Tv, { size: 10 }), "Twitch"),
-                  h('a', { href: `https://www.youtube.com/results?search_query=${encodeURIComponent(gameSearch + ' live')}`, target: "_blank", rel: "noopener noreferrer", className: "px-3 py-1.5 rounded-lg text-[8px] font-bold transition-all hover:opacity-80 flex items-center gap-1", style: { background: "#ff000030", color: "#ff0000" } }, h(Youtube, { size: 10 }), "YouTube")
+              return h('div', { className: "mb-3 rounded-2xl p-3", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" } },
+                h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground text-center mb-2" }, "Aucun flux automatique"),
+                h('p', { className: "text-[8px] text-muted-foreground text-center mb-2" }, "Colle un lien Twitch ou YouTube pour regarder ici :"),
+                h('div', { className: "flex items-center gap-2" },
+                  h('input', { value: manualUrl, onChange: e => setManualUrl(e.target.value), onKeyDown: e => { if (e.key === 'Enter') handleManualEmbed(); }, placeholder: "twitch.tv/riotgames ou youtu.be/...", className: "flex-1 bg-secondary/60 border border-border rounded-xl px-3 py-2 text-[9px] text-foreground placeholder-muted-foreground outline-none" }),
+                  h('button', { onClick: handleManualEmbed, className: "px-3 py-2 rounded-xl text-[9px] font-bold transition-all hover:opacity-80 flex-shrink-0", style: { background: manualUrl.trim() ? P1 : `${P1}40`, color: '#fff' } }, h(Tv, { size: 11 }))
                 )
               );
             }

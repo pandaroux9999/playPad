@@ -2758,7 +2758,9 @@ function extractRssImage(block) {
 const NON_GAMING_KEYWORDS = [
   'film', 'cinéma', 'cinema', 'série', 'serie', 'netflix', 'disney+', 'amazon prime',
   'oscar', 'césar', 'cesar', 'acteur', 'actrice', 'réalisateur', 'realisateur',
-  'bande-annonce', 'movie', 'tv show', 'episode', 'box-office',
+  'bande-annonce', 'movie', 'tv show', 'episode', 'box-office', 'box office',
+  'rotten tomatoes', 'rottentomatoes', 'hollywood', 'red carpet',
+  'acteurs', 'actrices', 'réalisateurs', 'realisateurs',
 ];
 
 async function fetchDramaFromRSS() {
@@ -2830,6 +2832,7 @@ async function fetchArticlesFromRSS() {
         const cover = extractRssImage(block);
         const lower = (title + ' ' + plainText).toLowerCase();
         if (NON_GAMING_KEYWORDS.some(kw => lower.includes(kw))) continue;
+        if (feed.name === 'JV' && category === 'News culture') continue;
         items.push({
           type: 'article',
           title,

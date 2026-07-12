@@ -1685,15 +1685,16 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
               )
             ),
             // "Voir plus" for drama items (keep existing drama feed as secondary)
-            dramaItems.filter(d => !d._archived).length > 0 && h('div', { className: "mt-4" },
-              h('p', { className: "text-[9px] font-black text-muted-foreground mb-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Autres actualit\u00e9s"),
+            dramaItems.filter(d => !d._archived).length > 0 && h('div', { className: "mt-4 space-y-2" },
+              h('p', { className: "text-[9px] font-black text-muted-foreground mb-1", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Autres actualit\u00e9s"),
               dramaItems.filter(d => !d._archived).slice(0, 3).map((item, i) =>
-                h('div', { key: 'd'+i, onClick: () => setSelectedNews(item), className: "p-2.5 rounded-xl cursor-pointer transition-all hover:opacity-80 mb-1", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" } },
-                  h('div', { className: "flex items-start gap-2" },
-                    h('span', { className: "px-1 py-0.5 rounded text-[6px] font-bold flex-shrink-0", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.15)" : "rgba(59,130,246,0.15)", color: item.tag === "Drama" ? "#ef4444" : "#3b82f6" } }, item.tag || ''),
-                    h('div', { className: "flex-1 min-w-0" },
-                      h('p', { className: "text-[9px] font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
-                      h('p', { className: "text-[7px] text-muted-foreground mt-0.5 line-clamp-1" }, item.sourceName)
+                h('div', { key: 'd'+i, onClick: () => setSelectedNews(item), className: "rounded-2xl overflow-hidden cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] border", style: { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" } },
+                  h('div', { className: "p-3" },
+                    h('p', { className: "text-sm sm:text-base font-bold text-foreground leading-tight line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
+                    h('div', { className: "flex items-center gap-1 mt-1.5" },
+                      h('span', { className: "text-[8px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.06)", color: item.tag === "Drama" ? "#ef4444" : "#8888aa" } }, (item.tag || 'Actu').slice(0, 12)),
+                      h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, item.sourceName),
+                      item.pubDate && h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, new Date(item.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
                     )
                   )
                 )

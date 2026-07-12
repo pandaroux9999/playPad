@@ -189,51 +189,27 @@ async function upsertGame(userId, game) {
 }
 
 async function updateGameStatus(userId, gameId, status) {
-  // Essaye UPDATE d'abord
-  const { data: existing, error: findError } = await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from('games')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('game_id', gameId)
-    .maybeSingle();
-  if (findError) throw new Error(findError.message);
-
-  if (existing) {
-    const { error } = await supabaseAdmin
-      .from('games')
-      .update({ status })
-      .eq('id', existing.id);
-    if (error) throw new Error(error.message);
-  } else {
-    const { error } = await supabaseAdmin
-      .from('games')
-      .insert({ user_id: userId, game_id: gameId, status, playtime: 0 });
-    if (error) throw new Error(error.message);
-  }
+    .upsert({ user_id: userId, game_id: gameId, status, playtime: 0, user_rating: 0, review_text: '', review_public: 1, has_review: false }, { onConflict: 'user_id, game_id' });
+  if (error) throw new Error(error.message);
 }
 
 async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic) {
   const hasReview = reviewText && reviewText.trim().length > 0;
-  const { data: existing, error: findError } = await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from('games')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('game_id', gameId)
-    .maybeSingle();
-  if (findError) throw new Error(findError.message);
-
-  if (existing) {
-    const { error } = await supabaseAdmin
-      .from('games')
-      .update({ user_rating: rating, review_text: reviewText, review_public: reviewPublic, has_review: hasReview })
-      .eq('id', existing.id);
-    if (error) throw new Error(error.message);
-  } else {
-    const { error } = await supabaseAdmin
-      .from('games')
-      .insert({ user_id: userId, game_id: gameId, status: 'not_started', playtime: 0, user_rating: rating, review_text: reviewText, review_public: reviewPublic, has_review: hasReview });
-    if (error) throw new Error(error.message);
-  }
+    .upsert({
+      user_id: userId,
+      game_id: gameId,
+      status: 'not_started',
+      playtime: 0,
+      user_rating: rating,
+      review_text: reviewText,
+      review_public: reviewPublic ? 1 : 0,
+      has_review: hasReview,
+    }, { onConflict: 'user_id, game_id' });
+  if (error) throw new Error(error.message);
 }
 
 async function getWishlist(userId) {
@@ -602,7 +578,7 @@ async function ensureCatalogGame(game) {
 
 async function batchUpsertCatalog(games) {
   if (!games || games.length === 0) return;
-  games = games.filter(g => g.game_id?.startsWith('jv-'));
+  games = games.filter(g => g.game_id);
   if (games.length === 0) return;
   const now = new Date().toISOString();
   const payloads = games.map(g => ({

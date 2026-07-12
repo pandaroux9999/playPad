@@ -398,10 +398,9 @@ function PlatformBadge({ platform, platforms, small }) {
 }
 
 function StarRating({ rating, size = 14, interactive = false, onChange }) {
-  const starColor = rating >= 3 ? "#22c55e" : rating > 0 ? "#ef4444" : "#3a3a55";
   return h('div', { className: "flex gap-0.5" }, ...[1,2,3,4,5].map(i =>
     h('button', { key: i, onClick: () => interactive && onChange?.(i), className: interactive ? "cursor-pointer hover:scale-125 transition-transform" : "cursor-default pointer-events-none" },
-      h(Star, { size, fill: i <= rating ? starColor : "transparent", stroke: i <= rating ? starColor : "#3a3a55", strokeWidth: 1.5 })
+      h(Star, { size, fill: i <= rating ? "#f59e0b" : "transparent", stroke: i <= rating ? "#f59e0b" : "#3a3a55", strokeWidth: 1.5 })
     )
   ));
 }

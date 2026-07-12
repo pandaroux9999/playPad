@@ -2803,7 +2803,7 @@ async function fetchArticlesFromRSS() {
       const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
       let match;
       let count = 0;
-      while ((match = itemRegex.exec(xml)) !== null && count < 8) {
+      while ((match = itemRegex.exec(xml)) !== null && count < 20) {
         const block = match[1];
         const get = (tag) => {
           const m = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i').exec(block);
@@ -2813,13 +2813,10 @@ async function fetchArticlesFromRSS() {
           return val;
         };
         const title = get('title');
-        let link = get('link');
-        const guid = get('guid');
+        const link = get('guid') || get('link');
         if (!title) continue;
         count++;
-        // Gameblog a un bug : <link> contient l'URL en double, <guid> est correct
-        if (link && link.includes('//' + link.split('/')[2] + '//')) link = guid || link;
-        const rawHtml = get('content:encoded') || get('description');
+        const rawHtml = get('description');
         const plainText = rawHtml.replace(/<[^>]*>/g, '').trim();
         const pubDate = get('pubDate');
         const category = get('category');
@@ -2829,13 +2826,13 @@ async function fetchArticlesFromRSS() {
         items.push({
           type: 'article',
           title,
-          desc: plainText.slice(0, 250),
+          desc: plainText.slice(0, 300),
           cover,
           tag: category || 'Actu',
-          officialUrl: link || guid,
-          sourceUrl: link || guid,
+          officialUrl: link,
+          sourceUrl: link,
           sourceName: feed.name,
-          details: rawHtml,
+          details: plainText.slice(0, 1500),
           pubDate,
         });
       }
@@ -2844,7 +2841,7 @@ async function fetchArticlesFromRSS() {
     }
   }
   items.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
-  return items.slice(0, 20);
+  return items.slice(0, 40);
 }
 
 // ─── 3. FETCH : E-Sport via RSS ────────────────────────────

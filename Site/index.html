@@ -1388,7 +1388,29 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
             r.review_text && h('p', { className: "text-[10px] text-foreground/70 leading-relaxed line-clamp-2" }, r.review_text),
             h('div', { className: "flex items-center gap-3 mt-1.5" },
               h('button', { onClick: async () => { if (!user) { showAuthModal('register'); return; } const nv = r.my_vote === 1 ? 0 : 1; castVote(r, nv); try { await API.voteReview(r.id, nv); load(); } catch(e) { console.error('[Vote]', e); load(); } }, className: `flex items-center gap-1 text-[8px] font-bold transition-colors ${r.my_vote === 1 ? "text-sky-400" : "text-muted-foreground hover:text-sky-400"}` }, h(ThumbsUp, { size: 8, fill: r.my_vote === 1 ? "#38bdf8" : "none", stroke: r.my_vote === 1 ? "#38bdf8" : "currentColor" }), r.thumbs_up || 0),
-              h('button', { onClick: async () => { if (!user) { showAuthModal('register'); return; } const nv = r.my_vote === -1 ? 0 : -1; castVote(r, nv); try { await API.voteReview(r.id, nv); load(); } catch(e) { console.error('[Vote]', e); load(); } }, className: `flex items-center gap-1 text-[8px] font-bold transition-colors ${r.my_vote === -1 ? "text-red-400" : "text-muted-foreground hover:text-red-400"}` }, h(ThumbsDown, { size: 8, fill: r.my_vote === -1 ? "#f87171" : "none", stroke: r.my_vote === -1 ? "#f87171" : "currentColor" }), r.thumbs_down || 0)
+              h('button', { onClick: async () => { if (!user) { showAuthModal('register'); return; } const nv = r.my_vote === -1 ? 0 : -1; castVote(r, nv); try { await API.voteReview(r.id, nv); load(); } catch(e) { console.error('[Vote]', e); load(); } }, className: `flex items-center gap-1 text-[8px] font-bold transition-colors ${r.my_vote === -1 ? "text-red-400" : "text-muted-foreground hover:text-red-400"}` }, h(ThumbsDown, { size: 8, fill: r.my_vote === -1 ? "#f87171" : "none", stroke: r.my_vote === -1 ? "#f87171" : "currentColor" }), r.thumbs_down || 0),
+              h('button', { onClick: async () => {
+                if (replyState.reviewId === r.id) { setReplyState({ reviewId: null, text: '' }); return; }
+                setReplyState({ reviewId: r.id, text: '' });
+                if (!replies[r.id]) {
+                  try { const d = await API.getReviewReplies(r.id); setReplies(prev => ({ ...prev, [r.id]: d.replies || [] })); } catch(e) {}
+                }
+              }, className: `flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[8px] font-bold transition-colors ${replyState.reviewId === r.id ? "text-purple-400" : "text-muted-foreground hover:text-purple-400"}` }, h(MessageSquare, { size: 8 }), r.reply_count || 0)
+            ),
+            replyState.reviewId === r.id && h('div', { className: "mt-2 space-y-2" },
+              (replies[r.id] || []).map(reply =>
+                h('div', { key: reply.id, className: "flex items-start gap-1.5 text-[9px] text-muted-foreground pl-2 border-l-2 border-border" },
+                  h('span', { className: "font-bold text-foreground whitespace-nowrap" }, reply.users?.display_name || "?"),
+                  h('span', null, reply.text)
+                )
+              ),
+              h('div', { className: "flex gap-1.5" },
+                h('input', { value: replyState.text, onChange: e => setReplyState(s => ({ ...s, text: e.target.value })), placeholder: "\u00c9cris une r\u00e9ponse...", className: "flex-1 bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-[9px] text-foreground placeholder-muted-foreground outline-none" }),
+                h('button', { onClick: async () => {
+                  if (!replyState.text.trim()) return;
+                  try { await API.replyToReview(r.id, replyState.text.trim()); setReplies(prev => ({ ...prev, [r.id]: (prev[r.id] || []).concat([{ id: Date.now(), review_id: r.id, text: replyState.text.trim(), users: { display_name: "Vous" }, created_at: new Date().toISOString() }]) })); setReplyState({ reviewId: null, text: '' }); load(); } catch(e) {}
+                }, className: "px-2 py-1.5 rounded-lg text-[9px] font-bold text-white", style: { background: GRAD } }, "Envoyer")
+              )
             )
           );
         })

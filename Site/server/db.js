@@ -1335,7 +1335,7 @@ async function getNewsFromCache() {
     .order('category')
     .order('sort_key', { ascending: false });
   if (error) throw new Error(error.message);
-  const result = { releases: [], esport: [], drama: [] };
+  const result = { releases: [], esport: [], drama: [], articles: [] };
   for (const row of data || []) {
     if (result[row.category]) {
       result[row.category].push({ ...cleanItemData(row.item_data), _created_at: row.created_at });
@@ -1345,7 +1345,7 @@ async function getNewsFromCache() {
 }
 
 async function pruneNewsCache(maxPerCategory) {
-  for (const cat of ['releases', 'esport', 'drama']) {
+  for (const cat of ['releases', 'esport', 'drama', 'articles']) {
     const { data } = await supabaseAdmin
       .from('news_cache')
       .select('id')

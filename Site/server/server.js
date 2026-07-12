@@ -2759,6 +2759,23 @@ const DRAMA_RSS_FEEDS = [
   { url: 'https://www.pcgamer.com/rss/all/', name: 'PC Gamer' },
 ];
 
+const ARTICLES_RSS_FEEDS = [
+  { url: 'https://www.gameblog.fr/rss', name: 'Gameblog', lang: 'fr' },
+  { url: 'https://www.actugaming.net/feed/', name: 'ActuGaming', lang: 'fr' },
+];
+
+function extractRssImage(block) {
+  const encMatch = block.match(/<enclosure[^>]*url="([^"]+)"/i);
+  if (encMatch) return encMatch[1];
+  const mediaMatch = block.match(/<media:content[^>]*url="([^"]+)"[^>]*medium="image"/i);
+  if (mediaMatch) return mediaMatch[1];
+  const thumbMatch = block.match(/<media:thumbnail[^>]*url="([^"]+)"/i);
+  if (thumbMatch) return thumbMatch[1];
+  const imgMatch = block.match(/<img[^>]+src="([^"]+\.(?:jpg|jpeg|png|webp))"/i);
+  if (imgMatch) return imgMatch[1];
+  return '';
+}
+
 const NON_GAMING_KEYWORDS = [
   'film', 'cinéma', 'cinema', 'série', 'serie', 'netflix', 'disney+', 'amazon prime',
   'oscar', 'césar', 'cesar', 'acteur', 'actrice', 'réalisateur', 'realisateur',
@@ -2773,11 +2790,9 @@ async function fetchDramaFromRSS() {
       const parsed = parseRSS(xml);
       for (const p of parsed.slice(0, 5)) {
         const lower = (p.title + ' ' + p.desc).toLowerCase();
-        // Filtre les articles non-jeu vidéo (cinéma, séries, etc.)
         if (NON_GAMING_KEYWORDS.some(kw => lower.includes(kw))) continue;
         const tag = lower.includes('licencie') || lower.includes('greve') || lower.includes('controvers') || lower.includes('polemique') || lower.includes('drama')
           ? 'Drama' : 'Actu';
-        // Traduction automatique EN -> FR
         const [titleFr, descFr] = await Promise.all([
           translateText(p.title),
           translateText(p.desc.slice(0, 500)),
@@ -2800,6 +2815,54 @@ async function fetchDramaFromRSS() {
   }
   items.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
   return items.slice(0, 15);
+}
+
+async function fetchArticlesFromRSS() {
+  const items = [];
+  for (const feed of ARTICLES_RSS_FEEDS) {
+    try {
+      const xml = await httpGet(feed.url);
+      const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+      let match;
+      let count = 0;
+      while ((match = itemRegex.exec(xml)) !== null && count < 8) {
+        const block = match[1];
+        const get = (tag) => {
+          const m = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i').exec(block);
+          let val = m ? m[1].trim() : '';
+          val = val.replace(/<!\[CDATA\[/g, '').replace(/\]\]>/g, '');
+          val = val.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+          return val;
+        };
+        const title = get('title');
+        const link = get('link');
+        if (!title) continue;
+        count++;
+        const desc = get('description').replace(/<[^>]*>/g, '').trim();
+        const pubDate = get('pubDate');
+        const category = get('category');
+        const cover = extractRssImage(block);
+        const lower = (title + ' ' + desc).toLowerCase();
+        if (NON_GAMING_KEYWORDS.some(kw => lower.includes(kw))) continue;
+        items.push({
+          type: 'article',
+          title,
+          desc: desc.slice(0, 200),
+          cover,
+          tag: category || 'Actu',
+          officialUrl: link,
+          sourceUrl: link,
+          sourceName: feed.name,
+          details: desc.slice(0, 1000),
+          pubDate,
+        });
+      }
+    } catch (e) {
+      console.error(`[News] RSS error ${feed.name}:`, e.message);
+    }
+  }
+  items.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
+  return items.slice(0, 20);
 }
 
 // ─── 3. FETCH : E-Sport via RSS ────────────────────────────
@@ -3066,8 +3129,14 @@ async function refreshAllNews(force) {
     notifyFavoriteUsers('esport', esport).catch(e => console.error('[Notify] Error:', e.message));
   }
 
+  const articles = await fetchArticlesFromRSS();
+  if (articles.length > 0) {
+    await db.addNewsItems('articles', articles);
+    results.articles = articles.length;
+  }
+
   await db.pruneNewsCache(50).catch(e => console.error('[News] Prune error:', e.message));
-  console.log(`[News] ✅ Rafraîchi : ${results.releases} releases, ${results.drama} drama, ${results.esport} esport`);
+  console.log(`[News] ✅ Rafraîchi : ${results.releases} releases, ${results.drama} drama, ${results.esport} esport, ${results.articles || 0} articles`);
   return results;
 }
 
@@ -3190,9 +3259,8 @@ app.post('/api/translate', async (req, res) => {
 app.get('/api/news', newsLimiter, async (req, res) => {
   try {
     const data = await db.getNewsFromCache();
-    const hasData = (data.releases?.length || 0) + (data.esport?.length || 0) + (data.drama?.length || 0) > 0;
+    const hasData = (data.releases?.length || 0) + (data.esport?.length || 0) + (data.drama?.length || 0) + (data.articles?.length || 0) > 0;
     if (hasData) {
-      // Si l'e-sport est vide ou ne contient que des articles RSS (pas de vraies équipes), on utilise le fallback
       if (!data.esport || data.esport.length === 0 || !data.esport.some(e => e.teams || e.gameSlug)) {
         const fallback = loadNewsFallback();
         if (fallback.esport && fallback.esport.length > 0) {
@@ -3201,12 +3269,11 @@ app.get('/api/news', newsLimiter, async (req, res) => {
       }
       res.json(data);
     } else {
-      // Fallback vers le fichier JSON si le cache DB est vide
-      res.json(loadNewsFallback());
+      res.json({ ...loadNewsFallback(), articles: [] });
     }
   } catch (err) {
     console.error('[News] DB error, fallback JSON:', err.message);
-    res.json(loadNewsFallback());
+    res.json({ ...loadNewsFallback(), articles: [] });
   }
 });
 

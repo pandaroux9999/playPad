@@ -2745,11 +2745,11 @@ const ARTICLES_RSS_FEEDS = [
 function extractRssImage(block) {
   const encMatch = block.match(/<enclosure[^>]*url="([^"]+)"/i);
   if (encMatch) return encMatch[1];
-  const mediaMatch = block.match(/<media:content[^>]*url="([^"]+)"[^>]*medium="image"/i);
-  if (mediaMatch) return mediaMatch[1];
+  const imgExtMatch = block.match(/<media:content[^>]+url="([^"]+\.(?:jpg|jpeg|png|webp|gif))"/i);
+  if (imgExtMatch) return imgExtMatch[1];
   const thumbMatch = block.match(/<media:thumbnail[^>]*url="([^"]+)"/i);
   if (thumbMatch) return thumbMatch[1];
-  const imgMatch = block.match(/<img[^>]+src="([^"]+\.(?:jpg|jpeg|png|webp))"/i);
+  const imgMatch = block.match(/<img[^>]+src="([^"]+)"/i);
   if (imgMatch) return imgMatch[1];
   return '';
 }

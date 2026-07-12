@@ -41,6 +41,15 @@ const YEAR_RANGES = [];
 for (let y = 1990; y <= 2026; y++) YEAR_RANGES.push(y);
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function safeWrite(filePath, data) {
+  const tmp = filePath + '.tmp.' + Date.now();
+  try {
+    fs.writeFileSync(tmp, data);
+    fs.renameSync(tmp, filePath);
+  } catch (e) {
+    console.error(`[ERREUR ÉCRITURE] ${filePath}: ${e.message}`);
+  }
+}
 
 function fetchJSON(url) {
   return new Promise((resolve, reject) => {
@@ -174,13 +183,8 @@ function mergeByTitle(games) {
 
         await sleep(300);
 
-        if (page % 10 === 0) {
-          fs.writeFileSync(PROGRESS, JSON.stringify({ platformIdx: pi, yearIdx: yi, page: page + 1 }));
-          const merged = mergeByTitle(allGames);
-          fs.writeFileSync(OUTPUT, JSON.stringify(merged, null, 2));
-          const elapsed = Math.round((Date.now() - startTime) / 1000);
-          console.log(`  [SAUVEGARDE] ${merged.length} jeux uniques (${Math.floor(elapsed/60)}m${elapsed%60}s)`);
-        }
+        // Sauvegarde du progrès
+        safeWrite(PROGRESS, JSON.stringify({ platformIdx: pi, yearIdx: yi, page: page + 1 }));
 
         hasNext = data.next !== null;
         page++;
@@ -192,7 +196,7 @@ function mergeByTitle(games) {
 
   console.log('\n=== FUSION PAR TITRE ===');
   const final = mergeByTitle(allGames);
-  fs.writeFileSync(OUTPUT, JSON.stringify(final, null, 2));
+  safeWrite(OUTPUT, JSON.stringify(final, null, 2));
   try { fs.unlinkSync(PROGRESS); } catch {}
 
   const elapsed = Math.round((Date.now() - startTime) / 1000);

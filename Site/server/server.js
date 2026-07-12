@@ -620,6 +620,16 @@ app.get('/api/games/ratings', async (req, res) => {
   }
 });
 
+app.get('/api/catalog/filters', catalogLimiter, async (req, res) => {
+  try {
+    const filters = await db.getCatalogFilters();
+    res.json(filters);
+  } catch (err) {
+    console.error('[CatalogFilters] Error:', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
 app.get('/api/catalog', catalogLimiter, async (req, res) => {
   try {
     const { search, letter, platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating } = req.query;
@@ -3522,25 +3532,40 @@ app.get('/api/streamers/search', requireAuth, async (req, res) => {
 app.post('/api/contact', requireAuth, contactLimiter, async (req, res) => {
   try {
     const { message, email } = req.body;
-    if (!message) return res.status(400).json({ error: 'Message requis' });
+    if (!message || !message.trim()) return res.status(400).json({ error: 'Message requis' });
+    if (message.trim().length < 5) return res.status(400).json({ error: 'Message trop court' });
+    if (email && !validateEmail(email)) return res.status(400).json({ error: 'Email invalide' });
+
     const sanitizedMsg = stripHtml(message);
     const sanitizedEmail = email ? stripHtml(email) : '';
+
     // Stocker en DB immédiatement
     const { error } = await db.supabaseAdmin
       .from('contact_messages')
-      .insert({ user_id: req.session.userId, email: email || '', message });
+      .insert({ user_id: req.session.userId, email: sanitizedEmail || '', message: sanitizedMsg });
     if (error) console.error('[Contact] DB error:', error.message);
-    // Email en arrière-plan (ne pas bloquer la réponse)
+
+    // Email (retourne un statut clair au frontend)
+    let mailStatus = 'disabled';
     const transporter = createMailTransporter();
     if (transporter) {
-      transporter.sendMail({
-        from: `"PlayPad Contact" <${process.env.SMTP_USER}>`,
-        to: process.env.SMTP_USER,
-        subject: `[PlayPad] Message de ${sanitizedEmail || 'utilisateur #' + req.session.userId}`,
-        html: `<p><b>De :</b> ${sanitizedEmail || 'inconnu'}</p><p><b>Message :</b></p><p>${sanitizedMsg}</p>`,
-      }).catch(e => console.error('[Contact] Email error:', e.message));
+      try {
+        await transporter.sendMail({
+          from: `"PlayPad Contact" <${process.env.SMTP_USER}>`,
+          to: process.env.SMTP_USER,
+          subject: `[PlayPad] Message de ${sanitizedEmail || 'utilisateur #' + req.session.userId}`,
+          html: `<p><b>De :</b> ${sanitizedEmail || 'inconnu'}</p><p><b>Message :</b></p><p>${sanitizedMsg}</p>`,
+        });
+        mailStatus = 'sent';
+      } catch (e) {
+        mailStatus = 'failed';
+        console.error('[Contact] Email error:', e.message);
+      }
+    } else {
+      console.warn('[Contact] SMTP non configuré: message enregistré en base uniquement');
     }
-    res.json({ ok: true });
+
+    res.json({ ok: true, mailStatus });
   } catch (err) {
     console.error('[Contact]', err.message);
     res.status(500).json({ error: 'Erreur interne' });

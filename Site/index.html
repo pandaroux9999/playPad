@@ -173,6 +173,7 @@ const API = {
     if (filters) Object.entries(filters).forEach(([k, v]) => { if (v !== undefined && v !== '' && v !== 'all') p[k] = v; });
     return API.request('GET', '/api/catalog?' + new URLSearchParams(p).toString());
   },
+  getCatalogFilters: () => API.request('GET', '/api/catalog/filters'),
   deleteGame: (gameId) => API.request('DELETE', `/api/games/${gameId}`),
   disconnectPlatform: (platform) => API.request('DELETE', `/api/games/platform/${platform}`),
   heartbeat: () => API.request('POST', '/api/heartbeat'),
@@ -975,6 +976,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const [filterYearMin, setFilterYearMin] = useState('');
   const [filterAgeRating, setFilterAgeRating] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [catalogFilters, setCatalogFilters] = useState({ platforms: [], genres: [], years: [], ageRatings: [] });
 
   const buildFilters = useCallback(() => {
     const f = {};
@@ -1003,6 +1005,16 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   }, [search, activeLetter, buildFilters]);
 
   useEffect(() => { setCatalogPage(1); loadCatalog(1, false); }, [loadCatalog]);
+  useEffect(() => {
+    API.getCatalogFilters().then(f => {
+      setCatalogFilters({
+        platforms: f.platforms || [],
+        genres: f.genres || [],
+        years: f.years || [],
+        ageRatings: f.ageRatings || [],
+      });
+    }).catch(() => {});
+  }, [refreshKey]);
   useEffect(() => { API.getBoosterTop().then(d => setTopBoosted(d.top || [])).catch(() => {}); }, [refreshKey]);
   useEffect(() => { API.getBoosterPoints().then(d => setBoostPoints(d.points)).catch(() => {}); }, [refreshKey]);
   useEffect(() => { API.getNewReleases().then(d => setNewReleases(d.releases || [])).catch(() => {}); }, [refreshKey]);
@@ -1048,30 +1060,21 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       showFilters && h('div', { className: "mb-2 flex gap-1.5 overflow-x-auto px-4 pb-1", style: { scrollbarWidth: "none" } },
         h('select', { value: filterPlatform, onChange: e => setFilterPlatform(e.target.value), className: "text-[9px] bg-secondary/60 border border-border rounded-lg px-1.5 py-1 text-foreground outline-none flex-shrink-0" },
           h('option', { value: "all" }, "Plateforme: Toutes"),
-          h('option', { value: "pc" }, "PC"),
-          h('option', { value: "ps5" }, "PS5"),
-          h('option', { value: "ps4" }, "PS4"),
-          h('option', { value: "ps3" }, "PS3"),
-          h('option', { value: "xbox" }, "Xbox"),
-          h('option', { value: "xbox360" }, "Xbox 360"),
-          h('option', { value: "nintendo" }, "Nintendo"),
-          h('option', { value: "ios" }, "iOS"),
-          h('option', { value: "android" }, "Android"),
+          ...(catalogFilters.platforms.length > 0 ? catalogFilters.platforms : ['pc', 'ps5', 'ps4', 'ps3', 'xbox', 'xbox360', 'nintendo', 'ios', 'android'])
+            .map(p => h('option', { value: p }, PLATFORM_CONFIG[p]?.name || PLATFORM_CONFIG[p]?.label || p.toUpperCase())),
         ),
         h('select', { value: filterGenre, onChange: e => setFilterGenre(e.target.value), className: "text-[9px] bg-secondary/60 border border-border rounded-lg px-1.5 py-1 text-foreground outline-none flex-shrink-0" },
           h('option', { value: "all" }, "Genre: Tous"),
+          ...catalogFilters.genres.map(g => h('option', { value: g }, g)),
         ),
         h('select', { value: filterYearMin, onChange: e => setFilterYearMin(e.target.value), className: "text-[9px] bg-secondary/60 border border-border rounded-lg px-1.5 py-1 text-foreground outline-none flex-shrink-0" },
           h('option', { value: "" }, "Année: Toutes"),
-          ...[2026,2025,2024,2023,2022,2021,2020,2019,2018,2017,2016,2015,2014,2013,2012,2011,2010].map(y => h('option', { value: String(y) }, y)),
+          ...(catalogFilters.years.length > 0 ? catalogFilters.years : [2026,2025,2024,2023,2022,2021,2020,2019,2018,2017,2016,2015,2014,2013,2012,2011,2010])
+            .map(y => h('option', { value: String(y) }, y)),
         ),
         h('select', { value: filterAgeRating, onChange: e => setFilterAgeRating(e.target.value), className: "text-[9px] bg-secondary/60 border border-border rounded-lg px-1.5 py-1 text-foreground outline-none flex-shrink-0" },
           h('option', { value: "" }, "PEGI: Tous"),
-          h('option', { value: "3" }, "3+"),
-          h('option', { value: "7" }, "7+"),
-          h('option', { value: "12" }, "12+"),
-          h('option', { value: "16" }, "16+"),
-          h('option', { value: "18" }, "18+"),
+          ...(catalogFilters.ageRatings.length > 0 ? catalogFilters.ageRatings : [3, 7, 12, 16, 18]).map(v => h('option', { value: String(v) }, `${v}+`)),
         ),
       ),
       h('div', { className: "flex-1 overflow-y-auto px-4 pb-20", style: { scrollbarWidth: "none" } },
@@ -2395,13 +2398,13 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
         h('div', { className: "relative bg-card border border-border rounded-2xl p-5 w-80 max-h-[85vh] overflow-y-auto", style: { zIndex: 1 } },
           h('div', { className: "flex items-center gap-2 mb-3" },
             h('div', { className: "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0", style: { background: "#0070d120" } },
-              h('img', { src: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/PlayStation_logo_colour.svg/200px-PlayStation_logo_colour.svg.png", alt: "PSN", className: "w-4 h-4 object-contain" })
+              h('img', { src: "img/icons8-playstation-32.png", alt: "PSN", className: "w-5 h-5 object-contain", onError: (e) => { e.target.style.display = 'none'; } })
             ),
-            h('p', { className: "text-sm font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Connecter PlayStation Network")
+            h('p', { className: "text-base font-black text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Connecte PlayStation Network")
           ),
           psnResult === null && h('div', { className: "bg-secondary/50 rounded-xl p-3 mb-3" },
             h('p', { className: "text-[10px] font-bold text-foreground mb-2" }, "Comment récupérer ton NPSSO :"),
-            h('ol', { className: "text-[9px] text-muted-foreground space-y-1.5 list-decimal list-inside" },
+            h('ol', { className: "text-[10px] text-muted-foreground space-y-1.5 list-decimal list-inside" },
               h('li', null, "Connecte-toi sur ", h('span', { className: "font-bold text-foreground" }, "playstation.com"), " (dans ton navigateur)"),
               h('li', { className: "leading-relaxed" }, "Ouvre cette URL dans le ", h('span', { className: "font-bold text-foreground" }, "même onglet"), " :",
                 h('br'), h('code', { className: "text-[8px] bg-background/50 px-1 py-0.5 rounded font-mono break-all" }, "ca.account.sony.com/api/v1/ssocookie")),
@@ -2410,7 +2413,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
                 " (64 caractères)"),
               h('li', null, "Colle-la ci-dessous")
             ),
-            h('p', { className: "text-[8px] mt-2 flex items-start gap-1", style: { color: "#f59e0b" } },
+            h('p', { className: "text-[9px] mt-2 flex items-start gap-1", style: { color: "#f59e0b" } },
               h('span', { className: "flex-shrink-0 mt-0.5" }, "\u26a0"),
               "Ce token expire tous les ~2 mois. Tu devras le re-copier.")
           ),
@@ -2642,15 +2645,6 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
         h('button', { onClick: () => { setSettingsOpen(false); onDeleteAccount(); }, className: "flex items-center gap-2 py-2.5 text-xs font-medium w-full text-left", style: { color: "#ef444488" } },
           h(Trash2, { size: 13, style: { color: "#ef444488" } }),
           "Supprimer mon compte"
-        ),
-        // Admin catalogue
-        h('div', { className: "border-t border-border pt-2.5 mt-2.5" },
-          h('p', { className: "text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-2" }, "Admin catalogue"),
-          h('div', { className: "flex flex-col gap-1.5" },
-            h('button', { onClick: async () => { try { const r = await API.replaceCatalogFromJson(); setSettingsOpen(false); showToast(`${r.count} jeux importés depuis JeuxVideo.com`); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "text-[10px] font-bold text-left py-1.5 px-2 rounded-lg", style: { background: `${P1}10`, color: P1 } }, "Remplir le catalogue"),
-            h('button', { onClick: async () => { try { const r = await API.cleanCatalogNonJv(); setSettingsOpen(false); showToast(`${r.deleted} jeux non-JV supprimés`); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "text-[10px] font-bold text-left py-1.5 px-2 rounded-lg", style: { background: "rgba(239,68,68,0.1)", color: "#ef4444" } }, "Nettoyer"),
-            h('button', { onClick: async () => { try { const r = await API.enrichCatalogFromRawg(); setSettingsOpen(false); showToast(`${r.enriched} jeux enrichis`); } catch (err) { showToast('Erreur: ' + err.message); } }, className: "text-[10px] font-bold text-left py-1.5 px-2 rounded-lg", style: { background: "rgba(59,130,246,0.1)", color: "#3b82f6" } }, "Enrichir"),
-          )
         )
       )
     ),
@@ -2677,10 +2671,12 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
               if (!contactMsg.trim()) return;
               setContactSending(true);
               try {
-                await API.request('POST', '/api/contact', { message: contactMsg, email: user?.email || '' });
+                const result = await API.request('POST', '/api/contact', { message: contactMsg, email: user?.email || '' });
                 setContactOpen(false);
                 setContactMsg('');
-                showToast('Message envoy\u00e9 !');
+                if (result.mailStatus === 'sent') showToast('Message envoyé par email.');
+                else if (result.mailStatus === 'failed') showToast('Message enregistré, mais email non envoyé.');
+                else showToast('Message enregistré (email non configuré).');
               } catch (e) { showToast('Erreur: ' + (e.message || '')); }
               finally { setContactSending(false); }
             },

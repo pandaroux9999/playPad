@@ -830,74 +830,105 @@ async function getCatalog() {
 }
 
 async function queryCatalog({ search, letter, platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating, page = 1, limit = 60 }) {
-  // Construction de la requête Supabase avec filtres
-  let query = supabaseAdmin.from('catalog').select('*', { count: 'exact' });
+  const all = await getCatalog();
+  let filtered = all;
+
   if (search && search.trim()) {
     const s = search.trim().toLowerCase();
-    // On filtre en mémoire pour la recherche (fonctionne sur tout le cache)
-    const all = await getCatalog();
-    let filtered = all.filter(g => (g.title || '').toLowerCase().includes(s));
-    if (letter && letter !== 'all') {
-      if (letter === '#') { const lr = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/; filtered = filtered.filter(g => !lr.test(g.title || '')); }
-      else { const l = letter.toLowerCase(); filtered = filtered.filter(g => (g.title || '').toLowerCase().startsWith(l)); }
-    }
-    const total = filtered.length;
-    const offset = (page - 1) * limit;
-    return { data: filtered.slice(offset, offset + limit), total, page, limit };
+    filtered = filtered.filter(g => {
+      const haystack = [
+        g.title,
+        g.genre,
+        g.developer,
+        g.publisher,
+        g.description,
+        g.platform,
+        g.platforms_raw,
+      ].filter(Boolean).join(' ').toLowerCase();
+      return haystack.includes(s);
+    });
   }
-  // Lettre / tri
+
   if (letter && letter !== 'all') {
     if (letter === '#') {
-      const all = await getCatalog();
       const lr = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/;
-      let filtered = all.filter(g => !lr.test(g.title || ''));
-      filtered = applyExtraFilters(filtered, { platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating });
-      const total = filtered.length;
-      const offset = (page - 1) * limit;
-      return { data: filtered.slice(offset, offset + limit), total, page, limit };
+      filtered = filtered.filter(g => !lr.test(g.title || ''));
+    } else {
+      const l = letter.toLowerCase();
+      filtered = filtered.filter(g => (g.title || '').toLowerCase().startsWith(l));
     }
-    query = query.ilike('title', letter.toLowerCase() + '%');
   }
-  // Filtres simples (via Supabase)
-  if (platform && platform !== 'all') query = query.or(`platform.ilike.%${platform}%,platforms_raw.ilike.%${platform}%`);
-  if (genre && genre !== 'all') query = query.eq('genre', genre);
-  if (yearMin) query = query.gte('year', parseInt(yearMin));
-  if (yearMax) query = query.lte('year', parseInt(yearMax));
-  if (ageRating) { const a = parseInt(ageRating); query = query.gte('age_rating', a); }
-  // Scores (editorial, user) — on les filtre en mémoire car format string "X/20"
-  const hasScoreFilter = editorialMin || editorialMax || userScoreMin || userScoreMax;
-  // Pagination + tri
-  const offset = (page - 1) * limit;
-  if (!hasScoreFilter) {
-    const total = await getCatalogCount();
-    query = query.order('title').range(offset, offset + limit - 1);
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-    return { data: data || [], total, page, limit };
-  }
-  // Avec filtres de score → chargement + filtre en mémoire
-  const all = await getCatalog();
-  let filtered = applyExtraFilters(all, { platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating });
-  if (letter && letter !== 'all') {
-    if (letter === '#') { const lr = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/; filtered = filtered.filter(g => !lr.test(g.title || '')); }
-    else { const l = letter.toLowerCase(); filtered = filtered.filter(g => (g.title || '').toLowerCase().startsWith(l)); }
-  }
+
+  filtered = applyExtraFilters(filtered, {
+    platform,
+    genre,
+    yearMin,
+    yearMax,
+    editorialMin,
+    editorialMax,
+    userScoreMin,
+    userScoreMax,
+    ageRating,
+  });
+
   const total = filtered.length;
+  const offset = (Math.max(1, page) - 1) * Math.max(1, limit);
   return { data: filtered.slice(offset, offset + limit), total, page, limit };
 }
 
 function applyExtraFilters(games, { platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating }) {
   let filtered = games;
   if (platform && platform !== 'all') filtered = filtered.filter(g => g.platform === platform || (g.platforms_raw || '').toLowerCase().includes(platform.toLowerCase()));
-  if (genre && genre !== 'all') filtered = filtered.filter(g => (g.genre || '').toLowerCase() === genre.toLowerCase());
+  if (genre && genre !== 'all') filtered = filtered.filter(g => (g.genre || '').toLowerCase().split(',').map(s => s.trim()).includes(genre.toLowerCase()));
   if (yearMin) filtered = filtered.filter(g => g.year >= parseInt(yearMin));
   if (yearMax) filtered = filtered.filter(g => g.year <= parseInt(yearMax));
   if (ageRating) { const a = parseInt(ageRating); filtered = filtered.filter(g => g.age_rating >= a); }
-  if (editorialMin) filtered = filtered.filter(g => parseFloat(g.editorial_score) >= parseFloat(editorialMin));
-  if (editorialMax) filtered = filtered.filter(g => parseFloat(g.editorial_score) <= parseFloat(editorialMax));
-  if (userScoreMin) filtered = filtered.filter(g => parseFloat(g.user_score) >= parseFloat(userScoreMin));
-  if (userScoreMax) filtered = filtered.filter(g => parseFloat(g.user_score) <= parseFloat(userScoreMax));
+  if (editorialMin) filtered = filtered.filter(g => parseScore(g.editorial_score) >= parseFloat(editorialMin));
+  if (editorialMax) filtered = filtered.filter(g => parseScore(g.editorial_score) <= parseFloat(editorialMax));
+  if (userScoreMin) filtered = filtered.filter(g => parseScore(g.user_score) >= parseFloat(userScoreMin));
+  if (userScoreMax) filtered = filtered.filter(g => parseScore(g.user_score) <= parseFloat(userScoreMax));
   return filtered;
+}
+
+function parseScore(value) {
+  if (value === null || value === undefined) return 0;
+  const m = String(value).replace(',', '.').match(/\d+(\.\d+)?/);
+  return m ? parseFloat(m[0]) : 0;
+}
+
+async function getCatalogFilters() {
+  const all = await getCatalog();
+  const genresSet = new Set();
+  const platformsSet = new Set();
+  const ageRatingsSet = new Set();
+  const yearsSet = new Set();
+
+  for (const g of all) {
+    if (g.platform) platformsSet.add(String(g.platform).toLowerCase());
+    if (g.platforms_raw) {
+      String(g.platforms_raw)
+        .split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(Boolean)
+        .forEach(p => platformsSet.add(p));
+    }
+    if (g.genre) {
+      String(g.genre)
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+        .forEach(genreName => genresSet.add(genreName));
+    }
+    if (g.age_rating && Number(g.age_rating) > 0) ageRatingsSet.add(Number(g.age_rating));
+    if (g.year && Number(g.year) > 0) yearsSet.add(Number(g.year));
+  }
+
+  return {
+    genres: [...genresSet].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })),
+    platforms: [...platformsSet].sort(),
+    ageRatings: [...ageRatingsSet].sort((a, b) => a - b),
+    years: [...yearsSet].sort((a, b) => b - a),
+  };
 }
 
 async function searchCatalog({ search, letter, page = 1, limit = 500 }) {
@@ -1778,6 +1809,7 @@ module.exports = {
   dedupeCatalog,
   mergeCatalogDuplicatesByTitle,
   getCatalog,
+  getCatalogFilters,
   getCatalogCount,
   searchCatalog,
   queryCatalog,

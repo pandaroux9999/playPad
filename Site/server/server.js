@@ -3590,7 +3590,7 @@ app.post('/api/contact', requireAuth, contactLimiter, async (req, res) => {
             console.warn('[Contact] Email envoyé via fallback Resend');
           } catch (re) {
             mailStatus = 'failed';
-            mailError = 'resend_send_failed';
+            mailError = getResendFailureHint(re);
             console.error('[Contact] Resend fallback error:', re.code || 'UNKNOWN', re.message);
           }
         }
@@ -3602,7 +3602,7 @@ app.post('/api/contact', requireAuth, contactLimiter, async (req, res) => {
         mailProvider = 'resend';
       } catch (re) {
         mailStatus = 'failed';
-        mailError = 'resend_send_failed';
+        mailError = getResendFailureHint(re);
         console.error('[Contact] Resend send error:', re.code || 'UNKNOWN', re.message);
       }
     } else {
@@ -3886,6 +3886,27 @@ function getMailFailureHint(err) {
     return 'gmail_requires_2fa_or_app_password';
   }
   return 'smtp_send_failed';
+}
+
+function getResendFailureHint(err) {
+  const message = String(err?.message || '').toLowerCase();
+
+  if (message.includes('(401)') || message.includes('unauthorized') || message.includes('api key')) {
+    return 'resend_invalid_api_key';
+  }
+  if (message.includes('onboarding@resend.dev') || message.includes('testing emails') || message.includes('only send emails to your own')) {
+    return 'resend_test_recipient_not_allowed';
+  }
+  if (message.includes('verify') && message.includes('domain')) {
+    return 'resend_domain_not_verified';
+  }
+  if (message.includes('from') && (message.includes('invalid') || message.includes('not allowed'))) {
+    return 'resend_from_invalid';
+  }
+  if (message.includes('rate limit') || message.includes('(429)')) {
+    return 'resend_rate_limited';
+  }
+  return 'resend_send_failed';
 }
 
 async function sendEsportNotificationEmail(user, event, action) {

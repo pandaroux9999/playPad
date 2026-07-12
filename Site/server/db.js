@@ -189,23 +189,27 @@ async function upsertGame(userId, game) {
 }
 
 async function updateGameStatus(userId, gameId, status) {
+  console.log('[updateGameStatus] userId=%s gameId=%s status=%s', userId, gameId, status);
   const { data: existing, error: findError } = await supabaseAdmin
     .from('games')
     .select('id')
     .eq('user_id', userId)
     .eq('game_id', gameId)
     .maybeSingle();
-  if (findError) throw new Error(findError.message);
+  if (findError) { console.error('[updateGameStatus] findError:', findError); throw new Error(findError.message); }
+  console.log('[updateGameStatus] existing:', existing ? existing.id : 'null');
   if (existing) {
     const { error } = await supabaseAdmin.from('games').update({ status }).eq('id', existing.id);
-    if (error) throw new Error(error.message);
+    if (error) { console.error('[updateGameStatus] updateError:', error); throw new Error(error.message); }
   } else {
     const { error } = await supabaseAdmin.from('games').insert({ user_id: userId, game_id: gameId, status, playtime: 0 });
-    if (error) throw new Error(error.message);
+    if (error) { console.error('[updateGameStatus] insertError:', error); throw new Error(error.message); }
   }
+  console.log('[updateGameStatus] OK');
 }
 
 async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic) {
+  console.log('[updateGameRating] userId=%s gameId=%s rating=%s reviewTextLen=%s reviewPublic=%s', userId, gameId, rating, reviewText?.length, reviewPublic);
   const hasReview = reviewText && reviewText.trim().length > 0;
   const { data: existing, error: findError } = await supabaseAdmin
     .from('games')
@@ -213,19 +217,21 @@ async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic
     .eq('user_id', userId)
     .eq('game_id', gameId)
     .maybeSingle();
-  if (findError) throw new Error(findError.message);
+  if (findError) { console.error('[updateGameRating] findError:', findError); throw new Error(findError.message); }
+  console.log('[updateGameRating] existing:', existing ? existing.id : 'null', 'hasReview:', hasReview);
   if (existing) {
     const { error } = await supabaseAdmin
       .from('games')
       .update({ user_rating: rating, review_text: reviewText, review_public: reviewPublic, has_review: hasReview })
       .eq('id', existing.id);
-    if (error) throw new Error(error.message);
+    if (error) { console.error('[updateGameRating] updateError:', error); throw new Error(error.message); }
   } else {
     const { error } = await supabaseAdmin
       .from('games')
       .insert({ user_id: userId, game_id: gameId, status: 'not_started', playtime: 0, user_rating: rating, review_text: reviewText, review_public: reviewPublic, has_review: hasReview });
-    if (error) throw new Error(error.message);
+    if (error) { console.error('[updateGameRating] insertError:', error); throw new Error(error.message); }
   }
+  console.log('[updateGameRating] OK');
 }
 
 async function getWishlist(userId) {
@@ -332,7 +338,8 @@ async function savePublicReview(userId, gameId, rating, reviewText, gameTitle, g
   if (error) {
     console.log('[savePublicReview] Upsert failed, trying insert/update fallback:', error.message);
     // Fallback: delete existing then insert (for tables without the UNIQUE constraint)
-    await supabaseAdmin.from('community_reviews').delete().eq('user_id', userId).eq('game_id', gameId);
+    const { error: delErr } = await supabaseAdmin.from('community_reviews').delete().eq('user_id', userId).eq('game_id', gameId);
+    if (delErr) console.error('[savePublicReview] Delete error (non-fatal):', delErr);
     let { error: e2 } = await supabaseAdmin
       .from('community_reviews')
       .insert(buildPayload(true));

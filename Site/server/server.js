@@ -391,11 +391,12 @@ app.post('/api/games/sync', requireAuth, async (req, res) => {
 app.post('/api/games/status', requireAuth, async (req, res) => {
   try {
     const { gameId, status } = req.body;
+    console.log('[Status] userId=%s gameId=%s status=%s', req.session.userId, gameId, status);
     await db.updateGameStatus(req.session.userId, gameId, status);
     res.json({ ok: true });
   } catch (err) {
-    console.error('[Status] Error:', err.message);
-    res.status(500).json({ error: 'Erreur interne' });
+    console.error('[Status] Error:', err.message, err.stack);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -422,7 +423,7 @@ app.post('/api/games/review', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[Review] Error:', err.message);
     console.error('[Review] Stack:', err.stack);
-    res.status(500).json({ error: 'Erreur interne' });
+    res.status(500).json({ error: err.message });
   }
 });
 

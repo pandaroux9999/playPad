@@ -3560,12 +3560,15 @@ app.post('/api/contact', requireAuth, contactLimiter, async (req, res) => {
     const transporter = createMailTransporter();
     if (transporter) {
       try {
-        await transporter.sendMail({
-          from: `"PlayPad Contact" <${process.env.SMTP_USER}>`,
-          to: process.env.SMTP_USER,
-          subject: `[PlayPad] Message de ${sanitizedEmail || 'utilisateur #' + req.session.userId}`,
-          html: `<p><b>De :</b> ${sanitizedEmail || 'inconnu'}</p><p><b>Message :</b></p><p>${sanitizedMsg}</p>`,
-        });
+        await Promise.race([
+          transporter.sendMail({
+            from: `"PlayPad Contact" <${process.env.SMTP_USER}>`,
+            to: process.env.SMTP_USER,
+            subject: `[PlayPad] Message de ${sanitizedEmail || 'utilisateur #' + req.session.userId}`,
+            html: `<p><b>De :</b> ${sanitizedEmail || 'inconnu'}</p><p><b>Message :</b></p><p>${sanitizedMsg}</p>`,
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP timeout')), 12000)),
+        ]);
         mailStatus = 'sent';
       } catch (e) {
         mailStatus = 'failed';
@@ -3734,6 +3737,9 @@ function createMailTransporter() {
     port: parseInt(smtpPort || '587'),
     secure: smtpPort === '465',
     auth: { user: smtpUser, pass: smtpPass },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 }
 

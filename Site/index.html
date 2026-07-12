@@ -116,16 +116,32 @@ function useSheetSwipe(onClose) {
 }
 
 const API = {
-  async request(method, url, body) {
+  async request(method, url, body, options = {}) {
     const opts = { method, headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' };
+    const timeoutMs = options?.timeoutMs || 0;
+    const controller = timeoutMs > 0 ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    if (controller) opts.signal = controller.signal;
     if (body) opts.body = JSON.stringify(body);
     console.log(`[API] ${method} ${url}`, body || '');
-    const res = await fetch(url, opts);
-    console.log(`[API] Response ${res.status}`, res.statusText);
-    const data = await res.json();
-    console.log(`[API] Data`, data);
-    if (!res.ok) throw new Error(data.error || 'Erreur serveur');
-    return data;
+    try {
+      const res = await fetch(url, opts);
+      console.log(`[API] Response ${res.status}`, res.statusText);
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (_) {
+        data = {};
+      }
+      console.log(`[API] Data`, data);
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+      return data;
+    } catch (err) {
+      if (err?.name === 'AbortError') throw new Error('Le serveur met trop de temps à répondre. Réessaie dans quelques secondes.');
+      throw err;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
   },
   register: (u, d, p, e) => API.request('POST', '/api/register', { username: u, displayName: d, password: p, email: e }),
   login: (u, p) => API.request('POST', '/api/login', { username: u, password: p }),
@@ -2760,7 +2776,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
               if (contactMsgLen < CONTACT_MIN_MESSAGE_LEN) { showToast(`Message trop court (min ${CONTACT_MIN_MESSAGE_LEN} caractères)`); return; }
               setContactSending(true);
               try {
-                const result = await API.request('POST', '/api/contact', { message: contactMsg, email: user?.email || '' });
+                const result = await API.request('POST', '/api/contact', { message: contactMsg, email: user?.email || '' }, { timeoutMs: 15000 });
                 setContactOpen(false);
                 setContactMsg('');
                 if (result.mailStatus === 'sent') showToast('Message envoyé par email.');

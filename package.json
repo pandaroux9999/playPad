@@ -9,14 +9,15 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
     "bcryptjs": "^2.4.3",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.5",
-    "cheerio": "^1.0.0",
     "express": "^4.21.0",
     "express-rate-limit": "^7.5.0",
     "express-session": "^1.18.1",
     "helmet": "^8.1.0",
     "nodemailer": "^6.9.0",
-    "psn-api": "^2.18.0"
+    "psn-api": "^2.18.0",
+    "puppeteer-core": "^25.3.0"
   },
   "engines": {
     "node": ">=18"

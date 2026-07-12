@@ -191,9 +191,7 @@ async function upsertGame(userId, game) {
 async function updateGameStatus(userId, gameId, status) {
   const { error } = await supabaseAdmin
     .from('games')
-    .update({ status })
-    .eq('user_id', userId)
-    .eq('game_id', gameId);
+    .upsert({ user_id: userId, game_id: gameId, status }, { onConflict: 'user_id, game_id' });
   if (error) throw new Error(error.message);
 }
 
@@ -201,14 +199,14 @@ async function updateGameRating(userId, gameId, rating, reviewText, reviewPublic
   const hasReview = reviewText && reviewText.trim().length > 0;
   const { error } = await supabaseAdmin
     .from('games')
-    .update({
+    .upsert({
+      user_id: userId,
+      game_id: gameId,
       user_rating: rating,
       review_text: reviewText,
       review_public: reviewPublic,
       has_review: hasReview,
-    })
-    .eq('user_id', userId)
-    .eq('game_id', gameId);
+    }, { onConflict: 'user_id, game_id' });
   if (error) throw new Error(error.message);
 }
 

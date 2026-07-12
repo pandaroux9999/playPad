@@ -181,7 +181,7 @@ CREATE TABLE IF NOT EXISTS game_boosts (
 -- Cache des actualités (jeux, esport, drama) — rafraîchi automatiquement
 CREATE TABLE IF NOT EXISTS news_cache (
   id SERIAL PRIMARY KEY,
-  category TEXT NOT NULL CHECK(category IN ('releases', 'esport', 'drama')),
+  category TEXT NOT NULL CHECK(category IN ('releases', 'esport', 'drama', 'articles')),
   item_data JSONB NOT NULL,
   archived BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -189,6 +189,10 @@ CREATE TABLE IF NOT EXISTS news_cache (
 );
 CREATE INDEX IF NOT EXISTS idx_news_cache_category ON news_cache(category);
 ALTER TABLE news_cache ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE;
+
+-- Migration: ajout catégorie 'articles' pour le flux RSS (Gameblog, ActuGaming)
+ALTER TABLE news_cache DROP CONSTRAINT IF EXISTS news_cache_category_check;
+ALTER TABLE news_cache ADD CONSTRAINT news_cache_category_check CHECK(category IN ('releases', 'esport', 'drama', 'articles'));
 
 -- Réponses aux critiques communautaires
 CREATE TABLE IF NOT EXISTS review_replies (

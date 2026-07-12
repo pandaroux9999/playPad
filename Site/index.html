@@ -1093,22 +1093,6 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
             })
           )
         ),
-        // À la une (top rated)
-        featured.length > 0 && h('div', null,
-          h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "\u2B50", " \u00c0 la une"),
-          h('div', { className: "flex gap-3 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } },
-            filterBySearch(featured, g => g.title).map(game => h('div', { key: game.game_id, className: `flex-shrink-0 ${q ? 'w-28' : 'w-36'}` },
-              h(GameCard, {
-                game: { ...game, userRating: ratings?.[game.game_id] || 0 },
-                onClick: () => onSelect(game),
-                wishlistIds, onWishlist: onToggleWishlist,
-                topThreeIds, onCrown: onToggleTopThree,
-                boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
-                small: !!q,
-              })
-            ))
-          )
-        ),
       ),
       h('div', { className: "flex gap-1 mb-3 overflow-x-auto pb-1", style: { scrollbarWidth: "none" } },
         LETTERS.map(l => h('button', { key: l, onClick: () => { setActiveLetter(l); setSearch(''); }, className: "flex-shrink-0 w-7 h-7 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all", style: activeLetter === l ? { background: GRAD, color: "#fff", boxShadow: "0 0 12px rgba(168,85,247,0.4)" } : { background: "rgba(26,26,46,0.7)", color: "#8888aa" } }, l === "all" ? "All" : l)),

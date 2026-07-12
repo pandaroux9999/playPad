@@ -1788,7 +1788,7 @@ function NewsDetailSheet({ item, onClose }) {
     if (!u) return;
     if (u.includes('twitch.tv')) {
       const ch = u.split('twitch.tv/').pop()?.split('?')[0]?.split('/')[0];
-      if (ch) { setEmbedSrc(`https://player.twitch.tv/?channel=${ch}&parent=localhost`); return; }
+      if (ch) { setEmbedSrc(`https://player.twitch.tv/?channel=${ch}&parent=${window.location.hostname}`); return; }
     }
     if (u.includes('youtube.com/watch') || u.includes('youtu.be')) {
       let vid = '';
@@ -1904,7 +1904,7 @@ function NewsDetailSheet({ item, onClose }) {
               );
             }
             const isTwitch = stream.type === 'twitch';
-            const src = isTwitch ? `https://player.twitch.tv/?channel=${stream.channel}&parent=localhost` : `https://www.youtube.com/embed/${stream.videoId}?autoplay=0`;
+            const src = isTwitch ? `https://player.twitch.tv/?channel=${stream.channel}&parent=${window.location.hostname}` : `https://www.youtube.com/embed/${stream.videoId}?autoplay=0`;
             const name = isTwitch ? 'Twitch' : 'YouTube';
             return h('div', { className: "mb-3 rounded-2xl overflow-hidden border", style: { borderColor: "rgba(255,255,255,0.06)" } },
               h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground px-3 pt-2 pb-1 flex items-center gap-1.5" }, isLive ? "Regarder en direct" : "Replay / VOD", h('span', { className: "text-[7px] font-normal text-muted-foreground" }, "via ", name)),

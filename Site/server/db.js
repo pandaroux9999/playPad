@@ -1227,8 +1227,23 @@ async function getTopBoostedGames() {
     .eq('week_start', weekStart);
   if (error) throw new Error(error.message);
 
+  let boostRows = data || [];
+
+  // Fallback : si aucun boost cette semaine, chercher dans l'ancienne table boosts (7 derniers jours)
+  if (boostRows.length === 0) {
+    const { data: old } = await supabaseAdmin
+      .from('boosts')
+      .select('game_id')
+      .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+      .limit(50)
+      .catch(() => ({ data: null }));
+    if (old && old.length > 0) {
+      boostRows = old;
+    }
+  }
+
   const counts = {};
-  for (const row of data || []) {
+  for (const row of boostRows) {
     counts[row.game_id] = (counts[row.game_id] || 0) + 1;
   }
 

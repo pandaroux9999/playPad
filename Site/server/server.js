@@ -2568,6 +2568,25 @@ app.get('/api/booster/top', async (req, res) => {
   }
 });
 
+// Ancien endpoint /api/boost/top pour migration
+app.get('/api/boost/top', async (req, res) => {
+  try {
+    const top = await db.getTopBoosted(10);
+    const enriched = await Promise.all(top.map(async ({ game_id, count }) => {
+      const { data: cat } = await db.supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .eq('game_id', game_id)
+        .maybeSingle();
+      return { game_id, count, game: cat || null };
+    }));
+    res.json({ top: enriched.filter(b => b.game) });
+  } catch (err) {
+    console.error('[BoostTop] Error:', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
 app.get('/api/booster/status/:gameId', requireAuth, async (req, res) => {
   try {
     const boosted = await db.getUserBoostStatus(req.session.userId, req.params.gameId);

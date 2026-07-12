@@ -2740,6 +2740,7 @@ const DRAMA_RSS_FEEDS = [
 const ARTICLES_RSS_FEEDS = [
   { url: 'https://www.gameblog.fr/rss', name: 'Gameblog', lang: 'fr' },
   { url: 'https://www.actugaming.net/feed/', name: 'ActuGaming', lang: 'fr' },
+  { url: 'https://www.jeuxvideo.com/rss/rss.xml', name: 'JV', lang: 'fr' },
 ];
 
 function extractRssImage(block) {

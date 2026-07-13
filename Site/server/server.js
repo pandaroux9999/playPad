@@ -1339,8 +1339,9 @@ app.post('/api/catalog/populate', requireAuth, async (req, res) => {
   })();
 });
 
+const fs2 = require('fs');
 function readJSONStrippedBOM(fpath) {
-  const raw = fs.readFileSync(fpath, 'utf-8');
+  const raw = fs2.readFileSync(fpath, 'utf-8');
   // Enlève le BOM UTF-8 (\\uFEFF) si présent
   const clean = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
   return JSON.parse(clean);

@@ -1350,25 +1350,27 @@ app.post('/api/catalog/replace-from-json', requireAuth, async (req, res) => {
       const games = JSON.parse(fs.readFileSync(jvPath, 'utf-8'));
       if (Array.isArray(games)) allGames.push(...games);
     }
-    // Charger RAWG et fusionner (un jeu RAWG remplace un JV si même game_id)
-    const rawgPath = path.join(dataDir, 'rawg-catalog.json');
-    if (fs.existsSync(rawgPath)) {
-      const raws = JSON.parse(fs.readFileSync(rawgPath, 'utf-8'));
-      if (Array.isArray(raws)) {
-        const rawgMap = new Map();
-        for (const g of raws) rawgMap.set(g.game_id, g);
-        // On remplace les game_id existants qui commencent par rawg-
-        // et on ajoute les nouveaux
-        const seen = new Set();
-        for (const g of allGames) seen.add(g.game_id);
-        for (const [id, g] of rawgMap) {
-          if (seen.has(id)) {
-            // Remplacer l'entrée existante
-            const idx = allGames.findIndex(x => x.game_id === id);
-            if (idx !== -1) allGames[idx] = g;
-          } else {
-            allGames.push(g);
+    // Charger RAWG (rawg-catalog.json, rawg-catalog1.json, rawg-catalog2.json)
+    const rawgFiles = ['rawg-catalog.json', 'rawg-catalog1.json', 'rawg-catalog2.json'];
+    for (const rawgFile of rawgFiles) {
+      const rawgPath = path.join(dataDir, rawgFile);
+      if (fs.existsSync(rawgPath)) {
+        console.log(`[Catalog] Chargement de ${rawgFile}...`);
+        const raws = JSON.parse(fs.readFileSync(rawgPath, 'utf-8'));
+        if (Array.isArray(raws)) {
+          const rawgMap = new Map();
+          for (const g of raws) rawgMap.set(g.game_id, g);
+          const seen = new Set();
+          for (const g of allGames) seen.add(g.game_id);
+          for (const [id, g] of rawgMap) {
+            if (seen.has(id)) {
+              const idx = allGames.findIndex(x => x.game_id === id);
+              if (idx !== -1) allGames[idx] = g;
+            } else {
+              allGames.push(g);
+            }
           }
+          console.log(`[Catalog] ${rawgFile}: ${raws.length} jeux chargés`);
         }
       }
     }
@@ -1813,6 +1815,35 @@ async function fixMissingCovers() {
     if (missing.length > 0) { await db.batchUpsertCatalog(missing); }
     console.log(`[Catalog] ${missing.length} jeux cultes ajoutés (${GAMES_CATALOG.length - missing.length} déjà présents)`);
   } catch (e) { console.error('[Catalog] Erreur jeux cultes:', e.message); }
+  // Import automatique depuis les fichiers RAWG JSON si le catalogue est vide
+  (async () => {
+    try {
+      const count = await db.getCatalogCount();
+      if (count < 100) {
+        const fs = require('fs');
+        const dataDir = path.join(__dirname, 'data');
+        const rawgFiles = ['rawg-catalog1.json', 'rawg-catalog2.json'];
+        let totalImported = 0;
+        for (const file of rawgFiles) {
+          const fpath = path.join(dataDir, file);
+          if (fs.existsSync(fpath)) {
+            console.log(`[Catalog] Import automatique de ${file}...`);
+            const games = JSON.parse(fs.readFileSync(fpath, 'utf-8'));
+            if (Array.isArray(games) && games.length > 0) {
+              await db.batchUpsertCatalog(games);
+              totalImported += games.length;
+              console.log(`[Catalog] ${file}: ${games.length} jeux importés`);
+            }
+          }
+        }
+        if (totalImported > 0) {
+          console.log(`[Catalog] ${totalImported} jeux RAWG importés automatiquement au démarrage`);
+        }
+      }
+    } catch (e) {
+      console.error('[Catalog] Erreur import RAWG JSON au démarrage:', e.message);
+    }
+  })();
   // Correction des couvertures manquantes
   try { await fixMissingCovers(); } catch (e) { console.error('[Covers] Error:', e.message); }
   // Données de démonstration après le catalogue

@@ -634,44 +634,47 @@ async function batchUpsertCatalog(games) {
   games = games.filter(g => g.game_id);
   if (games.length === 0) return;
   const now = new Date().toISOString();
-  const payloads = games.map(g => ({
-    game_id: g.game_id, title: g.title, platform: g.platform || '',
-    cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
-    developer: g.developer || '', publisher: g.publisher || '',
-    description: g.description || '',
-    editorial_score: g.editorial_score || '',
-    user_score: g.user_score || '',
-    platforms_raw: g.platforms_raw || '',
-    jv_url: g.jv_url || '',
-    age_rating: g.age_rating || 0,
-    updated_at: now,
-  }));
-  const { error } = await supabaseAdmin.from('catalog').upsert(payloads, { onConflict: 'game_id', ignoreDuplicates: true });
-  if (error) {
-    // Retry sans les colonnes avancées (si elles n'existent pas encore)
-    const basic = games.map(g => ({
+  const BATCH_SIZE = 200;
+  let totalOk = 0;
+  for (let i = 0; i < games.length; i += BATCH_SIZE) {
+    const batch = games.slice(i, i + BATCH_SIZE);
+    const payloads = batch.map(g => ({
       game_id: g.game_id, title: g.title, platform: g.platform || '',
       cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
       developer: g.developer || '', publisher: g.publisher || '',
       description: g.description || '',
+      editorial_score: g.editorial_score || '',
+      user_score: g.user_score || '',
+      platforms_raw: g.platforms_raw || '',
+      jv_url: g.jv_url || '',
+      age_rating: g.age_rating || 0,
+      updated_at: now,
     }));
-    const { error: e2 } = await supabaseAdmin.from('catalog').upsert(basic, { onConflict: 'game_id', ignoreDuplicates: true });
-    if (e2) console.error('[batchUpsertCatalog] Fallback error:', e2.message);
-    else {
-      // Mise à jour en 2 passes : d'abord les basics, puis les colonnes avancées
-      const extra = games.map(g => ({
-        game_id: g.game_id,
-        editorial_score: g.editorial_score || '',
-        user_score: g.user_score || '',
-        platforms_raw: g.platforms_raw || '',
-        jv_url: g.jv_url || '',
-        age_rating: g.age_rating || 0,
-        updated_at: now,
+    const { error } = await supabaseAdmin.from('catalog').upsert(payloads, { onConflict: 'game_id', ignoreDuplicates: true });
+    if (error) {
+      const basic = batch.map(g => ({
+        game_id: g.game_id, title: g.title, platform: g.platform || '',
+        cover: g.cover || '', genre: g.genre || '', year: g.year || 0,
+        developer: g.developer || '', publisher: g.publisher || '',
+        description: g.description || '',
       }));
-      const { error: e3 } = await supabaseAdmin.from('catalog').upsert(extra, { onConflict: 'game_id' });
-      if (e3) { /* colonnes pas encore créées, pas grave */ }
+      const { error: e2 } = await supabaseAdmin.from('catalog').upsert(basic, { onConflict: 'game_id', ignoreDuplicates: true });
+      if (!e2) {
+        const extra = batch.map(g => ({
+          game_id: g.game_id,
+          editorial_score: g.editorial_score || '',
+          user_score: g.user_score || '',
+          platforms_raw: g.platforms_raw || '',
+          jv_url: g.jv_url || '',
+          age_rating: g.age_rating || 0,
+          updated_at: now,
+        }));
+        await supabaseAdmin.from('catalog').upsert(extra, { onConflict: 'game_id' }).catch(() => {});
+      }
     }
+    totalOk += batch.length;
   }
+  console.log(`[batchUpsertCatalog] ${totalOk} jeux traités`);
   invalidateCatalogCache();
 }
 

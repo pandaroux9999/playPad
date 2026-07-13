@@ -669,7 +669,7 @@ async function batchUpsertCatalog(games) {
           age_rating: g.age_rating || 0,
           updated_at: now,
         }));
-        await supabaseAdmin.from('catalog').upsert(extra, { onConflict: 'game_id' }).catch(() => {});
+        try { await supabaseAdmin.from('catalog').upsert(extra, { onConflict: 'game_id' }); } catch (_) {}
       }
     }
     totalOk += batch.length;

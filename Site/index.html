@@ -2803,7 +2803,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   );
 }
 
-function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, userId, ratings, boosterPoints, userBoostedSet, onBoostGame, showAuthModal }) {
+function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistIds, onToggleWishlist, topThreeIds, onToggleTopThree, userId, ratings, boosterPoints, userBoostedSet, onBoostGame, showAuthModal, onStatusChange }) {
   const [downloadCount, setDownloadCount] = useState(0);
   const [trailerVideoId, setTrailerVideoId] = useState(null);
   const [trailerLoading, setTrailerLoading] = useState(false);
@@ -2893,13 +2893,19 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
   };
 
   const handleStatusChange = async (s) => {
+    const prev = { inLib: game._inLibrary, st: game.status };
+    game._inLibrary = true;
+    game.status = s;
     setStatus(s);
     try {
       await API.setStatus(gameId, s, { title: game.title, cover: game.cover, platform: game.platform, genre: game.genre, year: game.year });
-      game._inLibrary = true;
-      game.status = s;
       onStatusChange?.();
-    } catch (e) { console.error('[StatusChange] Error:', e); }
+    } catch (e) {
+      game._inLibrary = prev.inLib;
+      game.status = prev.st;
+      setStatus(prev.st);
+      console.error('[StatusChange] Error:', e);
+    }
   };
 
   const handleTopThree = (g) => {
@@ -3703,7 +3709,13 @@ function App() {
   const handleStatusChange = async () => {
     try {
       const d = await API.getGames();
-      setGames((d.games || []).map(n));
+      const refreshed = (d.games || []).map(n);
+      setGames(refreshed);
+      setSelectedGame(prev => {
+        if (!prev) return prev;
+        const match = refreshed.find(g => g.game_id === (prev.game_id || prev.id));
+        return match ? { ...prev, _inLibrary: true, status: match.status, userRating: match.userRating } : prev;
+      });
     } catch {}
   };
 

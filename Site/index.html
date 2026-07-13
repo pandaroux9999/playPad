@@ -972,14 +972,14 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   );
 }
 
-function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topThreeIds, onToggleTopThree, showToast, userBoostedSet, refreshKey }) {
+function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topThreeIds, onToggleTopThree, showToast, userBoostedSet, refreshKey, boostedGames }) {
   const [search, setSearch] = useState("");
   const [activeLetter, setActiveLetter] = useState("all");
   const [catalog, setCatalog] = useState([]);
   const [catalogTotal, setCatalogTotal] = useState(0);
   const [catalogPage, setCatalogPage] = useState(1);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
-  const [topBoosted, setTopBoosted] = useState([]);
+  const [topBoostedFallback, setTopBoostedFallback] = useState([]);
   const [boostedGamesLocal, setBoostedGamesLocal] = useState(new Set());
   const [boostPoints, setBoostPoints] = useState(null);
   const [newReleases, setNewReleases] = useState([]);
@@ -1031,7 +1031,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       });
     }).catch(() => {});
   }, [refreshKey]);
-  useEffect(() => { API.getBoosterTop().then(d => setTopBoosted(d.top || [])).catch(() => {}); }, [refreshKey]);
+  useEffect(() => { API.getBoosterTop().then(d => setTopBoostedFallback(d.top || [])).catch(() => {}); }, [refreshKey]);
   useEffect(() => { API.getBoosterPoints().then(d => setBoostPoints(d.points)).catch(() => {}); }, [refreshKey]);
   useEffect(() => { API.getNewReleases().then(d => setNewReleases(d.releases || [])).catch(() => {}); }, [refreshKey]);
   useEffect(() => { API.getDownloadCounts().then(d => setDownloadCounts(d.counts || {})).catch(() => {}); }, [refreshKey]);
@@ -1188,7 +1188,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
                     onClick: () => onSelect(game),
                     wishlistIds, onWishlist: onToggleWishlist,
                     topThreeIds, onCrown: onToggleTopThree,
-                    boostCount: topBoosted.find(b => b.game_id === game.game_id)?.count || 0,
+                    boostCount: (boostedGames || topBoostedFallback).find(b => b.game_id === game.game_id)?.count || 0,
                     boosterActive: userBoostedSet?.has(game.game_id),
                     boosterBtn: () => onSelect(game),
                     small: !!q,
@@ -1199,10 +1199,10 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         // Boostés de la semaine
         h('div', null,
           h('h3', { className: "text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 flex items-center gap-1.5" }, "Boost\u00e9s de la semaine"),
-          topBoosted.length === 0
+          (boostedGames || topBoostedFallback).length === 0
             ? h('p', { className: "text-[10px] text-muted-foreground italic mb-3" }, "Aucun boost pour l\u2019instant")
             : h('div', { className: "flex gap-3 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } },
-                filterBySearch(topBoosted, b => b.game?.title).slice(0, 10).map(b => {
+                filterBySearch(boostedGames || topBoostedFallback, b => b.game?.title).slice(0, 10).map(b => {
               const game = b.game;
               if (!game) return null;
               return h('div', { key: b.game_id, className: `flex-shrink-0 ${q ? 'w-28' : 'w-36'}` },
@@ -1237,7 +1237,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
             ),
             h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" },
               catalog.map(game => {
-                const boostCount = topBoosted.find(b => b.game_id === game.game_id)?.count || 0;
+                const boostCount = (boostedGames || topBoostedFallback).find(b => b.game_id === game.game_id)?.count || 0;
                 const dlCount = downloadCounts[game.game_id] || 0;
                 return h('div', { key: game.game_id, className: "relative" },
                   h(GameCard, {

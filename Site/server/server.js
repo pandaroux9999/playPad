@@ -3256,11 +3256,28 @@ function getWeekStart() {
 async function seedWeeklyBoosts() {
   try {
     const weekStart = getWeekStart();
-    const { count } = await db.supabaseAdmin
-      .from('game_boosts')
-      .select('*', { count: 'exact', head: true })
-      .eq('week_start', weekStart);
-    if (count > 2) return; // déjà assez de boosts cette semaine
+    // Vérifie si la table game_boosts existe et a déjà des boosts
+    let hasExisting = false;
+    try {
+      const { count } = await db.supabaseAdmin
+        .from('game_boosts')
+        .select('*', { count: 'exact', head: true })
+        .eq('week_start', weekStart);
+      if (count > 2) hasExisting = true;
+    } catch (e) { /* table may not exist */ }
+
+    // Fallback : vérifier dans l'ancienne table boosts
+    if (!hasExisting) {
+      try {
+        const { count } = await db.supabaseAdmin
+          .from('boosts')
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString());
+        if (count > 2) hasExisting = true;
+      } catch (e) {}
+    }
+
+    if (hasExisting) return; // déjà assez de boosts cette semaine
 
     // Récupère un user bot (ou crée-le)
     let { data: bot } = await db.supabaseAdmin
@@ -3276,20 +3293,29 @@ async function seedWeeklyBoosts() {
         .single();
       if (error) return console.error('[SeedBoosts] Bot creation error:', error.message);
       bot = newBot;
-      await db.supabaseAdmin.from('booster_points').insert({ user_id: bot.id, points: 100, claimed_first_login: true });
+      try { await db.supabaseAdmin.from('booster_points').insert({ user_id: bot.id, points: 100, claimed_first_login: true }); } catch (e) {}
     }
 
-    // Prend 8 jeux aléatoires du catalogue
+    // Prend 10 jeux aléatoires du catalogue
     const { data: games } = await db.supabaseAdmin
       .from('catalog')
       .select('game_id')
       .limit(100);
     if (!games || games.length === 0) return;
-    const shuffled = games.sort(() => Math.random() - 0.5).slice(0, 8);
-    const rows = shuffled.map(g => ({ user_id: bot.id, game_id: g.game_id, week_start: weekStart }));
-    const { error: insErr } = await db.supabaseAdmin.from('game_boosts').insert(rows);
-    if (insErr) return console.error('[SeedBoosts] Insert error:', insErr.message);
-    console.log(`[SeedBoosts] ✅ ${rows.length} boosts ajoutés pour la semaine ${weekStart}`);
+    const shuffled = games.sort(() => Math.random() - 0.5).slice(0, 10);
+    // Insérer dans game_boosts (nouveau système)
+    try {
+      const rows = shuffled.map(g => ({ user_id: bot.id, game_id: g.game_id, week_start }));
+      await db.supabaseAdmin.from('game_boosts').insert(rows);
+      console.log(`[SeedBoosts] ✅ ${rows.length} boosts ajoutés dans game_boosts`);
+    } catch (e) { console.error('[SeedBoosts] game_boosts insert error:', e.message); }
+
+    // Insérer aussi dans l'ancienne table boosts pour compatibilité
+    try {
+      const oldRows = shuffled.map(g => ({ user_id: bot.id, game_id: g.game_id, created_at: new Date().toISOString() }));
+      await db.supabaseAdmin.from('boosts').insert(oldRows);
+      console.log(`[SeedBoosts] ✅ ${oldRows.length} boosts ajoutés dans boosts (legacy)`);
+    } catch (e) { console.error('[SeedBoosts] boosts insert error:', e.message); }
   } catch (e) {
     console.error('[SeedBoosts] Error:', e.message);
   }

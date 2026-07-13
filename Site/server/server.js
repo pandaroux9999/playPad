@@ -1339,7 +1339,7 @@ app.post('/api/catalog/populate', requireAuth, async (req, res) => {
   })();
 });
 
-app.post('/api/catalog/replace-from-json', async (req, res) => {
+app.get('/api/catalog/replace-from-json', async (req, res) => {
   try {
     const fs = require('fs');
     const dataDir = path.join(__dirname, 'data');

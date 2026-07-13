@@ -1815,35 +1815,42 @@ async function fixMissingCovers() {
     if (missing.length > 0) { await db.batchUpsertCatalog(missing); }
     console.log(`[Catalog] ${missing.length} jeux cultes ajoutés (${GAMES_CATALOG.length - missing.length} déjà présents)`);
   } catch (e) { console.error('[Catalog] Erreur jeux cultes:', e.message); }
-  // Import automatique depuis les fichiers RAWG JSON si le catalogue est vide
-  (async () => {
-    try {
-      const count = await db.getCatalogCount();
-      if (count < 100) {
-        const fs = require('fs');
-        const dataDir = path.join(__dirname, 'data');
-        const rawgFiles = ['rawg-catalog1.json', 'rawg-catalog2.json'];
-        let totalImported = 0;
-        for (const file of rawgFiles) {
-          const fpath = path.join(dataDir, file);
-          if (fs.existsSync(fpath)) {
-            console.log(`[Catalog] Import automatique de ${file}...`);
-            const games = JSON.parse(fs.readFileSync(fpath, 'utf-8'));
-            if (Array.isArray(games) && games.length > 0) {
-              await db.batchUpsertCatalog(games);
-              totalImported += games.length;
-              console.log(`[Catalog] ${file}: ${games.length} jeux importés`);
-            }
+  // Import depuis les fichiers RAWG JSON si le catalogue < 200 jeux
+  try {
+    const count = await db.getCatalogCount();
+    console.log(`[Catalog] ${count} jeux dans le catalogue, vérification import RAWG JSON...`);
+    if (count < 200) {
+      const fs = require('fs');
+      const dataDir = path.join(__dirname, 'data');
+      const rawgFiles = ['rawg-catalog1.json', 'rawg-catalog2.json'];
+      let totalImported = 0;
+      for (const file of rawgFiles) {
+        const fpath = path.join(dataDir, file);
+        if (fs.existsSync(fpath)) {
+          const stats = fs.statSync(fpath);
+          const sizeMB = (stats.size / 1024 / 1024).toFixed(1);
+          console.log(`[Catalog] Import de ${file} (${sizeMB}MB)...`);
+          const games = JSON.parse(fs.readFileSync(fpath, 'utf-8'));
+          if (Array.isArray(games) && games.length > 0) {
+            await db.batchUpsertCatalog(games);
+            totalImported += games.length;
+            console.log(`[Catalog] ✅ ${file}: ${games.length} jeux importés`);
           }
-        }
-        if (totalImported > 0) {
-          console.log(`[Catalog] ${totalImported} jeux RAWG importés automatiquement au démarrage`);
+        } else {
+          console.log(`[Catalog] ${file} non trouvé, ignoré`);
         }
       }
-    } catch (e) {
-      console.error('[Catalog] Erreur import RAWG JSON au démarrage:', e.message);
+      if (totalImported > 0) {
+        console.log(`[Catalog] ✅ ${totalImported} jeux RAWG importés au démarrage`);
+      } else {
+        console.log('[Catalog] Aucun fichier RAWG JSON trouvé');
+      }
+    } else {
+      console.log(`[Catalog] Catalogue déjà peuplé (${count} jeux), import RAWG ignoré`);
     }
-  })();
+  } catch (e) {
+    console.error('[Catalog] Erreur import RAWG JSON au démarrage:', e.message);
+  }
   // Correction des couvertures manquantes
   try { await fixMissingCovers(); } catch (e) { console.error('[Covers] Error:', e.message); }
   // Données de démonstration après le catalogue

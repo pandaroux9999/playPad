@@ -1262,47 +1262,91 @@ async function communityBoostGame(userId, gameId) {
 // Booster individuel (1 point/semaine, table game_boosts)
 async function boosterBoostGame(userId, gameId) {
   const weekStart = getWeekStart();
-  let pointsData = await getBoosterPoints(userId);
+  let pointsData;
+  try {
+    pointsData = await getBoosterPoints(userId);
+  } catch (e) {
+    // Si la table booster_points n'existe pas, donne 1 point par défaut
+    pointsData = { points: 1, claimed_first_login: false };
+  }
 
   // Reset hebdo : si 0 point mais aucun boost cette semaine, redonne 1 point
   if (pointsData.points < 1) {
-    const { data: weekBoosts } = await supabaseAdmin
-      .from('game_boosts')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('week_start', weekStart);
-    if (!weekBoosts || weekBoosts.length === 0) {
-      await supabaseAdmin
-        .from('booster_points')
-        .update({ points: 1 })
-        .eq('user_id', userId);
+    let weekBoosts = [];
+    try {
+      const { data } = await supabaseAdmin
+        .from('game_boosts')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('week_start', weekStart);
+      weekBoosts = data || [];
+    } catch (e) { /* table may not exist */ }
+
+    if (weekBoosts.length === 0) {
+      try {
+        await supabaseAdmin
+          .from('booster_points')
+          .update({ points: 1 })
+          .eq('user_id', userId);
+      } catch (e) { /* table may not exist */ }
       pointsData.points = 1;
     } else {
       throw new Error('Pas assez de points booster');
     }
   }
 
-  const { data: existing } = await supabaseAdmin
-    .from('game_boosts')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('game_id', gameId)
-    .eq('week_start', weekStart)
-    .maybeSingle();
+  // Vérifier si déjà boosté cette semaine
+  let existing = null;
+  try {
+    const { data } = await supabaseAdmin
+      .from('game_boosts')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('game_id', gameId)
+      .eq('week_start', weekStart)
+      .maybeSingle();
+    existing = data;
+  } catch (e) { /* table may not exist */ }
 
   if (existing) throw new Error('Tu as déjà boosté ce jeu cette semaine');
 
-  const { error: boostError } = await supabaseAdmin
-    .from('game_boosts')
-    .insert({ user_id: userId, game_id: gameId, week_start: weekStart });
-  if (boostError) throw new Error(boostError.message);
+  // Insérer dans game_boosts (nouveau système)
+  try {
+    const { error } = await supabaseAdmin
+      .from('game_boosts')
+      .insert({ user_id: userId, game_id: gameId, week_start: weekStart });
+    if (error) throw error;
+  } catch (e) {
+    // Si game_boosts n'existe pas, insérer dans la table boosts (legacy)
+    await communityBoostGameFallback(userId, gameId);
+    return { remaining: Math.max(0, pointsData.points - 1) };
+  }
 
-  await supabaseAdmin
-    .from('booster_points')
-    .update({ points: pointsData.points - 1 })
-    .eq('user_id', userId);
+  // Décrémenter les points
+  try {
+    await supabaseAdmin
+      .from('booster_points')
+      .update({ points: pointsData.points - 1 })
+      .eq('user_id', userId);
+  } catch (e) { /* table may not exist */ }
 
   return { remaining: pointsData.points - 1 };
+}
+
+// Fallback vers l'ancien système boosts si game_boosts n'existe pas
+async function communityBoostGameFallback(userId, gameId) {
+  const { data: existing } = await supabaseAdmin
+    .from('boosts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('game_id', gameId)
+    .maybeSingle();
+  if (existing) throw new Error('Tu as déjà boosté ce jeu');
+
+  const { error } = await supabaseAdmin
+    .from('boosts')
+    .insert({ user_id: userId, game_id: gameId });
+  if (error) throw new Error(error.message);
 }
 
 async function getTopBoostedGames() {

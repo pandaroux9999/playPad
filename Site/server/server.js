@@ -1339,6 +1339,13 @@ app.post('/api/catalog/populate', requireAuth, async (req, res) => {
   })();
 });
 
+function readJSONStrippedBOM(fpath) {
+  const raw = fs.readFileSync(fpath, 'utf-8');
+  // Enlève le BOM UTF-8 (\\uFEFF) si présent
+  const clean = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
+  return JSON.parse(clean);
+}
+
 app.get('/api/catalog/replace-from-json', async (req, res) => {
   try {
     const fs = require('fs');
@@ -1347,7 +1354,7 @@ app.get('/api/catalog/replace-from-json', async (req, res) => {
     // Charger JV
     const jvPath = path.join(dataDir, 'jv-catalog.json');
     if (fs.existsSync(jvPath)) {
-      const games = JSON.parse(fs.readFileSync(jvPath, 'utf-8'));
+      const games = readJSONStrippedBOM(jvPath);
       if (Array.isArray(games)) allGames.push(...games);
     }
     // Charger RAWG (rawg-catalog.json, rawg-catalog1.json, rawg-catalog2.json)
@@ -1356,7 +1363,7 @@ app.get('/api/catalog/replace-from-json', async (req, res) => {
       const rawgPath = path.join(dataDir, rawgFile);
       if (fs.existsSync(rawgPath)) {
         console.log(`[Catalog] Chargement de ${rawgFile}...`);
-        const raws = JSON.parse(fs.readFileSync(rawgPath, 'utf-8'));
+        const raws = readJSONStrippedBOM(rawgPath);
         if (Array.isArray(raws)) {
           const rawgMap = new Map();
           for (const g of raws) rawgMap.set(g.game_id, g);
@@ -1830,7 +1837,7 @@ async function fixMissingCovers() {
           const stats = fs.statSync(fpath);
           const sizeMB = (stats.size / 1024 / 1024).toFixed(1);
           console.log(`[Catalog] Import de ${file} (${sizeMB}MB)...`);
-          const games = JSON.parse(fs.readFileSync(fpath, 'utf-8'));
+          const games = readJSONStrippedBOM(fpath);
           if (Array.isArray(games) && games.length > 0) {
             await db.batchUpsertCatalog(games);
             totalImported += games.length;

@@ -1348,17 +1348,16 @@ function readJSONStrippedBOM(fpath) {
 }
 
 app.get('/api/catalog/replace-from-json', async (req, res) => {
+  res.json({ ok: true, pending: true, message: 'Import en arrière-plan, vérifie les logs Render' });
   try {
     const fs = require('fs');
     const dataDir = path.join(__dirname, 'data');
     let allGames = [];
-    // Charger JV
     const jvPath = path.join(dataDir, 'jv-catalog.json');
     if (fs.existsSync(jvPath)) {
       const games = readJSONStrippedBOM(jvPath);
       if (Array.isArray(games)) allGames.push(...games);
     }
-    // Charger RAWG (rawg-catalog.json, rawg-catalog1.json, rawg-catalog2.json)
     const rawgFiles = ['rawg-catalog.json', 'rawg-catalog1.json', 'rawg-catalog2.json'];
     for (const rawgFile of rawgFiles) {
       const rawgPath = path.join(dataDir, rawgFile);
@@ -1383,21 +1382,23 @@ app.get('/api/catalog/replace-from-json', async (req, res) => {
       }
     }
     if (allGames.length === 0) {
-      return res.status(400).json({ error: 'Aucun jeu trouvé dans jv-catalog.json ou rawg-catalog.json' });
+      console.error('[CatalogReplace] Aucun jeu trouvé');
+      return;
     }
-    console.log(`[Catalog] Remplacement du catalogue par ${allGames.length} jeux (JV + RAWG)...`);
+    console.log(`[Catalog] Remplacement du catalogue par ${allGames.length} jeux...`);
     await db.clearCatalog();
     const batchSize = 200;
+    let total = 0;
     for (let i = 0; i < allGames.length; i += batchSize) {
       const batch = allGames.slice(i, i + batchSize);
       await db.batchUpsertCatalog(batch);
+      total += batch.length;
+      if (total % 10000 === 0) console.log(`[Catalog] ${total}/${allGames.length} jeux importés...`);
     }
-    console.log(`[Catalog] Catalogue remplacé: ${allGames.length} jeux importés`);
+    console.log(`[Catalog] ✅ ${allGames.length} jeux importés`);
     db.invalidateCatalogCache();
-    res.json({ ok: true, count: allGames.length });
   } catch (err) {
     console.error('[CatalogReplace] Error:', err.message);
-    res.status(500).json({ error: err.message });
   }
 });
 

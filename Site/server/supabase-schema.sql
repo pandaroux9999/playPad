@@ -259,3 +259,16 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
+
+-- Pronostics matchs e-sport
+CREATE TABLE IF NOT EXISTS match_predictions (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  match_id INTEGER NOT NULL,
+  team_id INTEGER NOT NULL,
+  game_slug TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, match_id)
+);
+CREATE INDEX IF NOT EXISTS idx_match_predictions_match ON match_predictions(match_id);
+CREATE INDEX IF NOT EXISTS idx_match_predictions_user ON match_predictions(user_id);

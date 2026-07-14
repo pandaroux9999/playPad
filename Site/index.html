@@ -228,6 +228,9 @@ const API = {
   toggleEsportFavorite: (event) => API.request('POST', '/api/esport/favorite/toggle', { event }),
   getEsportFavorites: () => API.request('GET', '/api/esport/favorites'),
   checkEsportFavorite: (title, game) => API.request('GET', `/api/esport/favorites/check?title=${encodeURIComponent(title)}&game=${encodeURIComponent(game||'')}`),
+  predictMatch: (matchId, teamId, gameSlug) => API.request('POST', `/api/esport/predict/${matchId}`, { teamId, gameSlug }),
+  getMatchPredictions: (matchId) => API.request('GET', `/api/esport/predictions/${matchId}`),
+  getMyPredictions: () => API.request('GET', '/api/esport/my-predictions'),
   getEsportMatch: (game, matchId) => API.request('GET', `/api/esport/match/${game}/${matchId}`),
   getEsportTeamPlayers: (game, teamId) => API.request('GET', `/api/esport/team/${game}/${teamId}`),
   getEsportPlayer: (game, playerId) => API.request('GET', `/api/esport/player/${game}/${playerId}`),
@@ -1588,7 +1591,7 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
   );
 }
 
-function MagView({ onSelectGame }) {
+function MagView({ onSelectGame, showAuthModal, user }) {
   const [articles, setArticles] = useState([]);
   const [esportEvents, setEsportEvents] = useState([]);
   const [dramaItems, setDramaItems] = useState([]);
@@ -1818,11 +1821,11 @@ function MagView({ onSelectGame }) {
         );
       })()
     ),
-    selectedNews && h(NewsDetailSheet, { item: selectedNews, onClose: () => setSelectedNews(null) })
+    selectedNews && h(NewsDetailSheet, { item: selectedNews, onClose: () => setSelectedNews(null), showAuthModal, user })
   );
 }
 
-function NewsDetailSheet({ item, onClose }) {
+function NewsDetailSheet({ item, onClose, showAuthModal, user }) {
   const isRelease = item.type === "release";
   const isEsport = item.type === "esport";
   const isArticle = item.type === "article";
@@ -1843,12 +1846,19 @@ function NewsDetailSheet({ item, onClose }) {
   const [teamDetailLoading, setTeamDetailLoading] = useState(false);
   const [teamPlayers, setTeamPlayers] = useState([]);
   const [teamInfo, setTeamInfo] = useState(null);
+  const [predictions, setPredictions] = useState(null);
+  const [predictLoading, setPredictLoading] = useState(false);
   useEffect(() => {
     if (isEsport && !matchDetail && !matchLoading && item.matchId && item.gameSlug) {
       setMatchLoading(true);
       API.getEsportMatchRoster(item.gameSlug, item.matchId).then(d => {
         if (d && d.match) setMatchDetail(d.match);
       }).catch(() => {}).finally(() => setMatchLoading(false));
+    }
+    // Charger les pronostics
+    if (isEsport && item.matchId && !predictions && !predictLoading) {
+      setPredictLoading(true);
+      API.getMatchPredictions(item.matchId).then(d => setPredictions(d)).catch(() => {}).finally(() => setPredictLoading(false));
     }
     // Charger les commentaires depuis localStorage
     if (isEsport && item.matchId) {
@@ -1886,8 +1896,8 @@ function NewsDetailSheet({ item, onClose }) {
     'LCK': { type: 'twitch', channel: 'lck' },
     'LPL': { type: 'twitch', channel: 'lpl' },
     'LEC': { type: 'twitch', channel: 'lec' },
-    'ESL Pro League': { type: 'twitch', channel: 'esl_cs2' },
-    'ESL': { type: 'twitch', channel: 'esl_cs2' },
+    'ESL Pro League': { type: 'twitch', channel: 'ESLCS' },
+    'ESL': { type: 'twitch', channel: 'ESLCS' },
     'BLAST': { type: 'twitch', channel: 'blasttv' },
     'BLAST Premier': { type: 'twitch', channel: 'blasttv' },
     'RLCS': { type: 'twitch', channel: 'rocketleague' },
@@ -2001,6 +2011,57 @@ function NewsDetailSheet({ item, onClose }) {
               isLive && h('span', { className: "px-3 py-1 rounded text-[10px] font-bold animate-pulse", style: { background: "rgba(34,197,94,0.2)", color: "#22c55e" } }, "EN DIRECT"),
               item.league && h('span', { className: "text-[10px] text-muted-foreground" }, item.league),
               item.date && h('span', { className: "text-[10px] text-muted-foreground" }, "\u00B7", item.date)
+            ),
+            // ─── PRONOSTICS ──────────────────────
+            h('div', { className: "mt-3 rounded-xl p-3", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" } },
+              h('p', { className: "text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5" }, h(ThumbsUp, { size: 10 }), "Pronostics"),
+              (() => {
+                const t = item.teams || [];
+                const p = predictions;
+                const total = p?.total || 0;
+                const myVote = p?.userPrediction;
+                const hasBoth = t.length >= 2;
+                return h('div', { className: "flex gap-2" },
+                  [0, 1].map(i => {
+                    const team = t[i];
+                    if (!team) return null;
+                    const count = p?.teams?.[team.id] || 0;
+                    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                    const isMyVote = myVote === team.id;
+                    return h('button', {
+                      key: team.id,
+                      onClick: async () => {
+                        if (myVote || !item.matchId || !item.gameSlug) return;
+                        if (!user) { showAuthModal?.('register'); return; }
+                        try {
+                          await API.predictMatch(item.matchId, team.id, item.gameSlug);
+                          const updated = await API.getMatchPredictions(item.matchId);
+                          setPredictions(updated);
+                        } catch (e) { alert(e.message); }
+                      },
+                      disabled: myVote != null || item.status === 'finished',
+                      className: "flex-1 flex items-center gap-2 px-2.5 py-2 rounded-lg transition-all",
+                      style: {
+                        background: isMyVote ? `${P1}25` : 'rgba(255,255,255,0.03)',
+                        border: isMyVote ? `1px solid ${P1}50` : '1px solid transparent',
+                        opacity: myVote && !isMyVote ? 0.4 : 1,
+                        cursor: myVote || !user ? 'default' : 'pointer'
+                      }
+                    },
+                      team.logo
+                        ? h('img', { src: team.logo, alt: '', className: "w-5 h-5 object-contain rounded" })
+                        : h('div', { className: "w-5 h-5 rounded flex items-center justify-center text-[9px] font-black text-white", style: { background: GRAD } }, (team.name || '?')[0]),
+                      h('div', { className: "flex-1 text-left" },
+                        h('p', { className: "text-[10px] font-bold text-foreground truncate" }, team.name),
+                        h('p', { className: "text-[8px] text-muted-foreground" }, isMyVote ? 'Ton vote' : `${pct}% (${count} vote${count > 1 ? 's' : ''})`)
+                      ),
+                      total > 0 && h('div', { className: "h-1.5 rounded-full overflow-hidden flex-1 max-w-[40px]", style: { background: 'rgba(255,255,255,0.06)' } },
+                        h('div', { className: "h-full rounded-full transition-all", style: { width: `${pct}%`, background: isMyVote ? P1 : '#8888aa' } })
+                      )
+                    );
+                  })
+                );
+              })()
             )
           ),
           // ─── STREAM ──────────────────────────────
@@ -3839,7 +3900,7 @@ function App() {
         h('div', { className: "h-full overflow-y-auto" },
           null,
           view === "catalogue" && h(CatalogueView, { key: 'cat', refreshKey: catalogRefreshKey, onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); const sg = e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }; sg._inLibrary = Boolean(e); setSelectedGame(sg); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
-          view === "actus" && h(MagView, { onSelectGame: setSelectedGame }),
+          view === "actus" && h(MagView, { onSelectGame: setSelectedGame, showAuthModal, user }),
           view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, freshReview, onFreshReviewConsumed: () => setFreshReview(null), onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); }, showAuthModal, user }),
           view === "profil" && h(ProfilView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: game => setSelectedGame({ ...game, _inLibrary: true }), search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast, showAuthModal, setView, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); } })
         )

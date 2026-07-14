@@ -3613,6 +3613,46 @@ app.get('/api/esport/favorites/check', requireAuth, async (req, res) => {
   }
 });
 
+// ─── PRONOSTICS MATCHS E-SPORT ─────────────────────────────
+app.post('/api/esport/predict/:matchId', requireAuth, async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.matchId);
+    const { teamId, gameSlug } = req.body;
+    if (!teamId || !gameSlug) return res.status(400).json({ error: 'teamId et gameSlug requis' });
+    const result = await db.addPrediction(req.session.userId, matchId, teamId, gameSlug);
+    res.json(result);
+  } catch (err) {
+    console.error('[Predict]', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/esport/predictions/:matchId', async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.matchId);
+    const stats = await db.getMatchPredictions(matchId);
+    let userPrediction = null;
+    if (req.session?.userId) {
+      const up = await db.getUserPrediction(req.session.userId, matchId);
+      if (up) userPrediction = up.team_id;
+    }
+    res.json({ ...stats, userPrediction });
+  } catch (err) {
+    console.error('[Predictions]', err.message);
+    res.json({ total: 0, teams: {}, userPrediction: null });
+  }
+});
+
+app.get('/api/esport/my-predictions', requireAuth, async (req, res) => {
+  try {
+    const predictions = await db.getUserPredictions(req.session.userId);
+    res.json({ predictions });
+  } catch (err) {
+    console.error('[MyPredictions]', err.message);
+    res.json({ predictions: [] });
+  }
+});
+
 // ─── NOTIFICATION PREFERENCES ───────────────────────────────
 app.get('/api/account/notifications', requireAuth, async (req, res) => {
   try {

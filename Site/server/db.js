@@ -1922,6 +1922,10 @@ module.exports = {
   markNotificationRead,
   markAllNotificationsRead,
   getSiteStats,
+  addPrediction,
+  getMatchPredictions,
+  getUserPrediction,
+  getUserPredictions,
 };
 
 // ─── STATISTIQUES DU SITE ──────────────────────────────────────
@@ -1950,6 +1954,55 @@ async function getSiteStats() {
     gameBoosts: counts[8].count || 0,
     boosterUsers: counts[9].count || 0,
   };
+}
+
+// ─── PRONOSTICS MATCHS E-SPORT ───────────────────────────────
+async function addPrediction(userId, matchId, teamId, gameSlug) {
+  const { data: existing } = await supabaseAdmin
+    .from('match_predictions')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('match_id', matchId)
+    .maybeSingle();
+  if (existing) throw new Error('Tu as déjà voté pour ce match');
+
+  const { error } = await supabaseAdmin
+    .from('match_predictions')
+    .insert({ user_id: userId, match_id: matchId, team_id: teamId, game_slug: gameSlug });
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+async function getMatchPredictions(matchId) {
+  const { data, error } = await supabaseAdmin
+    .from('match_predictions')
+    .select('team_id')
+    .eq('match_id', matchId);
+  if (error) return { total: 0, teams: {} };
+  const total = data.length;
+  const teams = {};
+  for (const p of data) teams[p.team_id] = (teams[p.team_id] || 0) + 1;
+  return { total, teams };
+}
+
+async function getUserPrediction(userId, matchId) {
+  const { data } = await supabaseAdmin
+    .from('match_predictions')
+    .select('team_id')
+    .eq('user_id', userId)
+    .eq('match_id', matchId)
+    .maybeSingle();
+  return data || null;
+}
+
+async function getUserPredictions(userId) {
+  const { data } = await supabaseAdmin
+    .from('match_predictions')
+    .select('match_id, team_id, game_slug, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  return data || [];
 }
 
 // ─── AUTO-SCHEMA (création des tables manquantes au démarrage) ──

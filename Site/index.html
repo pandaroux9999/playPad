@@ -165,6 +165,7 @@ const API = {
   toggleWishlist: (gameId) => API.request('POST', '/api/wishlist/toggle', { gameId }),
   getTopThree: () => API.request('GET', '/api/topthree'),
   setTopThree: (gameId, position) => API.request('POST', '/api/topthree', { gameId, position }),
+  deleteMyReviews: () => API.request('DELETE', '/api/account/reviews'),
   getGameReviews: (gameId) => API.request('GET', `/api/games/reviews?gameId=${gameId}`),
   getGameRatings: () => API.request('GET', '/api/games/ratings'),
   getReviewsFeed: () => API.request('GET', '/api/reviews/feed'),
@@ -2736,6 +2737,14 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
         h('button', { onClick: () => { setContactOpen(true); }, className: "flex items-center gap-2 py-2.5 text-xs font-medium text-foreground hover:opacity-80 border-b border-border w-full text-left" },
           h(MessageCircle, { size: 13, style: { color: `${P1}aa` } }),
           "Nous contacter"
+        ),
+        // Supprimer mes critiques
+        h('button', { onClick: async () => {
+          if (!confirm('Supprimer toutes tes critiques ? Cette action est irréversible.')) return;
+          try { const r = await API.deleteMyReviews(); alert(r.deleted + ' critique(s) supprimée(s)'); } catch (e) { alert('Erreur: ' + e.message); }
+        }, className: "flex items-center gap-2 py-2.5 text-xs font-medium w-full text-left", style: { color: "#f59e0b88" } },
+          h(Trash2, { size: 13, style: { color: "#f59e0b88" } }),
+          "Supprimer mes critiques"
         ),
         // Supprimer le compte
         h('button', { onClick: () => { setSettingsOpen(false); onDeleteAccount(); }, className: "flex items-center gap-2 py-2.5 text-xs font-medium w-full text-left", style: { color: "#ef444488" } },

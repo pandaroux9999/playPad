@@ -498,6 +498,20 @@ app.get('/api/reviews/:id/replies', requireAuth, async (req, res) => {
   }
 });
 
+app.delete('/api/account/reviews', requireAuth, async (req, res) => {
+  try {
+    const { error, count } = await db.supabaseAdmin
+      .from('community_reviews')
+      .delete()
+      .eq('user_id', req.session.userId);
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, deleted: count || 0 });
+  } catch (err) {
+    console.error('[DeleteMyReviews] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/reviews/game/:gameId', requireAuth, async (req, res) => {
   try {
     const { gameId } = req.params;

@@ -3755,6 +3755,7 @@ function App() {
     }).catch(() => {});
     API.getGameRatings().then(d => setRatings(d.ratings || {})).catch(() => {});
     API.getFriends().then(d => setFriendsCount((d.friends || []).length)).catch(() => {});
+    refreshBooster();
     setTimeout(() => {
       API.getDiscoveries().then(d => setDiscoveries(d.discoveries || [])).catch(() => {});
     }, 3000);

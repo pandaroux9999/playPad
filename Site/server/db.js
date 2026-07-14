@@ -1921,7 +1921,36 @@ module.exports = {
   getUnreadNotificationCount,
   markNotificationRead,
   markAllNotificationsRead,
+  getSiteStats,
 };
+
+// ─── STATISTIQUES DU SITE ──────────────────────────────────────
+async function getSiteStats() {
+  const counts = await Promise.all([
+    supabaseAdmin.from('users').select('id', { count: 'exact', head: true }),
+    supabaseAdmin.from('games').select('id', { count: 'exact', head: true }),
+    supabaseAdmin.from('catalog').select('game_id', { count: 'exact', head: true }),
+    supabaseAdmin.from('community_reviews').select('id', { count: 'exact', head: true }),
+    supabaseAdmin.from('wishlist').select('id', { count: 'exact', head: true }),
+    supabaseAdmin.from('boosts').select('id', { count: 'exact', head: true }),
+    supabaseAdmin.from('messages').select('id', { count: 'exact', head: true }),
+    supabaseAdmin.from('friends').select('id', { count: 'exact', head: true }),
+    supabaseAdmin.from('game_boosts').select('id', { count: 'exact', head: true }),
+    supabaseAdmin.from('booster_points').select('user_id', { count: 'exact', head: true }),
+  ]);
+  return {
+    users: counts[0].count || 0,
+    games: counts[1].count || 0,
+    catalog: counts[2].count || 0,
+    reviews: counts[3].count || 0,
+    wishes: counts[4].count || 0,
+    boosts: counts[5].count || 0,
+    messages: counts[6].count || 0,
+    friends: counts[7].count || 0,
+    gameBoosts: counts[8].count || 0,
+    boosterUsers: counts[9].count || 0,
+  };
+}
 
 // ─── AUTO-SCHEMA (création des tables manquantes au démarrage) ──
 async function ensureMissingTables() {

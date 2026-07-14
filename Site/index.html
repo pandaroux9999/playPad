@@ -115,17 +115,19 @@ function useSheetSwipe(onClose) {
   return { panelRef, overlayRef, onTouchStart, onTouchMove, onTouchEnd };
 }
 
+const API_BASE = 'http://' + window.location.hostname;
 const API = {
   async request(method, url, body, options = {}) {
+    const fetchUrl = url.startsWith('/') ? API_BASE + url : url;
     const opts = { method, headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' };
     const timeoutMs = options?.timeoutMs || 0;
     const controller = timeoutMs > 0 ? new AbortController() : null;
     const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
     if (controller) opts.signal = controller.signal;
     if (body) opts.body = JSON.stringify(body);
-    console.log(`[API] ${method} ${url}`, body || '');
+    console.log(`[API] ${method} ${fetchUrl}`, body || '');
     try {
-      const res = await fetch(url, opts);
+      const res = await fetch(fetchUrl, opts);
       console.log(`[API] Response ${res.status}`, res.statusText);
       let data = {};
       try {

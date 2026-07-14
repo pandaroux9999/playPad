@@ -1036,7 +1036,8 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   }, [refreshKey]);
   useEffect(() => { API.getBoosterTop().then(d => setTopBoostedFallback(d.top || [])).catch(() => {}); }, [refreshKey]);
   useEffect(() => { API.getBoosterPoints().then(d => setBoostPoints(d.points)).catch(() => {}); }, [refreshKey]);
-  useEffect(() => { API.getIGDBPopular().then(d => setNewReleases(d.releases || [])).catch(() => { API.getNewReleases().then(d => setNewReleases(d.releases || [])).catch(() => {}); }); }, [refreshKey]);
+  const loadNewReleases = useCallback(() => { API.getIGDBPopular().then(d => setNewReleases(d.releases || [])).catch(() => { API.getNewReleases().then(d => setNewReleases(d.releases || [])).catch(() => {}); }); }, []);
+  useEffect(() => { loadNewReleases(); const t = setInterval(loadNewReleases, 120000); return () => clearInterval(t); }, [refreshKey]);
   useEffect(() => { API.getDownloadCounts().then(d => setDownloadCounts(d.counts || {})).catch(() => {}); }, [refreshKey]);
 
   // IntersectionObserver for infinite scroll

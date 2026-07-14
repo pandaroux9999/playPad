@@ -662,7 +662,7 @@ app.get('/api/igdb/popular-releases', async (req, res) => {
     const token = await igdbGetToken(igdbId, igdbSecret);
     const start2026 = Math.floor(new Date('2026-01-01').getTime() / 1000);
     const end2026 = Math.floor(new Date('2026-12-31T23:59:59').getTime() / 1000);
-    const body = `fields name,first_release_date,cover.url,total_rating,summary,platforms.name; where first_release_date >= ${start2026} & first_release_date <= ${end2026} & cover.url != null & total_rating != null; sort total_rating desc; limit 20;`;
+    const body = `fields name,first_release_date,cover.url,total_rating,summary,platforms.name; where first_release_date >= ${start2026} & first_release_date <= ${end2026} & cover.url != null & total_rating != null; sort total_rating desc; limit 50;`;
     const data = await igdbApiGet('https://api.igdb.com/v4/games', igdbId, token, body);
     if (!Array.isArray(data)) return res.json({ releases: [] });
     const releases = data.map(g => ({

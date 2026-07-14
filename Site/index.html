@@ -330,6 +330,35 @@ const PLATFORM_CONFIG = {
   ios:      { label: "iOS",      color: "#222222", text: "#ffffff", name: "iOS"             },
   android:  { label: "Android",  color: "#3ddc84", text: "#ffffff", name: "Android"         },
 };
+const PLATFORM_ALIAS = {
+  pc: ['pc','windows','win'],
+  ps5: ['ps5','playstation 5','playstation5'],
+  ps4: ['ps4','playstation 4','playstation4'],
+  ps3: ['ps3','playstation 3','playstation3'],
+  nintendo: ['nintendo','switch','switch 2','wii','wiiu','game boy','gameboy','3ds','nds','ds'],
+  xbox: ['xbox','xbox series','xbox one','xbox360'],
+  xbox360: ['xbox 360'],
+  ios: ['ios','iphone','ipad'],
+  android: ['android'],
+  steam: ['steam'],
+  epic: ['epic','epic games'],
+};
+function normalizePlatform(raw) {
+  const r = raw.toLowerCase().trim();
+  for (const [key, aliases] of Object.entries(PLATFORM_ALIAS)) {
+    if (aliases.some(a => r === a || r.startsWith(a))) return key;
+  }
+  return r;
+}
+function getGamePlatforms(game) {
+  const set = new Set();
+  if (game.platform) set.add(normalizePlatform(game.platform));
+  if (game.platforms_raw) {
+    String(game.platforms_raw).split(',').map(s => s.trim()).filter(Boolean).forEach(p => set.add(normalizePlatform(p)));
+  }
+  if (game.platforms) game.platforms.filter(Boolean).forEach(p => set.add(normalizePlatform(p)));
+  return [...set];
+}
 
 function isOnline(lastSeen) {
   if (!lastSeen) return false;
@@ -697,7 +726,7 @@ function LibraryView({ games, onSelect, search, setSearch, activePlatform, setAc
   const [filterYearMax, setFilterYearMax] = useState("");
   const [filterDeveloper, setFilterDeveloper] = useState("");
   const filtered = useMemo(() => games.filter(g =>
-    (activePlatform === "all" || (g.platforms || [g.platform]).filter(Boolean).includes(activePlatform)) &&
+    (activePlatform === "all" || getGamePlatforms(g).includes(activePlatform)) &&
     (filterGenre === "all" || g.genre === filterGenre) &&
     (filterStatus === "all" || g.status === filterStatus) &&
     (filterRatingMin === 0 || (g.userRating || 0) >= filterRatingMin) &&
@@ -1073,7 +1102,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         setFilterAgeRating('');
       };
       const filteredCatalog = catalog.filter(g => {
-        if (filterPlatform !== 'all' && !(g.platforms || [g.platform]).filter(Boolean).includes(filterPlatform)) return false;
+        if (filterPlatform !== 'all' && !getGamePlatforms(g).includes(filterPlatform)) return false;
         if (filterGenre !== 'all' && g.genre !== filterGenre) return false;
         if (filterYearMin && (g.year || 0) < Number(filterYearMin)) return false;
         if (filterAgeRating && String(g.age_rating || g.ageRating || 0) !== String(filterAgeRating)) return false;
@@ -1129,64 +1158,64 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         )
       ),
       hasActiveFilters && h('div', { className: "mb-2 flex flex-wrap gap-1.5" },
-        filterPlatform !== 'all' && h('span', { className: "px-2 py-1 rounded-lg text-[9px] font-bold", style: { background: `${P1}20`, color: P1 } }, PLATFORM_CONFIG[filterPlatform]?.label || filterPlatform),
+        filterPlatform !== 'all' && h('span', { className: "px-2 py-1 rounded-lg text-[9px] font-bold", style: { background: `${P1}20`, color: P1 } }, PLATFORM_CONFIG[normalizePlatform(filterPlatform)]?.label || filterPlatform),
         filterGenre !== 'all' && h('span', { className: "px-2 py-1 rounded-lg text-[9px] font-bold", style: { background: "rgba(59,130,246,0.18)", color: "#60a5fa" } }, filterGenre),
         !!filterYearMin && h('span', { className: "px-2 py-1 rounded-lg text-[9px] font-bold", style: { background: "rgba(34,197,94,0.18)", color: "#4ade80" } }, `Depuis ${filterYearMin}`),
         !!filterAgeRating && h('span', { className: "px-2 py-1 rounded-lg text-[9px] font-bold", style: { background: "rgba(245,158,11,0.18)", color: "#fbbf24" } }, `PEGI ${filterAgeRating}+`),
         h('button', { onClick: clearCatalogFilters, className: "px-2 py-1 rounded-lg text-[9px] font-bold", style: { background: "rgba(239,68,68,0.14)", color: "#ef4444" } }, "Réinitialiser")
       ),
-      showFilters && h('div', { style: { position: "fixed", inset: 0, zIndex: 10 }, onClick: () => setShowFilters(false) }),
-      showFilters && h('div', {
-        className: "rounded-2xl p-4 w-[calc(100%-32px)] max-w-md",
-        style: {
-          background: "#1a1a2e",
-          border: `1px solid ${P1}30`,
-          position: "fixed",
-          zIndex: 20,
-          top: "25%",
-          left: "50%",
-          transform: "translateX(-50%)"
-        }
-      },
-        h('div', { className: "flex items-center justify-between mb-3" },
-          h('p', { className: "text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5", style: { color: "#c4b5fd" } }, h(Sliders, { size: 10 }), "Filtres catalogue"),
-          h('button', { onClick: () => setShowFilters(false), className: "p-1 rounded hover:opacity-80", style: { color: "#8888aa" } }, h(X, { size: 12 }))
-        ),
-        h('div', { className: "grid grid-cols-2 gap-2.5" },
-          h('div', null,
-            h('p', { className: "text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1" }, "Plateforme"),
-            h('select', { id: "catalog-filter-platform", name: "catalogFilterPlatform", value: filterPlatform, onChange: e => setFilterPlatform(e.target.value), className: "w-full text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
-              h('option', { value: "all" }, "Toutes"),
-              ...(catalogFilters.platforms.length > 0 ? catalogFilters.platforms : ['pc', 'ps5', 'ps4', 'ps3', 'xbox', 'xbox360', 'nintendo', 'ios', 'android'])
-                .map(p => h('option', { value: p }, PLATFORM_CONFIG[p]?.name || PLATFORM_CONFIG[p]?.label || p.toUpperCase()))
-            )
+      showFilters && h('div', { style: { position: "fixed", zIndex: 20, inset: 0, animation: "fadeSlideIn 0.2s ease-out" } },
+        h('div', { onClick: () => setShowFilters(false), style: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" } }),
+        h('div', { style: { position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "85vh", background: "#1a1a2e", borderTopLeftRadius: 20, borderTopRightRadius: 20, border: `1px solid ${P1}20`, borderBottom: "none", display: "flex", flexDirection: "column", animation: "slideUp 0.25s cubic-bezier(0.32,0.72,0,1)" } },
+          // Handle
+          h('div', { style: { display: "flex", justifyContent: "center", padding: "8px 0 0" } },
+            h('div', { style: { width: 32, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.15)" } })
           ),
-          h('div', null,
-            h('p', { className: "text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1" }, "Genre"),
-            h('select', { id: "catalog-filter-genre", name: "catalogFilterGenre", value: filterGenre, onChange: e => setFilterGenre(e.target.value), className: "w-full text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
-              h('option', { value: "all" }, "Tous"),
-              ...catalogFilters.genres.map(g => h('option', { value: g }, g))
-            )
+          // Header
+          h('div', { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px 8px" } },
+            h('p', { style: { fontSize: 13, fontWeight: 900, letterSpacing: "0.05em", textTransform: "uppercase", background: GRAD, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" } }, "Filtres"),
+            h('button', { onClick: () => setShowFilters(false), style: { width: 28, height: 28, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.06)", color: "#8888aa", border: "none", cursor: "pointer" } }, h(X, { size: 13 }))
           ),
-          h('div', null,
-            h('p', { className: "text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1" }, "Année min"),
-            h('select', { id: "catalog-filter-year-min", name: "catalogFilterYearMin", value: filterYearMin, onChange: e => setFilterYearMin(e.target.value), className: "w-full text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
-              h('option', { value: "" }, "Toutes"),
-              ...(catalogFilters.years.length > 0 ? catalogFilters.years : [2026,2025,2024,2023,2022,2021,2020,2019,2018,2017,2016,2015,2014,2013,2012,2011,2010])
-                .map(y => h('option', { value: String(y) }, y))
-            )
-          ),
-          h('div', null,
-            h('p', { className: "text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1" }, "PEGI"),
-            h('select', { id: "catalog-filter-age-rating", name: "catalogFilterAgeRating", value: filterAgeRating, onChange: e => setFilterAgeRating(e.target.value), className: "w-full text-[10px] bg-secondary/60 border border-border rounded-lg px-2 py-1.5 text-foreground outline-none" },
-              h('option', { value: "" }, "Tous"),
-              ...(catalogFilters.ageRatings.length > 0 ? catalogFilters.ageRatings : [3, 7, 12, 16, 18]).map(v => h('option', { value: String(v) }, `${v}+`))
+          // Content (scrollable)
+          h('div', { style: { overflow: "auto", padding: "0 20px 20px", flex: 1 } },
+            // PLATEFORME
+            h('div', { style: { marginBottom: 16 } },
+              h('p', { style: { fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8888aa", marginBottom: 8 } }, "Plateforme"),
+              h('div', { style: { display: "flex", flexWrap: "wrap", gap: 6 } },
+                h('button', { onClick: () => setFilterPlatform('all'), style: { padding: "5px 12px", borderRadius: 10, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: filterPlatform === 'all' ? GRAD : "rgba(255,255,255,0.06)", color: filterPlatform === 'all' ? "#fff" : "#a1a1aa" } }, "Toutes"),
+                ...(() => { const raw = catalogFilters.platforms.length > 0 ? catalogFilters.platforms : ['pc','ps5','ps4','ps3','xbox','xbox360','nintendo','ios','android']; return [...new Set(raw.map(normalizePlatform).filter(p => PLATFORM_CONFIG[p]))].sort().map(p => h('button', { key: p, onClick: () => setFilterPlatform(p), style: { display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 12px", borderRadius: 10, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: filterPlatform === p ? GRAD : "rgba(255,255,255,0.06)", color: filterPlatform === p ? "#fff" : "#a1a1aa" } }, h(PlatformLogo, { platform: p, size: 11 }), PLATFORM_CONFIG[p]?.label || p )); })()
+              )
+            ),
+            // GENRE
+            catalogFilters.genres.length > 0 && h('div', { style: { marginBottom: 16 } },
+              h('p', { style: { fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8888aa", marginBottom: 8 } }, "Genre"),
+              h('div', { style: { display: "flex", flexWrap: "wrap", gap: 6 } },
+                h('button', { onClick: () => setFilterGenre('all'), style: { padding: "5px 12px", borderRadius: 10, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: filterGenre === 'all' ? GRAD : "rgba(255,255,255,0.06)", color: filterGenre === 'all' ? "#fff" : "#a1a1aa" } }, "Tous"),
+                ...catalogFilters.genres.map(g => h('button', { key: g, onClick: () => setFilterGenre(g), style: { padding: "5px 12px", borderRadius: 10, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: filterGenre === g ? GRAD : "rgba(255,255,255,0.06)", color: filterGenre === g ? "#fff" : "#a1a1aa" } }, g))
+              )
+            ),
+            // ANNÉE
+            h('div', { style: { marginBottom: 16 } },
+              h('p', { style: { fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8888aa", marginBottom: 8 } }, "Année"),
+              h('div', { style: { display: "flex", flexWrap: "wrap", gap: 6 } },
+                h('button', { onClick: () => setFilterYearMin(''), style: { padding: "5px 12px", borderRadius: 10, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: !filterYearMin ? GRAD : "rgba(255,255,255,0.06)", color: !filterYearMin ? "#fff" : "#a1a1aa" } }, "Toutes"),
+                ...(catalogFilters.years.length > 0 ? catalogFilters.years : [2026,2025,2024,2023,2022,2021,2020,2019,2018,2017,2016,2015,2014,2013,2012,2011,2010]).map(y => h('button', { key: y, onClick: () => setFilterYearMin(String(y)), style: { padding: "5px 12px", borderRadius: 10, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: filterYearMin === String(y) ? GRAD : "rgba(255,255,255,0.06)", color: filterYearMin === String(y) ? "#fff" : "#a1a1aa" } }, y))
+              )
+            ),
+            // PEGI
+            h('div', { style: { marginBottom: 16 } },
+              h('p', { style: { fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em", color: "#8888aa", marginBottom: 8 } }, "Classification"),
+              h('div', { style: { display: "flex", flexWrap: "wrap", gap: 6 } },
+                h('button', { onClick: () => setFilterAgeRating(''), style: { padding: "5px 12px", borderRadius: 10, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: !filterAgeRating ? GRAD : "rgba(255,255,255,0.06)", color: !filterAgeRating ? "#fff" : "#a1a1aa" } }, "Tous"),
+                ...(catalogFilters.ageRatings.length > 0 ? catalogFilters.ageRatings : [3, 7, 12, 16, 18]).map(v => h('button', { key: v, onClick: () => setFilterAgeRating(String(v)), style: { padding: "5px 12px", borderRadius: 10, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: filterAgeRating === String(v) ? GRAD : "rgba(255,255,255,0.06)", color: filterAgeRating === String(v) ? "#fff" : "#a1a1aa" } }, `${v}+`))
+              )
+            ),
+            // Actions
+            h('div', { style: { display: "flex", gap: 8, marginTop: 8 } },
+              h('button', { onClick: () => { clearCatalogFilters(); setShowFilters(false); }, style: { flex: 1, padding: "10px 0", borderRadius: 12, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: "rgba(239,68,68,0.12)", color: "#ef4444" } }, "Réinitialiser"),
+              h('button', { onClick: () => setShowFilters(false), style: { flex: 1, padding: "10px 0", borderRadius: 12, fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer", background: GRAD, color: "#fff" } }, `${filteredCatalog.length} résultats`)
             )
           )
-        ),
-        h('div', { className: "mt-3 flex gap-2" },
-          h('button', { onClick: clearCatalogFilters, className: "flex-1 py-2 rounded-lg text-[10px] font-bold", style: { background: "rgba(239,68,68,0.12)", color: "#ef4444" } }, "Réinitialiser"),
-          h('button', { onClick: () => setShowFilters(false), className: "flex-1 py-2 rounded-lg text-[10px] font-bold text-white", style: { background: GRAD } }, "Appliquer")
         )
       ),
       h('div', { className: "flex-1 overflow-y-auto px-4 pb-20", style: { scrollbarWidth: "none" } },
@@ -2482,7 +2511,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
   const initials = (user?.display_name || "??").charAt(0).toUpperCase() + ((user?.display_name || "?")[1] || "").toUpperCase();
   const platformStats = ["steam","xbox","ps5"].map(p => ({
     id: p, name: PLATFORM_CONFIG[p]?.name || p, color: PLATFORM_CONFIG[p]?.color || "#888",
-    count: games.filter(g => (g.platforms || [g.platform]).filter(Boolean).includes(p)).length,
+    count: games.filter(g => getGamePlatforms(g).includes(p)).length,
     connected: profileConnected?.[p] ?? (p === "steam" ? !!user?.steam_id : p === "xbox" ? !!user?.xbox_gamertag : p === "ps5" ? !!user?.psn_npsso : false),
   }));
   const connectedCount = platformStats.filter(p => p.connected).length;
@@ -2657,7 +2686,7 @@ function ProfileView({ user, games, wishlistIds, ratings, onToggleWishlist, onSe
       h('div', { className: "h-1.5 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full", style: { width: `${games.length === 0 ? 100 : (count / games.length) * 100}%`, background: STATUS_CONFIG[key].color } }))
     )))),
     h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Distribution des notes"), h('div', { className: "bg-card border border-border rounded-2xl p-4" }, ratingDist.map(({ score, count }) => h('div', { key: score, className: "flex items-center gap-2 mb-1.5 last:mb-0" }, h('div', { className: "flex gap-px w-14 flex-shrink-0" }, Array.from({ length: score }).map((_, i) => h(Star, { key: i, size: 9, fill: "#f59e0b", stroke: "#f59e0b" }))), h('div', { className: "flex-1 h-2 bg-secondary rounded-full overflow-hidden" }, h('div', { className: "h-full rounded-full bg-amber-500", style: { width: `${(count / maxCount) * 100}%` } })), h('span', { className: "text-xs text-muted-foreground w-4 text-right font-mono" }, count))))),
-    h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Par plateforme"), h('div', { className: "bg-card border border-border rounded-2xl p-4 flex flex-wrap gap-4" }, ["ps5","steam","xbox"].map(p => h('div', { key: p, className: "flex items-center gap-2" }, h(PlatformLogo, { platform: p, size: 16 }), h('span', { className: "text-xs font-bold text-foreground" }, PLATFORM_CONFIG[p].label), h('span', { className: "text-xs font-black font-mono", style: { color: p === "steam" ? "#c2dbf0" : PLATFORM_CONFIG[p].color } }, games.filter(g => (g.platforms || [g.platform]).filter(Boolean).includes(p)).length))))),
+    h('div', { className: "px-4 mb-4" }, h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Par plateforme"), h('div', { className: "bg-card border border-border rounded-2xl p-4 flex flex-wrap gap-4" }, ["ps5","steam","xbox"].map(p => h('div', { key: p, className: "flex items-center gap-2" }, h(PlatformLogo, { platform: p, size: 16 }), h('span', { className: "text-xs font-bold text-foreground" }, PLATFORM_CONFIG[p].label), h('span', { className: "text-xs font-black font-mono", style: { color: p === "steam" ? "#c2dbf0" : PLATFORM_CONFIG[p].color } }, games.filter(g => getGamePlatforms(g).includes(p)).length))))),
     games.length > 0 && h('div', { className: "px-4 mb-4" },
       h('h3', { className: "text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3" }, "Genres"),
       h('div', { className: "bg-card border border-border rounded-2xl p-4 flex flex-wrap gap-2" },

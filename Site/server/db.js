@@ -901,6 +901,27 @@ function parseScore(value) {
   return m ? parseFloat(m[0]) : 0;
 }
 
+const PLATFORM_ALIAS = {
+  pc: ['pc','windows','win'],
+  ps5: ['ps5','playstation 5','playstation5'],
+  ps4: ['ps4','playstation 4','playstation4'],
+  ps3: ['ps3','playstation 3','playstation3'],
+  nintendo: ['nintendo','switch','switch 2','wii','wiiu','game boy','gameboy','3ds','nds','ds'],
+  xbox: ['xbox','xbox series','xbox one','xbox360'],
+  xbox360: ['xbox 360'],
+  ios: ['ios','iphone','ipad'],
+  android: ['android'],
+  steam: ['steam'],
+  epic: ['epic','epic games'],
+};
+function normalizePlatform(raw) {
+  const r = String(raw).toLowerCase().trim();
+  for (const [key, aliases] of Object.entries(PLATFORM_ALIAS)) {
+    if (aliases.some(a => r === a || r.startsWith(a))) return key;
+  }
+  return r;
+}
+
 async function getCatalogFilters() {
   const all = await getCatalog();
   const genresSet = new Set();
@@ -909,13 +930,13 @@ async function getCatalogFilters() {
   const yearsSet = new Set();
 
   for (const g of all) {
-    if (g.platform) platformsSet.add(String(g.platform).toLowerCase());
+    if (g.platform) platformsSet.add(normalizePlatform(g.platform));
     if (g.platforms_raw) {
       String(g.platforms_raw)
         .split(',')
-        .map(s => s.trim().toLowerCase())
+        .map(s => s.trim())
         .filter(Boolean)
-        .forEach(p => platformsSet.add(p));
+        .forEach(p => platformsSet.add(normalizePlatform(p)));
     }
     if (g.genre) {
       String(g.genre)

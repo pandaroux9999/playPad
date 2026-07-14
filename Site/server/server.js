@@ -2901,26 +2901,43 @@ async function fetchDramaFromRSS() {
   for (const feed of DRAMA_RSS_FEEDS) {
     try {
       const xml = await httpGet(feed.url);
-      const parsed = parseRSS(xml);
-      for (const p of parsed.slice(0, 5)) {
-        const lower = (p.title + ' ' + p.desc).toLowerCase();
+      const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+      let match;
+      let count = 0;
+      while ((match = itemRegex.exec(xml)) !== null && count < 5) {
+        const block = match[1];
+        const get = (tag) => {
+          const m = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i').exec(block);
+          let val = m ? m[1].trim() : '';
+          val = val.replace(/<!\[CDATA\[/g, '').replace(/\]\]>/g, '');
+          val = val.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+          return val;
+        };
+        const title = get('title');
+        const rawDesc = get('description');
+        const plainDesc = rawDesc.replace(/<[^>]*>/g, '').trim();
+        if (!title) continue;
+        count++;
+        const lower = (title + ' ' + plainDesc).toLowerCase();
         if (NON_GAMING_KEYWORDS.some(kw => lower.includes(kw))) continue;
         const tag = lower.includes('licencie') || lower.includes('greve') || lower.includes('controvers') || lower.includes('polemique') || lower.includes('drama')
           ? 'Drama' : 'Actu';
+        const cover = extractRssImage(block);
         const [titleFr, descFr] = await Promise.all([
-          translateText(p.title),
-          translateText(p.desc.slice(0, 500)),
+          translateText(title),
+          translateText(plainDesc.slice(0, 500)),
         ]);
         items.push({
           type: 'drama',
-          title: titleFr || p.title,
-          desc: (descFr || p.desc).slice(0, 150),
+          title: titleFr || title,
+          desc: (descFr || plainDesc).slice(0, 150),
+          cover,
           tag,
-          officialUrl: p.link,
-          sourceUrl: p.link,
+          officialUrl: get('link'),
+          sourceUrl: get('link'),
           sourceName: feed.name,
-          details: (descFr || p.desc).slice(0, 500),
-          pubDate: p.pubDate,
+          details: (descFr || plainDesc).slice(0, 500),
+          pubDate: get('pubDate'),
         });
       }
     } catch (e) {

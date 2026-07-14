@@ -883,7 +883,7 @@ async function queryCatalog({ search, letter, platform, genre, yearMin, yearMax,
 
 function applyExtraFilters(games, { platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating }) {
   let filtered = games;
-  if (platform && platform !== 'all') filtered = filtered.filter(g => g.platform === platform || (g.platforms_raw || '').toLowerCase().includes(platform.toLowerCase()));
+  if (platform && platform !== 'all') filtered = filtered.filter(g => { if (normalizePlatform(g.platform) === platform) return true; if (g.platforms_raw) { return String(g.platforms_raw).split(',').map(s => s.trim()).filter(Boolean).some(p => normalizePlatform(p) === platform); } return false; });
   if (genre && genre !== 'all') filtered = filtered.filter(g => (g.genre || '').toLowerCase().split(',').map(s => s.trim()).includes(genre.toLowerCase()));
   if (yearMin) filtered = filtered.filter(g => g.year >= parseInt(yearMin));
   if (yearMax) filtered = filtered.filter(g => g.year <= parseInt(yearMax));

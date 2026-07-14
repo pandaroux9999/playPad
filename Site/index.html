@@ -1597,9 +1597,9 @@ function MagView({ onSelectGame }) {
       API.getNews(),
       API.getEsportGames().then(d => _setEsportAllGames(d.games || [])).catch(() => {})
     ]).then(([news]) => {
-      setEsportEvents(news.esport || []);
-      setDramaItems(news.drama || []);
-      setArticles(news.articles || []);
+      setEsportEvents((news.esport || []).sort((a, b) => new Date(a.pubDate || 0) - new Date(b.pubDate || 0)));
+      setDramaItems((news.drama || []).sort((a, b) => new Date(a.pubDate || 0) - new Date(b.pubDate || 0)));
+      setArticles((news.articles || []).sort((a, b) => new Date(a.pubDate || 0) - new Date(b.pubDate || 0)));
     }).catch(() => {}).finally(() => setLoadingNews(false));
   }, []);
   useEffect(() => { loadNews(); const t = setInterval(loadNews, 120000); return () => clearInterval(t); }, []);

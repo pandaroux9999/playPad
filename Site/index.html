@@ -1064,6 +1064,13 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         setFilterYearMin('');
         setFilterAgeRating('');
       };
+      const filteredCatalog = catalog.filter(g => {
+        if (filterPlatform !== 'all' && !(g.platforms || [g.platform]).filter(Boolean).includes(filterPlatform)) return false;
+        if (filterGenre !== 'all' && g.genre !== filterGenre) return false;
+        if (filterYearMin && (g.year || 0) < Number(filterYearMin)) return false;
+        if (filterAgeRating && String(g.age_rating || g.ageRating || 0) !== String(filterAgeRating)) return false;
+        return true;
+      });
 
     return h('div', { className: "flex flex-col h-full view-enter" },
       h('div', { className: "px-4 pt-3 pb-2 flex-shrink-0 relative" },
@@ -1228,17 +1235,17 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       ),
       catalog.length === 0 && loadingCatalog
         ? h('div', { className: "flex items-center justify-center h-40" }, h('div', { className: "w-6 h-6 border-2 rounded-full animate-spin", style: { borderColor: `${P1}30 ${P1}30 ${P1}30 transparent` } }))
-        : catalog.length === 0
+        : filteredCatalog.length === 0
         ? h('div', { className: "flex flex-col items-center justify-center h-40 text-muted-foreground" },
             h(Gamepad2, { size: 32, className: "mb-2 opacity-20" }),
-            h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9")
+            h('p', { className: "text-sm" }, "Aucun jeu trouv\u00e9 avec ces filtres")
           )
         : h('div', null,
             h('div', { className: "flex items-center justify-between mb-3" },
               h('p', { className: "text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2" }, label),
             ),
             h('div', { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" },
-              catalog.map(game => {
+              filteredCatalog.map(game => {
                 const boostCount = (boostedGames || topBoostedFallback).find(b => b.game_id === game.game_id)?.count || 0;
                 const dlCount = downloadCounts[game.game_id] || 0;
                 return h('div', { key: game.game_id, className: "relative" },
@@ -1597,9 +1604,9 @@ function MagView({ onSelectGame }) {
       API.getNews(),
       API.getEsportGames().then(d => _setEsportAllGames(d.games || [])).catch(() => {})
     ]).then(([news]) => {
-      setEsportEvents((news.esport || []).sort((a, b) => new Date(a.pubDate || 0) - new Date(b.pubDate || 0)));
-      setDramaItems((news.drama || []).sort((a, b) => new Date(a.pubDate || 0) - new Date(b.pubDate || 0)));
-      setArticles((news.articles || []).sort((a, b) => new Date(a.pubDate || 0) - new Date(b.pubDate || 0)));
+      setEsportEvents((news.esport || []).sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0)));
+      setDramaItems((news.drama || []).sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0)));
+      setArticles((news.articles || []).sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0)));
     }).catch(() => {}).finally(() => setLoadingNews(false));
   }, []);
   useEffect(() => { loadNews(); const t = setInterval(loadNews, 120000); return () => clearInterval(t); }, []);

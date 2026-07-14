@@ -634,7 +634,7 @@ async function batchUpsertCatalog(games) {
   games = games.filter(g => g.game_id);
   if (games.length === 0) return;
   const now = new Date().toISOString();
-  const BATCH_SIZE = 200;
+  const BATCH_SIZE = 1000;
   let totalOk = 0;
   for (let i = 0; i < games.length; i += BATCH_SIZE) {
     const batch = games.slice(i, i + BATCH_SIZE);
@@ -876,7 +876,7 @@ async function queryCatalog({ search, letter, platform, genre, yearMin, yearMax,
   });
 
   const total = filtered.length;
-  const totalCatalog = all.length;
+  const totalCatalog = await getCatalogCount();
   const offset = (Math.max(1, page) - 1) * Math.max(1, limit);
   return { data: filtered.slice(offset, offset + limit), total, totalCatalog, page, limit };
 }

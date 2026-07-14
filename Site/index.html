@@ -1137,16 +1137,15 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       ),
       showFilters && h('div', { style: { position: "fixed", inset: 0, zIndex: 10 }, onClick: () => setShowFilters(false) }),
       showFilters && h('div', {
-        className: "rounded-2xl p-4",
+        className: "rounded-2xl p-4 w-[calc(100%-32px)] max-w-md",
         style: {
           background: "#1a1a2e",
           border: `1px solid ${P1}30`,
-          position: "absolute",
+          position: "fixed",
           zIndex: 20,
-          top: "calc(100% - 4px)",
-          left: 0,
-          right: 0,
-          marginTop: 4
+          top: "25%",
+          left: "50%",
+          transform: "translateX(-50%)"
         }
       },
         h('div', { className: "flex items-center justify-between mb-3" },

@@ -1645,10 +1645,10 @@ function MagView({ onSelectGame }) {
     // ─── ACTUS ──────────────────────────────────
     newsSubTab === "actus" && h('div', { className: "px-4 pb-4" },
       (() => {
-        const items = articles.filter(r => !r._archived);
-        if (items.length === 0 && !loadingNews) return h('p', { className: "text-[11px] text-muted-foreground text-center py-6" }, "Aucune actualité pour le moment");
-        const hero = items[0];
-        const rest = items.slice(1);
+        const merged = [...articles.filter(r => !r._archived), ...dramaItems.filter(d => !d._archived)].sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
+        if (merged.length === 0 && !loadingNews) return h('p', { className: "text-[11px] text-muted-foreground text-center py-6" }, "Aucune actualité pour le moment");
+        const hero = merged[0];
+        const rest = merged.slice(1);
         return h('div', { className: "space-y-3" },
           hero && h('div', { key: 'hero', onClick: () => setSelectedNews(hero), className: "relative rounded-2xl overflow-hidden cursor-pointer transition-all hover:opacity-90 active:scale-[0.98]", style: { aspectRatio: "16/9" } },
             h('img', { src: hero.cover || '', alt: hero.title, className: "w-full h-full object-cover", onError: function(e) { e.target.style.display = 'none'; } }),
@@ -1683,21 +1683,7 @@ function MagView({ onSelectGame }) {
               )
             )
           ),
-          dramaItems.filter(d => !d._archived).length > 0 && h('div', { className: "mt-4 space-y-2" },
-            h('p', { className: "text-[9px] font-black text-muted-foreground mb-1", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Autres actualit\u00e9s"),
-            dramaItems.filter(d => !d._archived).slice(0, 3).map((item, i) =>
-              h('div', { key: 'd'+i, onClick: () => setSelectedNews(item), className: "rounded-2xl overflow-hidden cursor-pointer transition-all hover:opacity-80 hover:scale-[1.01] active:scale-[0.98] border", style: { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" } },
-                h('div', { className: "p-3" },
-                  h('p', { className: "text-sm sm:text-base font-bold text-foreground leading-tight line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.title),
-                  h('div', { className: "flex items-center gap-1 mt-1.5" },
-                    h('span', { className: "text-[8px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold", style: { background: item.tag === "Drama" ? "rgba(239,68,68,0.15)" : "rgba(255,255,255,0.06)", color: item.tag === "Drama" ? "#ef4444" : "#8888aa" } }, (item.tag || 'Actu').slice(0, 12)),
-                    h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, item.sourceName),
-                    item.pubDate && h('span', { className: "text-[8px] sm:text-[10px]", style: { color: "#6666aa" } }, new Date(item.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
-                  )
-                )
-              )
-            )
-          )
+          false
         );
       })()
     ),

@@ -984,6 +984,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   const [activeLetter, setActiveLetter] = useState("all");
   const [catalog, setCatalog] = useState([]);
   const [catalogTotal, setCatalogTotal] = useState(0);
+  const [catalogTotalAll, setCatalogTotalAll] = useState(0);
   const [catalogPage, setCatalogPage] = useState(1);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [topBoostedFallback, setTopBoostedFallback] = useState([]);
@@ -1020,6 +1021,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       if (append) setCatalog(prev => [...prev, ...games]);
       else { setCatalog(games); }
       setCatalogTotal(d.total || 0);
+      setCatalogTotalAll(d.totalCatalog || 0);
       setCatalogPage(page);
     } catch (e) {
       if (!append) setCatalog(CATALOGUE);
@@ -1085,7 +1087,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
         h('div', null,
           h('h1', { className: "text-xl font-black text-foreground leading-none", style: { fontFamily: "'Rajdhani', sans-serif" } }, "Catalogue Complet"),
           h('p', { className: "text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5" },
-            h('span', { className: "font-bold", style: { color: P1 } }, catalogTotal), " jeux",
+            h('span', { className: "font-bold", style: { color: P1 } }, catalogTotalAll), " jeux",
             boostPoints !== null && h('span', { className: "text-[10px] px-1.5 py-0.5 rounded-full font-bold", style: { background: GRAD, color: "#fff" } },
               boostPoints, " boost", boostPoints > 1 ? "s" : "", "\u2728"
             )

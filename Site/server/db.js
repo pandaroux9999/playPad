@@ -811,7 +811,7 @@ async function getCatalog() {
   const { data, error } = await supabaseAdmin
     .from('catalog')
     .select('*')
-    .limit(100000);
+    .limit(500000);
   if (error) throw new Error(error.message);
   if (!data) return [];
   const letterRe = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/;
@@ -829,6 +829,7 @@ async function getCatalog() {
     return 0;
   });
   catalogCache = data;
+  console.log(`[Catalog] getCatalog: ${data.length} jeux chargés en mémoire (cache)`);
   return data;
 }
 
@@ -875,8 +876,9 @@ async function queryCatalog({ search, letter, platform, genre, yearMin, yearMax,
   });
 
   const total = filtered.length;
+  const totalCatalog = all.length;
   const offset = (Math.max(1, page) - 1) * Math.max(1, limit);
-  return { data: filtered.slice(offset, offset + limit), total, page, limit };
+  return { data: filtered.slice(offset, offset + limit), total, totalCatalog, page, limit };
 }
 
 function applyExtraFilters(games, { platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating }) {

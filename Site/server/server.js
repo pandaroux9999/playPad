@@ -651,7 +651,8 @@ app.get('/api/catalog', catalogLimiter, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 60, 500);
     const result = await db.queryCatalog({ search, letter, platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating, page, limit });
-    res.json({ catalog: result.data, total: result.total, page, limit });
+    console.log(`[Catalog] API /api/catalog page=${page} limit=${limit} totalFiltered=${result.total} totalCatalog=${result.totalCatalog}`);
+    res.json({ catalog: result.data, total: result.total, totalCatalog: result.totalCatalog, page, limit });
   } catch (err) {
     console.error('[Catalog] Error:', err.message, 'query:', JSON.stringify(req.query));
     res.status(500).json({ error: 'Erreur interne' });
@@ -1893,6 +1894,8 @@ async function fixMissingCovers() {
     if (totalImported > 0) {
       console.log(`[Catalog] ✅ ${totalImported} jeux importés depuis les fichiers JSON`);
     }
+    const finalCount = await db.getCatalogCount();
+    console.log(`[Catalog] 📊 TOTAL dans la base: ${finalCount} jeux`);
   } catch (e) {
     console.error('[Catalog] Erreur import JSON au démarrage:', e.message);
   }

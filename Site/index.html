@@ -115,7 +115,7 @@ function useSheetSwipe(onClose) {
   return { panelRef, overlayRef, onTouchStart, onTouchMove, onTouchEnd };
 }
 
-const API_BASE = 'http://' + window.location.hostname;
+const API_BASE = window.location.protocol + '//' + window.location.hostname;
 const API = {
   async request(method, url, body, options = {}) {
     const fetchUrl = url.startsWith('/') ? API_BASE + url : url;

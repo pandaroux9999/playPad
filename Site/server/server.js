@@ -654,6 +654,36 @@ app.get('/api/catalog/new-releases', async (req, res) => {
   }
 });
 
+app.get('/api/igdb/popular-releases', async (req, res) => {
+  try {
+    const igdbId = process.env.TWITCH_CLIENT_ID;
+    const igdbSecret = process.env.TWITCH_CLIENT_SECRET;
+    if (!igdbId || !igdbSecret) return res.status(503).json({ error: 'IGDB non configuré' });
+    const token = await igdbGetToken(igdbId, igdbSecret);
+    const start2026 = Math.floor(new Date('2026-01-01').getTime() / 1000);
+    const end2026 = Math.floor(new Date('2026-12-31T23:59:59').getTime() / 1000);
+    const body = `fields name,first_release_date,cover.url,total_rating,summary,platforms.name; where first_release_date >= ${start2026} & first_release_date <= ${end2026} & cover.url != null & total_rating != null; sort total_rating desc; limit 20;`;
+    const data = await igdbApiGet('https://api.igdb.com/v4/games', igdbId, token, body);
+    if (!Array.isArray(data)) return res.json({ releases: [] });
+    const releases = data.map(g => ({
+      game_id: 'igdb-' + g.id,
+      title: g.name || 'Titre inconnu',
+      cover: g.cover?.url ? 'https:' + g.cover.url.replace('t_thumb', 't_cover_big') : '',
+      year: g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : 2026,
+      platform: g.platforms?.[0]?.name || 'pc',
+      genre: '',
+      developer: '',
+      description: g.summary || '',
+      userRating: g.total_rating ? Math.round(g.total_rating / 20) / 1 : 0,
+      release_date: g.first_release_date ? new Date(g.first_release_date * 1000).toISOString().split('T')[0] : '',
+    }));
+    res.json({ releases });
+  } catch (err) {
+    console.error('[IGDB Popular] Error:', err.message);
+    res.status(500).json({ error: 'Erreur interne' });
+  }
+});
+
 app.delete('/api/games', requireAuth, async (req, res) => {
   try {
     await db.deleteAllUserGames(req.session.userId);

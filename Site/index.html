@@ -217,6 +217,7 @@ const API = {
   resyncPsn: () => API.request('POST', '/api/platform/psn/resync'),
   getNews: () => API.request('GET', '/api/news'),
   getNewReleases: () => API.request('GET', '/api/catalog/new-releases'),
+  getIGDBPopular: () => API.request('GET', '/api/igdb/popular-releases'),
   replaceCatalogFromJson: () => API.request('POST', '/api/catalog/replace-from-json'),
   enrichCatalogFromRawg: () => API.request('POST', '/api/catalog/enrich-from-rawg'),
   cleanCatalogNonJv: () => API.request('POST', '/api/catalog/clean-non-jv'),
@@ -1035,7 +1036,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
   }, [refreshKey]);
   useEffect(() => { API.getBoosterTop().then(d => setTopBoostedFallback(d.top || [])).catch(() => {}); }, [refreshKey]);
   useEffect(() => { API.getBoosterPoints().then(d => setBoostPoints(d.points)).catch(() => {}); }, [refreshKey]);
-  useEffect(() => { API.getNewReleases().then(d => setNewReleases(d.releases || [])).catch(() => {}); }, [refreshKey]);
+  useEffect(() => { API.getIGDBPopular().then(d => setNewReleases(d.releases || [])).catch(() => { API.getNewReleases().then(d => setNewReleases(d.releases || [])).catch(() => {}); }); }, [refreshKey]);
   useEffect(() => { API.getDownloadCounts().then(d => setDownloadCounts(d.counts || {})).catch(() => {}); }, [refreshKey]);
 
   // IntersectionObserver for infinite scroll

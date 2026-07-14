@@ -1958,51 +1958,58 @@ async function getSiteStats() {
 
 // ─── PRONOSTICS MATCHS E-SPORT ───────────────────────────────
 async function addPrediction(userId, matchId, teamId, gameSlug) {
-  const { data: existing } = await supabaseAdmin
-    .from('match_predictions')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('match_id', matchId)
-    .maybeSingle();
-  if (existing) throw new Error('Tu as déjà voté pour ce match');
-
-  const { error } = await supabaseAdmin
-    .from('match_predictions')
-    .insert({ user_id: userId, match_id: matchId, team_id: teamId, game_slug: gameSlug });
-  if (error) throw new Error(error.message);
-  return { ok: true };
+  try {
+    const { data: existing } = await supabaseAdmin
+      .from('match_predictions')
+      .select('id')
+      .eq('user_id', userId).eq('match_id', matchId)
+      .maybeSingle();
+    if (existing) throw new Error('Tu as déjà voté pour ce match');
+    const { error } = await supabaseAdmin
+      .from('match_predictions')
+      .insert({ user_id: userId, match_id: matchId, team_id: teamId, game_slug: gameSlug });
+    if (error) throw error;
+    return { ok: true };
+  } catch (e) {
+    if (e.message?.includes('relation') || e.message?.includes('does not exist') || e.code === '42P01')
+      throw new Error('Table des pronostics pas encore créée sur Supabase');
+    throw e;
+  }
 }
 
 async function getMatchPredictions(matchId) {
-  const { data, error } = await supabaseAdmin
-    .from('match_predictions')
-    .select('team_id')
-    .eq('match_id', matchId);
-  if (error) return { total: 0, teams: {} };
-  const total = data.length;
-  const teams = {};
-  for (const p of data) teams[p.team_id] = (teams[p.team_id] || 0) + 1;
-  return { total, teams };
+  try {
+    const { data } = await supabaseAdmin
+      .from('match_predictions')
+      .select('team_id').eq('match_id', matchId);
+    if (!data) return { total: 0, teams: {} };
+    const teams = {};
+    for (const p of data) teams[p.team_id] = (teams[p.team_id] || 0) + 1;
+    return { total: data.length, teams };
+  } catch (e) {
+    return { total: 0, teams: {} };
+  }
 }
 
 async function getUserPrediction(userId, matchId) {
-  const { data } = await supabaseAdmin
-    .from('match_predictions')
-    .select('team_id')
-    .eq('user_id', userId)
-    .eq('match_id', matchId)
-    .maybeSingle();
-  return data || null;
+  try {
+    const { data } = await supabaseAdmin
+      .from('match_predictions')
+      .select('team_id')
+      .eq('user_id', userId).eq('match_id', matchId)
+      .maybeSingle();
+    return data || null;
+  } catch (e) { return null; }
 }
 
 async function getUserPredictions(userId) {
-  const { data } = await supabaseAdmin
-    .from('match_predictions')
-    .select('match_id, team_id, game_slug, created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(50);
-  return data || [];
+  try {
+    const { data } = await supabaseAdmin
+      .from('match_predictions')
+      .select('match_id, team_id, game_slug, created_at')
+      .eq('user_id', userId).order('created_at', { ascending: false }).limit(50);
+    return data || [];
+  } catch (e) { return []; }
 }
 
 // ─── AUTO-SCHEMA (création des tables manquantes au démarrage) ──

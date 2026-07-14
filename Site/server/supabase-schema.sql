@@ -263,7 +263,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, crea
 -- Pronostics matchs e-sport
 CREATE TABLE IF NOT EXISTS match_predictions (
   id SERIAL PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   match_id INTEGER NOT NULL,
   team_id INTEGER NOT NULL,
   game_slug TEXT NOT NULL,

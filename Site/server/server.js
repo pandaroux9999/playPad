@@ -2999,6 +2999,11 @@ async function fetchArticlesFromRSS() {
         const lower = (title + ' ' + plainText).toLowerCase();
         if (NON_GAMING_KEYWORDS.some(kw => lower.includes(kw))) continue;
         if (feed.name === 'JV' && category === 'News culture') continue;
+        const cats = (block.match(/<category[^>]*>([\s\S]*?)<\/category>/gi) || [])
+          .map(c => c.replace(/<\/?category[^>]*>/gi, '').trim().toLowerCase())
+          .filter(Boolean);
+        const nonGamingCats = ['entertainment', 'movies', 'tv', 'tv shows', 'film', 'cinema', 'celebrity', 'culture'];
+        if (cats.some(c => nonGamingCats.includes(c))) continue;
         items.push({
           type: 'article',
           title,

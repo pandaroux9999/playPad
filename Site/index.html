@@ -1756,59 +1756,55 @@ function MagView({ onSelectGame, showAuthModal, user }) {
                     })
                   )
                 ),
-                // 3. Pleine largeur : Actus e-sport
-                h('div', { className: "space-y-2" },
-                  h('span', { className: "text-[11px] font-black text-foreground uppercase tracking-wider flex items-center gap-1.5", style: { fontFamily: "'Rajdhani', sans-serif" } }, h(MessageCircle, { size: 12, style: { color: P1 } }), "Actualit\u00e9s e-sport"),
-                  (() => {
-                    const esportNews = filtered.filter(i => i.sourceName !== 'PandaScore' && (i.desc || i.details));
-                    return esportNews.length === 0
-                      ? h('p', { className: "text-[10px] text-muted-foreground italic py-4" }, "Aucune actualit\u00e9 e-sport r\u00e9cente")
-                      : h('div', { className: "space-y-2" },
-                          esportNews.slice(0, 6).map((item, i) => {
-                            const c = gc(item.game);
-                            return h('div', { key: i, onClick: () => setSelectedNews(item), className: "rounded-xl overflow-hidden cursor-pointer transition-all hover:opacity-80 border", style: { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" } },
-                              h('div', { className: "flex flex-col sm:flex-row" },
-                                item.cover && h('div', { className: "sm:w-36 sm:h-24 flex-shrink-0 relative" },
-                                  h('img', { src: item.cover, alt: item.event, className: "w-full h-full object-cover", onError: function(e) { e.target.style.display = 'none'; } })
+                // 3. Deux colonnes : Actus (70%) + Agenda (30%)
+                h('div', { className: "flex flex-col lg:flex-row gap-4" },
+                  h('div', { className: "lg:w-[70%] space-y-2" },
+                    h('span', { className: "text-[11px] font-black text-foreground uppercase tracking-wider flex items-center gap-1.5", style: { fontFamily: "'Rajdhani', sans-serif" } }, h(MessageCircle, { size: 12, style: { color: P1 } }), "Actualit\u00e9s e-sport"),
+                    (() => {
+                      const esportNews = filtered.filter(i => i.sourceName !== 'PandaScore' && (i.desc || i.details));
+                      return esportNews.length === 0
+                        ? h('p', { className: "text-[10px] text-muted-foreground italic py-4" }, "Aucune actualit\u00e9 e-sport r\u00e9cente")
+                        : h('div', { className: "grid grid-cols-1 sm:grid-cols-2 gap-2" },
+                            esportNews.slice(0, 6).map((item, i) => {
+                              const c = gc(item.game);
+                              return h('div', { key: i, onClick: () => setSelectedNews(item), className: "rounded-xl overflow-hidden cursor-pointer transition-all hover:opacity-80 border", style: { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" } },
+                                item.cover && h('div', { className: "relative", style: { aspectRatio: "16/9" } },
+                                  h('img', { src: item.cover, alt: item.event, className: "w-full h-full object-cover", onError: function(e) { e.target.style.display = 'none'; } }),
+                                  h('div', { className: "absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" })
                                 ),
-                                h('div', { className: "p-3 flex-1" },
-                                  h('div', { className: "flex items-center gap-1.5 mb-1.5" },
+                                h('div', { className: "p-2.5" },
+                                  h('div', { className: "flex items-center gap-1 mb-1" },
                                     h('span', { className: "px-1.5 py-0.5 rounded text-[7px] font-bold", style: { background: c + '25', color: c } }, (item.game || 'Esport').slice(0, 10)),
-                                    item.sourceName && h('span', { className: "text-[7px] text-muted-foreground" }, item.sourceName),
                                     item.pubDate && h('span', { className: "text-[7px]", style: { color: "#6666aa" } }, new Date(item.pubDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))
                                   ),
-                                  h('p', { className: "text-sm font-bold text-foreground leading-tight mb-1", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event || item.title),
-                                  h('p', { className: "text-[10px] leading-relaxed text-muted-foreground line-clamp-3" }, item.desc || item.details || '')
+                                  h('p', { className: "text-xs font-bold text-foreground leading-tight line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.event || item.title)
+                                )
+                              );
+                            })
+                          );
+                    })()
+                  ),
+                  h('div', { className: "lg:w-[30%] space-y-2" },
+                    h('span', { className: "text-[11px] font-black text-foreground uppercase tracking-wider flex items-center gap-1.5", style: { fontFamily: "'Rajdhani', sans-serif" } }, h(Calendar, { size: 12, style: { color: "#fbbf24" } }), "\u00c0 venir"),
+                    upcoming.length === 0
+                      ? h('p', { className: "text-[10px] text-muted-foreground italic py-2" }, "Aucun match \u00e0 venir")
+                      : h('div', { className: "space-y-1.5" },
+                          upcoming.slice(0, 8).map((item, idx) => {
+                            const t1 = item.teams?.[0], t2 = item.teams?.[1];
+                            return h('div', { key: idx, onClick: () => setSelectedNews(item), className: "flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition-all hover:opacity-80", style: { background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" } },
+                              h('div', { className: "flex items-center gap-2 flex-1 min-w-0" },
+                                h('div', { className: "flex -space-x-1.5 flex-shrink-0" },
+                                  h('div', { className: "relative w-7 h-7" }, h('div', { className: "absolute inset-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black text-white border", style: { background: GRAD, borderColor: "#1a1a2e" } }, (t1?.name || '?')[0]), t1?.logo && h('img', { src: t1.logo, alt: '', onError: (e) => { e.target.style.display = 'none'; }, className: "absolute inset-0 w-7 h-7 rounded-full object-contain border", style: { borderColor: "#1a1a2e", background: "#1a1a2e" } })),
+                                  h('div', { className: "relative w-7 h-7 -ml-1.5" }, h('div', { className: "absolute inset-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black text-white border", style: { background: GRAD, borderColor: "#1a1a2e" } }, (t2?.name || '?')[0]), t2?.logo && h('img', { src: t2.logo, alt: '', onError: (e) => { e.target.style.display = 'none'; }, className: "absolute inset-0 w-7 h-7 rounded-full object-contain border", style: { borderColor: "#1a1a2e", background: "#1a1a2e" } }))
+                                ),
+                                h('div', { className: "flex-1 min-w-0" },
+                                  h('p', { className: "text-xs font-bold text-foreground truncate" }, item.event),
+                                  h('p', { className: "text-[9px] text-muted-foreground truncate" }, item.game, item.date ? ' · ' + item.date : '')
                                 )
                               )
                             );
                           })
-                        );
-                  })()
-                ),
-                // 4. Pleine largeur : Agenda & Résultats
-                upcoming.length > 0 && h('div', { className: "space-y-2" },
-                  h('span', { className: "text-[11px] font-black text-foreground uppercase tracking-wider flex items-center gap-1.5", style: { fontFamily: "'Rajdhani', sans-serif" } }, h(Calendar, { size: 12, style: { color: "#fbbf24" } }), "\u00c0 venir"),
-                  h('div', { className: "flex gap-2 overflow-x-auto pb-2", style: { scrollbarWidth: "none" } },
-                    upcoming.slice(0, 10).map((item, idx) => {
-                      const t1 = item.teams?.[0], t2 = item.teams?.[1];
-                      return h('div', { key: idx, onClick: () => setSelectedNews(item), className: "flex-shrink-0 w-44 rounded-2xl border cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] overflow-hidden", style: { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" } },
-                        h('div', { className: "p-3" },
-                          h('div', { className: "flex items-center justify-center gap-3 mb-2" },
-                            h('div', { className: "flex flex-col items-center gap-1 w-14" },
-                              t1?.logo ? h('img', { src: t1.logo, alt: t1.name, className: "w-7 h-7 rounded-full object-contain" }) : h('div', { className: "w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black text-white", style: { background: GRAD } }, (t1?.name || '?')[0]),
-                              h('span', { className: "text-[7px] font-bold text-center text-foreground truncate w-full" }, t1?.name || '?')
-                            ),
-                            h('span', { className: "text-[10px] font-black text-muted-foreground" }, "VS"),
-                            h('div', { className: "flex flex-col items-center gap-1 w-14" },
-                              t2?.logo ? h('img', { src: t2.logo, alt: t2.name, className: "w-7 h-7 rounded-full object-contain" }) : h('div', { className: "w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black text-white", style: { background: GRAD } }, (t2?.name || '?')[0]),
-                              h('span', { className: "text-[7px] font-bold text-center text-foreground truncate w-full" }, t2?.name || '?')
-                            )
-                          ),
-                          h('p', { className: "text-[7px] text-muted-foreground text-center" }, item.game, item.date ? ' · ' + item.date : '')
                         )
-                      );
-                    })
                   )
                 )
               )
@@ -1932,7 +1928,7 @@ function NewsDetailSheet({ item, onClose, showAuthModal, user }) {
   const [translating, setTranslating] = useState(false);
   return h('div', { className: "fixed inset-0 z-50" },
     h('div', { ref: overlayRef, className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
-    h('div', { ref: panelRef, onTouchStart, onTouchMove, onTouchEnd, className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-y-auto", style: { maxHeight: "85%", scrollbarWidth: "none" } },
+    h('div', { ref: panelRef, onTouchStart, onTouchMove, onTouchEnd, className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card overflow-y-auto", style: { maxHeight: isEsport ? "96%" : "85%", scrollbarWidth: "none", borderRadius: isEsport ? "0px" : "28px 28px 0 0" } },
       // Cover header
       (isRelease || isArticle) && item.cover && h('div', { className: "relative h-48 flex-shrink-0" },
         h('img', { src: item.cover, alt: title, className: "w-full h-full object-cover" }),
@@ -2137,7 +2133,7 @@ function NewsDetailSheet({ item, onClose, showAuthModal, user }) {
                   )
                 )
               )
-            : h('div', { className: "mb-3" },
+            : h('div', { className: "mb-3 px-5" },
                 h('p', { className: "text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5" }, h(Users, { size: 13 }), "Line-ups"),
                 matchLoading
                   ? h('div', { className: "flex justify-center py-4" }, h(Loader, { size: 14, className: "animate-spin", style: { color: P1 } }))
@@ -2171,7 +2167,7 @@ function NewsDetailSheet({ item, onClose, showAuthModal, user }) {
                       )
               ),
           // ─── ESPACE COMMENTAIRES ────────────────
-          h('div', { className: "mt-4 pt-3 border-t", style: { borderColor: "rgba(255,255,255,0.06)" } },
+          h('div', { className: "mt-4 pt-3 border-t px-5", style: { borderColor: "rgba(255,255,255,0.06)" } },
             h('p', { className: "text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5" }, h(MessageCircle, { size: 13 }), "Commentaires (", matchComments.length, ")"),
             h('div', { className: "flex items-center gap-2 mb-2" },
               h('input', { value: commentInput, onChange: e => setCommentInput(e.target.value), onKeyDown: e => { if (e.key === 'Enter') postComment(); }, placeholder: "R\u00e9agis au match...", className: "flex-1 bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-[11px] text-foreground placeholder-muted-foreground outline-none" }),

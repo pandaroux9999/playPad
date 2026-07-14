@@ -1868,41 +1868,33 @@ async function fixMissingCovers() {
     if (missing.length > 0) { await db.batchUpsertCatalog(missing); }
     console.log(`[Catalog] ${missing.length} jeux cultes ajoutés (${GAMES_CATALOG.length - missing.length} déjà présents)`);
   } catch (e) { console.error('[Catalog] Erreur jeux cultes:', e.message); }
-  // Import depuis les fichiers RAWG JSON si le catalogue < 200 jeux
+  // Import de tous les fichiers JSON de catalogue (jv-catalog + RAWG)
   try {
-    const count = await db.getCatalogCount();
-    console.log(`[Catalog] ${count} jeux dans le catalogue, vérification import RAWG JSON...`);
-    if (count < 200) {
-      const fs = require('fs');
-      const dataDir = path.join(__dirname, 'data');
-      const rawgFiles = ['rawg-catalog1.json', 'rawg-catalog2.json'];
-      let totalImported = 0;
-      for (const file of rawgFiles) {
-        const fpath = path.join(dataDir, file);
-        if (fs.existsSync(fpath)) {
-          const stats = fs.statSync(fpath);
-          const sizeMB = (stats.size / 1024 / 1024).toFixed(1);
-          console.log(`[Catalog] Import de ${file} (${sizeMB}MB)...`);
-          const games = readJSONStrippedBOM(fpath);
-          if (Array.isArray(games) && games.length > 0) {
-            await db.batchUpsertCatalog(games);
-            totalImported += games.length;
-            console.log(`[Catalog] ✅ ${file}: ${games.length} jeux importés`);
-          }
-        } else {
-          console.log(`[Catalog] ${file} non trouvé, ignoré`);
+    const fs = require('fs');
+    const dataDir = path.join(__dirname, 'data');
+    const catalogFiles = ['jv-catalog.json', 'rawg-catalog1.json', 'rawg-catalog2.json'];
+    let totalImported = 0;
+    for (const file of catalogFiles) {
+      const fpath = path.join(dataDir, file);
+      if (fs.existsSync(fpath)) {
+        const stats = fs.statSync(fpath);
+        const sizeMB = (stats.size / 1024 / 1024).toFixed(1);
+        console.log(`[Catalog] Import de ${file} (${sizeMB}MB)...`);
+        const games = readJSONStrippedBOM(fpath);
+        if (Array.isArray(games) && games.length > 0) {
+          await db.batchUpsertCatalog(games);
+          totalImported += games.length;
+          console.log(`[Catalog] ✅ ${file}: ${games.length} jeux importés`);
         }
-      }
-      if (totalImported > 0) {
-        console.log(`[Catalog] ✅ ${totalImported} jeux RAWG importés au démarrage`);
       } else {
-        console.log('[Catalog] Aucun fichier RAWG JSON trouvé');
+        console.log(`[Catalog] ${file} non trouvé, ignoré`);
       }
-    } else {
-      console.log(`[Catalog] Catalogue déjà peuplé (${count} jeux), import RAWG ignoré`);
+    }
+    if (totalImported > 0) {
+      console.log(`[Catalog] ✅ ${totalImported} jeux importés depuis les fichiers JSON`);
     }
   } catch (e) {
-    console.error('[Catalog] Erreur import RAWG JSON au démarrage:', e.message);
+    console.error('[Catalog] Erreur import JSON au démarrage:', e.message);
   }
   // Correction des couvertures manquantes
   try { await fixMissingCovers(); } catch (e) { console.error('[Covers] Error:', e.message); }
@@ -2908,6 +2900,10 @@ const NON_GAMING_KEYWORDS = [
   'bande-annonce', 'movie', 'tv show', 'episode', 'box-office', 'box office',
   'rotten tomatoes', 'rottentomatoes', 'hollywood', 'red carpet',
   'acteurs', 'actrices', 'réalisateurs', 'realisateurs',
+  'trailer', 'teaser', 'casting', 'tournage', 'film adapt', 'tv series',
+  'season ', 'saison ', 'spin-off', 'spinoff', 'prequel', 'sequel',
+  'streaming', 'hbo', 'marvel', 'dc comics', 'star wars', 'harry potter',
+  'lord of the rings', 'seigneur des anneaux',
 ];
 
 async function fetchDramaFromRSS() {
@@ -2931,6 +2927,12 @@ async function fetchDramaFromRSS() {
         const rawDesc = get('description');
         const plainDesc = rawDesc.replace(/<[^>]*>/g, '').trim();
         if (!title) continue;
+        // Filtre les catégories non-jeu vidéo (PC Gamer met des catégories dans son RSS)
+        const categories = (block.match(/<category[^>]*>([\s\S]*?)<\/category>/gi) || [])
+          .map(c => c.replace(/<\/?category[^>]*>/gi, '').trim().toLowerCase())
+          .filter(Boolean);
+        const nonGamingCats = ['entertainment', 'movies', 'tv', 'tv shows', 'film', 'cinema', 'celebrity', 'culture'];
+        if (categories.some(c => nonGamingCats.includes(c))) continue;
         count++;
         const lower = (title + ' ' + plainDesc).toLowerCase();
         if (NON_GAMING_KEYWORDS.some(kw => lower.includes(kw))) continue;

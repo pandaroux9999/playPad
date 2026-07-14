@@ -651,7 +651,7 @@ app.get('/api/catalog', catalogLimiter, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 60, 500);
     const result = await db.queryCatalog({ search, letter, platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating, page, limit });
-    console.log(`[Catalog] API /api/catalog page=${page} limit=${limit} totalFiltered=${result.total} totalCatalog=${result.totalCatalog}`);
+    console.log(`[Catalog] API /api/catalog page=${page} limit=${limit} totalFiltered=${result.total} totalCatalog=${result.totalCatalog} search=${search||''} platform=${platform||'all'} genre=${genre||'all'}`);
     res.json({ catalog: result.data, total: result.total, totalCatalog: result.totalCatalog, page, limit });
   } catch (err) {
     console.error('[Catalog] Error:', err.message, 'query:', JSON.stringify(req.query));
@@ -1876,19 +1876,23 @@ async function fixMissingCovers() {
     const catalogFiles = ['jv-catalog.json', 'rawg-catalog1.json', 'rawg-catalog2.json'];
     let totalImported = 0;
     for (const file of catalogFiles) {
-      const fpath = path.join(dataDir, file);
-      if (fs.existsSync(fpath)) {
-        const stats = fs.statSync(fpath);
-        const sizeMB = (stats.size / 1024 / 1024).toFixed(1);
-        console.log(`[Catalog] Import de ${file} (${sizeMB}MB)...`);
-        const games = readJSONStrippedBOM(fpath);
-        if (Array.isArray(games) && games.length > 0) {
-          await db.batchUpsertCatalog(games);
-          totalImported += games.length;
-          console.log(`[Catalog] ✅ ${file}: ${games.length} jeux importés`);
+      try {
+        const fpath = path.join(dataDir, file);
+        if (fs.existsSync(fpath)) {
+          const stats = fs.statSync(fpath);
+          const sizeMB = (stats.size / 1024 / 1024).toFixed(1);
+          console.log(`[Catalog] Import de ${file} (${sizeMB}MB)...`);
+          const games = readJSONStrippedBOM(fpath);
+          if (Array.isArray(games) && games.length > 0) {
+            await db.batchUpsertCatalog(games);
+            totalImported += games.length;
+            console.log(`[Catalog] ✅ ${file}: ${games.length} jeux importés`);
+          }
+        } else {
+          console.log(`[Catalog] ${file} non trouvé, ignoré`);
         }
-      } else {
-        console.log(`[Catalog] ${file} non trouvé, ignoré`);
+      } catch (e) {
+        console.error(`[Catalog] ❌ ÉCHEC import ${file}: ${e.message}`);
       }
     }
     if (totalImported > 0) {

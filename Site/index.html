@@ -2147,9 +2147,9 @@ function NewsDetailSheet({ item, onClose, showAuthModal, user }) {
                 h('div', { className: "flex items-center gap-2" },
                   h('input', { value: manualUrl, onChange: e => setManualUrl(e.target.value), onKeyDown: e => { if (e.key === 'Enter') handleManualEmbed(); }, placeholder: "twitch.tv/riotgames ou youtu.be/...", className: "flex-1 bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-[11px] text-foreground placeholder-muted-foreground outline-none" }),
                   h('button', { onClick: handleManualEmbed, className: "px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all hover:opacity-80 flex-shrink-0", style: { background: manualUrl.trim() ? P1 : `${P1}40`, color: '#fff' } }, h(Tv, { size: 13 }))
-                )
-              );
-            }
+    )
+  ));
+}
             if (stream.type === 'link') {
               return h('div', { className: "mb-3" },
                 h('a', { href: stream.url, target: "_blank", rel: "noopener noreferrer", className: "flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold transition-all", style: { background: `${P1}20`, color: P1 } }, h(ExternalLink, { size: 14 }), isLive ? "Voir le match en direct" : "Voir le replay")
@@ -2465,6 +2465,7 @@ function WhatsAppChat({ friend, messages, onSend, refreshChat, chatInput, setCha
                     )
                   ]
       )
+    )
     ),
     h('form', { onSubmit: async (e) => { e.preventDefault(); if (!chatInput.trim() || chatSending) return; onSend(); }, className: "flex items-center gap-2 px-3 py-2 flex-shrink-0", style: { background: WA_INPUT } },
       h('button', { type: "button", onClick: () => setSuggestOpen(o => !o), className: "w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-80 transition-opacity" }, h(Plus, { size: 20, style: { color: suggestOpen ? WA_ACCENT : "#8696A0" } })),

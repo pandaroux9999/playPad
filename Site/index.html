@@ -1398,6 +1398,7 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
   const [searchFocused, setSearchFocused] = useState(false);
   const [replyState, setReplyState] = useState({ reviewId: null, text: '' });
   const [replies, setReplies] = useState({});
+  const [zoomCover, setZoomCover] = useState(null);
   const [loading, setLoading] = useState(true);
   const [playerSearchGame, setPlayerSearchGame] = useState('');
   const [playerResults, setPlayerResults] = useState([]);
@@ -1573,7 +1574,7 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
           const time = r.created_at ? new Date(r.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short' }) : '';
           return h('div', { key: r.id, className: "rounded-2xl p-4 border review-card", style: { background: ratingBg(r.rating), border: ratingBorder(r.rating) } },
             h('div', { className: "flex items-center gap-3 mb-2" },
-              r.game_cover && h('div', { className: "w-14 h-20 rounded overflow-hidden flex-shrink-0" }, h('img', { src: r.game_cover, alt: "", className: "w-full h-full object-cover" })),
+              r.game_cover && h('div', { onClick: () => setZoomCover(r.game_cover), className: "w-14 h-20 rounded overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity" }, h('img', { src: r.game_cover, alt: "", className: "w-full h-full object-cover" })),
               h('div', { className: "flex-1 min-w-0" },
                 h('p', { className: "text-sm font-bold text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, r.game_title || "Jeu"),
                 h('div', { className: "flex items-center gap-1.5 mt-0.5" },
@@ -1627,7 +1628,7 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
           const time = r.created_at ? new Date(r.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
           return h('div', { key: r.id, className: "rounded-2xl p-4 border", style: { background: ratingBg(r.rating), border: ratingBorder(r.rating) } },
             h('div', { className: "flex items-center gap-3 mb-2" },
-              r.game_cover && h('div', { className: "w-14 h-20 rounded overflow-hidden flex-shrink-0" }, h('img', { src: r.game_cover, alt: "", className: "w-full h-full object-cover", style: { aspectRatio: "3/4" } })),
+              r.game_cover && h('div', { onClick: () => setZoomCover(r.game_cover), className: "w-14 h-20 rounded overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity" }, h('img', { src: r.game_cover, alt: "", className: "w-full h-full object-cover", style: { aspectRatio: "3/4" } })),
               h('div', { className: "flex-1 min-w-0" },
                 h('p', { className: "text-sm font-bold text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, r.game_title || "Jeu"),
                 h('div', { className: "flex items-center gap-1.5 mt-0.5" },
@@ -1676,6 +1677,10 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
     ),
 
 
+    zoomCover && h('div', { onClick: () => setZoomCover(null), className: "fixed inset-0 z-[100] flex items-center justify-center", style: { background: "rgba(0,0,0,0.85)" } },
+      h('button', { onClick: () => setZoomCover(null), className: "absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity z-10", style: { background: "rgba(255,255,255,0.1)" } }, h(X, { size: 20, className: "text-white" })),
+      h('img', { src: zoomCover, alt: "", className: "max-w-[90vw] max-h-[90vh] object-contain rounded-xl", style: { boxShadow: "0 20px 60px rgba(0,0,0,0.5)" } })
+    ),
     // ¯\_(ツ)_/¯
   );
 }
@@ -2476,7 +2481,7 @@ function WhatsAppChat({ friend, messages, onSend, refreshChat, chatInput, setCha
       h('input', { value: chatInput, onChange: e => setChatInput(e.target.value), placeholder: "\u00c9cris un message\u2026", className: "flex-1 rounded-lg px-3.5 py-2 text-xs outline-none", style: { background: WA_BG, color: "#E9EDEF", border: "1px solid rgba(255,255,255,0.08)" } }),
       h('button', { type: "submit", disabled: !chatInput.trim() || chatSending, className: "w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-80 transition-opacity disabled:opacity-30", style: { background: chatInput.trim() ? WA_ACCENT : "rgba(255,255,255,0.08)" } }, chatSending ? h(Loader, { size: 12, className: "animate-spin" }) : h(Send, { size: 14, className: "text-white" }))
     )
-  ));
+  );
 }
 
 function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification, onSelectGame, startChat }) {

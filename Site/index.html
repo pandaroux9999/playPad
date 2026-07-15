@@ -2485,10 +2485,10 @@ function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification, onSe
   const avgRating = rated.length ? (rated.reduce((s, g) => s + g.userRating, 0) / rated.length) : 0;
   const { panelRef, overlayRef, onTouchStart, onTouchMove, onTouchEnd } = useSheetSwipe(onClose);
   return h('div', { className: "fixed inset-0 z-50" },
-    h('div', { ref: overlayRef, className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
-    h('div', { ref: panelRef, onTouchStart, onTouchMove, onTouchEnd, className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-hidden flex flex-col", style: { maxHeight: "90%" } },
-      !chatOpen
-        ? h('div', { className: "overflow-y-auto flex-1", style: { scrollbarWidth: "none" } },
+    !chatOpen && h('div', { ref: overlayRef, className: "sheet-overlay absolute inset-0 bg-black/60 backdrop-blur-sm", onClick: onClose }),
+    !chatOpen
+      ? h('div', { ref: panelRef, onTouchStart, onTouchMove, onTouchEnd, className: "sheet-panel absolute bottom-0 left-0 right-0 bg-card rounded-t-[28px] overflow-hidden flex flex-col", style: { maxHeight: "90%" } },
+          h('div', { className: "overflow-y-auto flex-1", style: { scrollbarWidth: "none" } },
             h('div', { className: "px-4 pt-4 pb-4" },
               h('div', { className: "flex items-center gap-4" },
                 h('div', { className: "relative w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0", style: { boxShadow: "0 8px 24px rgba(139,92,246,0.35)" } },
@@ -2580,19 +2580,20 @@ function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification, onSe
                   )
                 )
           )
-        : h(WhatsAppChat, {
-            friend: { ...friend, display_name: profile?.display_name || friend.display_name },
-            messages,
-            onSend: async () => { setChatSending(true); try { await API.sendMessage(friend.id, chatInput); setChatInput(""); } catch (e) {} setChatSending(false); refreshChat(); },
-            refreshChat,
-            chatInput, setChatInput, chatSending,
-            onBack: () => { setChatOpen(false); setMessages([]); },
-            onClose,
-            isOnline,
-            onAddNotification,
-            onSelectGame
-          })
-    )
+        )
+      : null,
+    chatOpen && h(WhatsAppChat, {
+        friend: { ...friend, display_name: profile?.display_name || friend.display_name },
+        messages,
+        onSend: async () => { setChatSending(true); try { await API.sendMessage(friend.id, chatInput); setChatInput(""); } catch (e) {} setChatSending(false); refreshChat(); },
+        refreshChat,
+        chatInput, setChatInput, chatSending,
+        onBack: () => { setChatOpen(false); setMessages([]); },
+        onClose,
+        isOnline,
+        onAddNotification,
+        onSelectGame
+      })
   );
 }
 
@@ -4097,7 +4098,7 @@ function App() {
         onBoostGame: handleBoostGame,
         showAuthModal,
       }),
-      selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => { setSelectedFriend(null); setChatFriend(null); }, isOnline, startChat: chatFriend?.id === selectedFriend.id, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, friendId: selectedFriend.id, type: type || 'friend', timestamp: Date.now() }, ...prev ]); }, onSelectGame: setSelectedGame }),
+      selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id + (chatFriend?.id === selectedFriend.id ? '-chat' : ''), friend: selectedFriend, onClose: () => { setSelectedFriend(null); setChatFriend(null); }, isOnline, startChat: chatFriend?.id === selectedFriend.id, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, friendId: selectedFriend.id, type: type || 'friend', timestamp: Date.now() }, ...prev ]); }, onSelectGame: setSelectedGame }),
       authModal && h('div', { className: "fixed inset-0 z-50 flex items-end md:items-center justify-center", style: { animation: "fadeIn 0.2s ease-out" } },
         h('div', { className: "absolute inset-0", style: { background: "rgba(0,0,0,0.7)" }, onClick: closeAuthModal }),
         h('div', { className: "relative max-h-[90vh] overflow-y-auto", style: { animation: "slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1)" } },

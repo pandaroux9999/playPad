@@ -2481,7 +2481,7 @@ function WhatsAppChat({ friend, messages, onSend, refreshChat, chatInput, setCha
       h('input', { value: chatInput, onChange: e => setChatInput(e.target.value), placeholder: "\u00c9cris un message\u2026", className: "flex-1 rounded-lg px-3.5 py-2 text-xs outline-none", style: { background: WA_BG, color: "#E9EDEF", border: "1px solid rgba(255,255,255,0.08)" } }),
       h('button', { type: "submit", disabled: !chatInput.trim() || chatSending, className: "w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-80 transition-opacity disabled:opacity-30", style: { background: chatInput.trim() ? WA_ACCENT : "rgba(255,255,255,0.08)" } }, chatSending ? h(Loader, { size: 12, className: "animate-spin" }) : h(Send, { size: 14, className: "text-white" }))
     )
-  );
+  ));
 }
 
 function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification, onSelectGame, startChat }) {

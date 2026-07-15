@@ -2467,7 +2467,6 @@ function WhatsAppChat({ friend, messages, onSend, refreshChat, chatInput, setCha
                     )
                   ]
       )
-    )
     ),
     h('form', { onSubmit: async (e) => { e.preventDefault(); if (!chatInput.trim() || chatSending) return; onSend(); }, className: "flex items-center gap-2 px-3 py-2 flex-shrink-0", style: { background: WA_INPUT } },
       h('button', { type: "button", onClick: () => setSuggestOpen(o => !o), className: "w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-80 transition-opacity" }, h(Plus, { size: 20, style: { color: suggestOpen ? WA_ACCENT : "#8696A0" } })),

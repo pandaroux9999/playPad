@@ -1408,7 +1408,7 @@ async function streamImportJSON(fpath, label) {
       else if (ch === '}') { current += ch; depth--; if (depth === 0 && inObj) {
           try { const obj = JSON.parse(current); batch.push(obj); } catch (e) { /* skip malformed */ }
           current = ''; inObj = false;
-          if (batch.length >= 200) { await db.batchUpsertCatalog(batch); total += batch.length; batch = []; }
+          if (batch.length >= 5000) { await db.batchUpsertCatalog(batch); total += batch.length; batch = []; }
       } }
       else if (inObj) current += ch;
     }

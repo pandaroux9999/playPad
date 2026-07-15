@@ -1385,7 +1385,7 @@ function ProfilView({ user, games, wishlistIds, ratings, onToggleWishlist, onSel
   );
 }
 
-function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelectFriend, onSelectGame, onAddNotification, showAuthModal, user }) {
+function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelectFriend, onSelectGame, onAddNotification, showAuthModal, user, onChatFriend }) {
   const [subTab, setSubTab] = useState("friends");
   const [publicReviews, setPublicReviews] = useState([]);
   const [friends, setFriends] = useState([]);
@@ -1530,6 +1530,7 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
             h('p', { className: "text-sm font-bold text-foreground", style: { fontFamily: "'Rajdhani', sans-serif" } }, friend.display_name),
             h('p', { className: "text-[10px] text-muted-foreground mt-0.5" }, "@", friend.username)
           ),
+          h('button', { onClick: (e) => { e.stopPropagation(); onChatFriend?.(friend); }, className: "p-1.5 rounded-lg hover:opacity-70", style: { background: `${P1}15` } }, h(MessageCircle, { size: 12, style: { color: P1 } })),
           h('button', { onClick: async (e) => { e.stopPropagation(); await API.removeFriend(friend.id); load(); }, className: "p-1.5 rounded-lg hover:opacity-70", style: { background: "rgba(239,68,68,0.1)" } }, h(UserX, { size: 12, style: { color: "#ef4444" } }))
         ))
       ),
@@ -2320,7 +2321,124 @@ function NewsDetailSheet({ item, onClose, showAuthModal, user }) {
   );
 }
 
-function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification }) {
+function WhatsAppChat({ friend, messages, onSend, refreshChat, chatInput, setChatInput, chatSending, onBack, onClose, isOnline: isOnlineProp, onAddNotification, onSelectGame }) {
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestSearch, setSuggestSearch] = useState("");
+  const [suggestMsg, setSuggestMsg] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
+  const messagesEndRef = useRef(null);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  const online = isOnlineProp?.(friend.last_seen) ?? false;
+  const initials = (friend.display_name || "??").charAt(0).toUpperCase() + ((friend.display_name || "?")[1] || "").toUpperCase();
+  const suggestFiltered = CATALOGUE.filter(g => g.title.toLowerCase().includes(suggestSearch.toLowerCase()));
+  const WA_BG = "#0B141A";
+  const WA_HEADER = "#1F2C33";
+  const WA_SENT = "#005C4B";
+  const WA_RECEIVED = "#202C33";
+  const WA_INPUT = "#1F2C33";
+  const WA_ACCENT = "#00A884";
+  const groupByDate = (msgs) => {
+    const groups = [];
+    let lastDate = null;
+    for (const m of msgs) {
+      const d = new Date(m.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+      if (d !== lastDate) { groups.push({ type: 'date', label: d }); lastDate = d; }
+      groups.push({ type: 'msg', msg: m });
+    }
+    return groups;
+  };
+  const items = groupByDate(messages);
+  return h('div', { className: "fixed inset-0 z-[60] flex flex-col", style: { background: WA_BG } },
+    h('div', { className: "flex items-center gap-3 px-3 py-2.5 flex-shrink-0", style: { background: WA_HEADER } },
+      h('button', { onClick: onBack, className: "w-9 h-9 rounded-full flex items-center justify-center hover:opacity-80 flex-shrink-0" }, h(ArrowLeft, { size: 20, className: "text-white" })),
+      h('div', { className: "w-9 h-9 rounded-full overflow-hidden flex items-center justify-center text-sm font-black text-white flex-shrink-0", style: { background: GRAD } },
+        friend.avatar_url ? h('img', { src: friend.avatar_url, alt: "", className: "w-full h-full object-cover", onError: e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex" } }) : null,
+        !friend.avatar_url && initials
+      ),
+      h('div', { className: "flex-1 min-w-0" },
+        h('p', { className: "text-sm font-bold text-white truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, friend.display_name),
+        h('p', { className: "text-[10px]", style: { color: online ? "#7FE9C3" : "#8696A0" } }, online ? "En ligne" : "Hors ligne")
+      ),
+      h('button', { onClick: onClose, className: "w-9 h-9 rounded-full flex items-center justify-center hover:opacity-80 flex-shrink-0" }, h(X, { size: 20, className: "text-white" }))
+    ),
+    h('div', { className: "flex-1 overflow-y-auto px-3 py-2", style: { scrollbarWidth: "none", background: "linear-gradient(180deg, #0B141A 0%, #0F1923 100%)" } },
+      items.length === 0
+        ? h('div', { className: "flex flex-col items-center justify-center h-full" },
+            h(MessageCircle, { size: 40, style: { color: WA_ACCENT, opacity: 0.3 } }),
+            h('p', { className: "text-sm mt-2", style: { color: "#8696A0" } }, "Aucun message. Envoie le premier !")
+          )
+        : items.map((item, i) =>
+            item.type === 'date'
+              ? h('div', { key: 'd'+i, className: "flex justify-center my-3" },
+                  h('span', { className: "text-[10px] px-2.5 py-1 rounded-lg font-bold", style: { background: "rgba(0,0,0,0.35)", color: "#8696A0" } }, item.label)
+                )
+              : h('div', { key: item.msg.id, className: "flex " + (item.msg.sender_id === friend.id ? "" : "justify-end") + " mb-1" },
+                  h('div', { className: "max-w-[85%] rounded-lg px-3 py-1.5", style: { background: item.msg.sender_id === friend.id ? WA_RECEIVED : WA_SENT, borderBottomLeftRadius: item.msg.sender_id === friend.id ? "4px" : "8px", borderBottomRightRadius: item.msg.sender_id === friend.id ? "8px" : "4px" } },
+                    item.msg.game_title
+                      ? h('div', { onClick: () => onSelectGame?.({ game_id: item.msg.game_id, title: item.msg.game_title, cover: item.msg.game_cover }), className: "cursor-pointer hover:opacity-80 transition-opacity" },
+                          h('div', { className: "flex items-center gap-2 p-1.5 rounded-lg", style: { background: "rgba(0,0,0,0.2)" } },
+                            item.msg.game_cover && h('div', { className: "w-8 h-11 rounded overflow-hidden flex-shrink-0" }, h('img', { src: item.msg.game_cover, alt: "", className: "w-full h-full object-cover" })),
+                            h('div', { className: "flex-1 min-w-0" },
+                              h('p', { className: "text-[11px] font-bold text-white truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.msg.game_title),
+                              h('p', { className: "text-[9px]", style: { color: "#8696A0" } }, "Proposition de jeu")
+                            ),
+                            h(ChevronRight, { size: 12, style: { color: "#8696A0" } })
+                          ),
+                          h('p', { className: "text-xs text-white/80 leading-relaxed mt-1" }, item.msg.message)
+                        )
+                      : h('p', { className: "text-xs text-white/90 leading-relaxed whitespace-pre-wrap" }, item.msg.message),
+                    h('div', { className: "flex items-center justify-end gap-1 mt-0.5" },
+                      h('span', { className: "text-[9px]", style: { color: item.msg.sender_id === friend.id ? "#8696A0" : "rgba(255,255,255,0.5)" } },
+                        new Date(item.msg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                      ),
+                      item.msg.sender_id !== friend.id && h(Check, { size: 10, style: { color: "rgba(255,255,255,0.5)" } })
+                    )
+                  )
+                )
+        ),
+      h('div', { ref: messagesEndRef })
+    ),
+    suggestOpen && h('div', { className: "flex-shrink-0 border-t overflow-y-auto", style: { maxHeight: "260px", background: WA_HEADER, borderColor: "rgba(255,255,255,0.08)" } },
+      h('div', { className: "p-3" },
+        h('div', { className: "flex items-center gap-2 mb-2" },
+          h('p', { className: "text-[11px] font-bold flex-1", style: { color: WA_ACCENT } }, "Proposer un jeu \u00e0 ", friend.display_name),
+          h('button', { onClick: () => setSuggestOpen(false), className: "w-6 h-6 rounded-full flex items-center justify-center hover:opacity-80" }, h(X, { size: 14, style: { color: "#8696A0" } }))
+        ),
+        h('div', { className: "relative mb-2" },
+          h(Search, { size: 11, className: "absolute left-2.5 top-1/2 -translate-y-1/2", style: { color: "#8696A0" } }),
+          h('input', { value: suggestSearch, onChange: e => setSuggestSearch(e.target.value), placeholder: "Chercher un jeu...", className: "w-full rounded-lg pl-7 pr-3 py-2 text-[11px] outline-none", style: { background: WA_BG, color: "#E9EDEF", border: "1px solid rgba(255,255,255,0.1)" } })
+        ),
+        h('div', { className: "space-y-1 max-h-32 overflow-y-auto", style: { scrollbarWidth: "none" } },
+          suggestFiltered.slice(0, 15).map(game =>
+            h('div', { key: game.game_id, className: "flex items-center gap-2 py-1.5 px-1 rounded-lg cursor-pointer hover:opacity-80 transition-opacity" },
+              h('div', { className: "w-7 h-10 rounded overflow-hidden flex-shrink-0" }, h('img', { src: game.cover, alt: "", className: "w-full h-full object-cover" })),
+              h('span', { className: "text-[11px] font-bold flex-1 truncate", style: { color: "#E9EDEF", fontFamily: "'Rajdhani', sans-serif" } }, game.title),
+              h('button', { onClick: async () => {
+                if (!suggestMsg.trim()) return;
+                setSuggesting(true);
+                try {
+                  await API.sendSuggestion(friend.id, game.game_id, game.title, game.cover, suggestMsg);
+                  refreshChat();
+                  setSuggestOpen(false); setSuggestSearch(""); setSuggestMsg("");
+                  onAddNotification?.(`Tu as propos\u00e9 "${game.title}" \u00e0 ${friend.display_name}`, "friend");
+                } catch (e) {}
+                setSuggesting(false);
+              }, disabled: suggesting || !suggestMsg.trim(), className: "px-2 py-1 text-[9px] font-bold rounded-lg text-white whitespace-nowrap", style: { background: suggestMsg.trim() ? WA_ACCENT : "rgba(255,255,255,0.1)" } }, suggesting ? "..." : "Proposer")
+            )
+          )
+        ),
+        h('input', { value: suggestMsg, onChange: e => setSuggestMsg(e.target.value), placeholder: "Message personnalis\u00e9...", className: "w-full rounded-lg px-3 py-2 text-[11px] outline-none mt-2", style: { background: WA_BG, color: "#E9EDEF", border: "1px solid rgba(255,255,255,0.1)" } })
+      )
+    ),
+    h('form', { onSubmit: async (e) => { e.preventDefault(); if (!chatInput.trim() || chatSending) return; onSend(); }, className: "flex items-center gap-2 px-3 py-2 flex-shrink-0", style: { background: WA_INPUT } },
+      h('button', { type: "button", onClick: () => setSuggestOpen(o => !o), className: "w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-80 transition-opacity" }, h(Plus, { size: 20, style: { color: suggestOpen ? WA_ACCENT : "#8696A0" } })),
+      h('input', { value: chatInput, onChange: e => setChatInput(e.target.value), placeholder: "\u00c9cris un message\u2026", className: "flex-1 rounded-lg px-3.5 py-2 text-xs outline-none", style: { background: WA_BG, color: "#E9EDEF", border: "1px solid rgba(255,255,255,0.08)" } }),
+      h('button', { type: "submit", disabled: !chatInput.trim() || chatSending, className: "w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-80 transition-opacity disabled:opacity-30", style: { background: chatInput.trim() ? WA_ACCENT : "rgba(255,255,255,0.08)" } }, chatSending ? h(Loader, { size: 12, className: "animate-spin" }) : h(Send, { size: 14, className: "text-white" }))
+    )
+  );
+}
+
+function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification, onSelectGame, startChat }) {
   const [profile, setProfile] = useState(null);
   const [topThree, setTopThree] = useState([]);
   const [friendGames, setFriendGames] = useState([]);
@@ -2330,11 +2448,13 @@ function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification }) {
   const [suggestSearch, setSuggestSearch] = useState("");
   const [suggestMsg, setSuggestMsg] = useState("");
   const [suggesting, setSuggesting] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(startChat || false);
   const [messages, setMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
-  const messagesEndRef = useRef(null);
+  const refreshChat = useCallback(() => {
+    API.getMessages(friend.id).then(d => setMessages(d.messages || [])).catch(() => {});
+  }, [friend.id]);
   useEffect(() => {
     setLoading(true);
     API.getUserProfile(friend.id).then(d => {
@@ -2343,6 +2463,7 @@ function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification }) {
       setFriendGames((d.games || []).map(n));
       setReviews(d.reviews || []);
     }).catch(() => {}).finally(() => setLoading(false));
+    if (startChat) { API.getMessages(friend.id).then(d => setMessages(d.messages || [])).catch(() => {}); }
   }, [friend.id]);
   // Poll messages when chat is open
   useEffect(() => {
@@ -2352,7 +2473,6 @@ function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification }) {
     const interval = setInterval(load, 3000);
     return () => clearInterval(interval);
   }, [chatOpen, friend.id]);
-  useEffect(() => { if (messages.length) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
   const totalHours = friendGames.reduce((s, g) => s + (g.playtime || 0), 0);
   const completed = friendGames.filter(g => g.status === "completed").length;
   const reviewed = reviews.length;
@@ -2460,32 +2580,18 @@ function FriendProfileSheet({ friend, onClose, isOnline, onAddNotification }) {
                   )
                 )
           )
-        : h('div', { className: "flex flex-col flex-1 overflow-hidden" },
-            h('div', { className: "flex items-center gap-3 px-4 py-3 border-b border-border flex-shrink-0" },
-              h('button', { onClick: () => setChatOpen(false), className: "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-80", style: { background: "rgba(0,0,0,0.5)" } }, h(ArrowLeft, { size: 16, className: "text-white" })),
-              h('div', { className: "w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white flex-shrink-0", style: { background: GRAD } }, initials),
-              h('div', { className: "flex-1 min-w-0" },
-                h('p', { className: "text-sm font-bold text-foreground truncate", style: { fontFamily: "'Rajdhani', sans-serif" } }, profile?.display_name || friend.display_name),
-                h('p', { className: "text-[9px] text-muted-foreground" }, online ? "En ligne" : "Hors ligne")
-              ),
-              h('button', { onClick: onClose, className: "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0", style: { background: "rgba(0,0,0,0.5)" } }, h(X, { size: 16, className: "text-white" }))
-            ),
-            h('div', { className: "flex-1 overflow-y-auto px-4 py-3 space-y-2", style: { scrollbarWidth: "none" } },
-              messages.length === 0
-                ? h('div', { className: "flex flex-col items-center justify-center h-full text-muted-foreground" }, h(MessageCircle, { size: 28, className: "mb-2 opacity-20" }), h('p', { className: "text-sm" }, "Aucun message. Envoie le premier !"))
-                : messages.map(m => h('div', { key: m.id, className: "flex " + (m.sender_id === friend.id ? "" : "justify-end") },
-                    h('div', { className: "max-w-[80%] rounded-2xl px-3.5 py-2", style: { background: m.sender_id === friend.id ? "rgba(26,26,46,0.8)" : GRAD, border: m.sender_id === friend.id ? "1px solid rgba(255,255,255,0.06)" : "none" } },
-                      h('p', { className: "text-xs text-foreground leading-relaxed" }, m.message),
-                      h('p', { className: "text-[8px] text-muted-foreground/50 mt-0.5 text-right" }, new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))
-                    )
-                  )),
-              h('div', { ref: messagesEndRef })
-            ),
-            h('form', { onSubmit: async (e) => { e.preventDefault(); if (!chatInput.trim() || chatSending) return; setChatSending(true); try { await API.sendMessage(friend.id, chatInput); setChatInput(""); } catch (e) {} setChatSending(false); }, className: "flex items-center gap-2 px-4 py-3 border-t border-border flex-shrink-0" },
-              h('input', { value: chatInput, onChange: e => setChatInput(e.target.value), placeholder: "\u00c9cris un message\u2026", className: "flex-1 bg-secondary/60 border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground placeholder-muted-foreground outline-none" }),
-              h('button', { type: "submit", disabled: !chatInput.trim() || chatSending, className: "w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-80 transition-opacity disabled:opacity-30", style: { background: GRAD } }, chatSending ? h(Loader, { size: 12, className: "animate-spin" }) : h(Send, { size: 14, className: "text-white" }))
-            )
-          )
+        : h(WhatsAppChat, {
+            friend: { ...friend, display_name: profile?.display_name || friend.display_name },
+            messages,
+            onSend: async () => { setChatSending(true); try { await API.sendMessage(friend.id, chatInput); setChatInput(""); } catch (e) {} setChatSending(false); refreshChat(); },
+            refreshChat,
+            chatInput, setChatInput, chatSending,
+            onBack: () => { setChatOpen(false); setMessages([]); },
+            onClose,
+            isOnline,
+            onAddNotification,
+            onSelectGame
+          })
     )
   );
 }
@@ -3599,6 +3705,7 @@ function App() {
   const [activePlatform, setActivePlatform] = useState("all");
   const [ratings, setRatings] = useState({});
   const [selectedFriend, setSelectedFriend] = useState(null);
+  const [chatFriend, setChatFriend] = useState(null);
   const [notifications, setNotifications] = useState(NOTIFICATIONS);
   const [toast, setToast] = useState(null);
   const [resetToken, setResetToken] = useState(null);
@@ -3965,7 +4072,7 @@ function App() {
           null,
           view === "catalogue" && h(CatalogueView, { key: 'cat', refreshKey: catalogRefreshKey, onSelect: game => { const e = games.find(g => g.game_id === game.game_id) || games.find(g => g.title === game.title); const sg = e || { ...game, userRating: 0, hasReview: false, reviewText: "", reviewPublic: true, status: "not_started" }; sg._inLibrary = Boolean(e); setSelectedGame(sg); }, wishlistIds, onToggleWishlist: handleToggleWishlist, ratings, topThreeIds, onToggleTopThree: handleToggleTopThree, showToast, boosterPoints, onBoostGame: handleBoostGame, boostedGames, userBoostedSet }),
           view === "actus" && h(MagView, { onSelectGame: setSelectedGame, showAuthModal, user }),
-          view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, freshReview, onFreshReviewConsumed: () => setFreshReview(null), onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); }, showAuthModal, user }),
+          view === "community" && h(CommunityView, { key: 'comm', refreshKey: communityRefreshKey, freshReview, onFreshReviewConsumed: () => setFreshReview(null), onSelectFriend: setSelectedFriend, onSelectGame: setSelectedGame, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'friend', timestamp: Date.now() }, ...prev ]); }, showAuthModal, user, onChatFriend: (f) => { setChatFriend(f); setSelectedFriend(f); } }),
           view === "profil" && h(ProfilView, { user, games, wishlistIds, ratings, onToggleWishlist: handleToggleWishlist, onSelect: game => setSelectedGame({ ...game, _inLibrary: true }), search, setSearch, activePlatform, setActivePlatform, notifications, onMarkAsRead: markAsRead, topThreeIds, topThree, onToggleTopThree: handleToggleTopThree, onLogout: handleLogout, onDeleteAccount: handleDeleteAccount, onUpdateAvatar: handleUpdateAvatar, onUpdateEmail: handleUpdateEmail, onSyncComplete: () => { loadData(); setCatalogRefreshKey(k => k + 1); }, showToast, showAuthModal, setView, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, type: type || 'sync', timestamp: Date.now() }, ...prev ]); } })
         )
       ),
@@ -3990,7 +4097,7 @@ function App() {
         onBoostGame: handleBoostGame,
         showAuthModal,
       }),
-      selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => setSelectedFriend(null), isOnline, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, friendId: selectedFriend.id, type: type || 'friend', timestamp: Date.now() }, ...prev ]); } }),
+      selectedFriend && h(FriendProfileSheet, { key: selectedFriend.id, friend: selectedFriend, onClose: () => { setSelectedFriend(null); setChatFriend(null); }, isOnline, startChat: chatFriend?.id === selectedFriend.id, onAddNotification: (msg, type) => { setNotifications(prev => [ { id: "n" + Date.now(), text: msg, read: false, friendId: selectedFriend.id, type: type || 'friend', timestamp: Date.now() }, ...prev ]); }, onSelectGame: setSelectedGame }),
       authModal && h('div', { className: "fixed inset-0 z-50 flex items-end md:items-center justify-center", style: { animation: "fadeIn 0.2s ease-out" } },
         h('div', { className: "absolute inset-0", style: { background: "rgba(0,0,0,0.7)" }, onClick: closeAuthModal }),
         h('div', { className: "relative max-h-[90vh] overflow-y-auto", style: { animation: "slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1)" } },

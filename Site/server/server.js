@@ -3046,6 +3046,9 @@ async function fetchArticlesFromRSS() {
 const ESPORT_RSS_FEEDS = [
   { url: 'https://www.hltv.org/rss/news', name: 'HLTV', game: 'Counter-Strike 2' },
   { url: 'https://dotesports.com/feed', name: 'Dot Esports', game: 'Multi' },
+  { url: 'https://raw.githubusercontent.com/IceQ1337/CS-RSS-Feed/master/feeds/news-feed-fr.xml', name: 'CS2 FR', game: 'Counter-Strike 2' },
+  { url: 'https://data.rito.news/lol/fr-fr/esports.rss', name: 'LoL Esports', game: 'League of Legends' },
+  { url: 'https://data.rito.news/val/fr-fr/esports.rss', name: 'VALORANT Esports', game: 'VALORANT' },
 ];
 
 async function fetchEsportFromRSS() {
@@ -3094,7 +3097,67 @@ async function fetchEsportFromRSS() {
   return items.slice(0, 12);
 }
 
-// ─── 3b. FETCH : E-Sport via PandaScore API ────────────────
+// ─── 3b. FETCH : E-Sport via esport.is API ───────────────
+// API gratuite (100 req/h) : https://esport.is/api-docs
+// Générer une clé gratuitement : https://esport.is/api-keys
+async function fetchEsportFromEsportIs() {
+  const key = process.env.ESPORT_IS_API_KEY;
+  if (!key) return [];
+  const items = [];
+  const seen = new Set();
+  const games = ['cs2', 'valorant', 'lol', 'dota2'];
+  try {
+    const endpoints = [
+      { status: 'live', url: `https://esport.is/api/v1/matches/live?token=${key}` },
+      { status: 'upcoming', url: `https://esport.is/api/v1/matches/upcoming?token=${key}` },
+      { status: 'finished', url: `https://esport.is/api/v1/matches/results?token=${key}` },
+    ];
+    for (const ep of endpoints) {
+      try {
+        const body = await httpGet(ep.url);
+        const data = JSON.parse(body);
+        const matches = data?.matches || data?.data || (Array.isArray(data) ? data : []);
+        for (const m of matches) {
+          const game = (m.game || m.videogame || '').toLowerCase();
+          if (!games.includes(game)) continue;
+          const title = (m.team1?.name || '') + ' vs ' + (m.team2?.name || '') || m.name || m.title || 'Match';
+          if (seen.has(title)) continue;
+          seen.add(title);
+          items.push({
+            type: 'esport',
+            event: title,
+            game: m.game || m.videogame || '',
+            gameSlug: game,
+            date: m.start_time || m.begin_at || m.date || '',
+            desc: (m.tournament || m.league || m.serie || '') + (m.status ? ' [' + m.status + ']' : ''),
+            officialUrl: m.url || m.match_url || '',
+            sourceUrl: '',
+            sourceName: 'esport.is',
+            details: `Tournoi: ${m.tournament || m.league || '?'}\nStatut: ${ep.status}`,
+            pubDate: m.start_time || m.begin_at || new Date().toISOString(),
+            matchId: m.id || '',
+            tournament: m.tournament || m.league || '',
+            league: m.league || '',
+            teams: [
+              { id: m.team1?.id || '', name: m.team1?.name || 'TBD', logo: m.team1?.logo || '', players: [] },
+              { id: m.team2?.id || '', name: m.team2?.name || 'TBD', logo: m.team2?.logo || '', players: [] },
+            ],
+            teamIds: [m.team1?.id || '', m.team2?.id || ''],
+            status: ep.status,
+            scores: [m.team1?.score || 0, m.team2?.score || 0],
+            gameDescription: '',
+          });
+        }
+      } catch (e) { /* skip endpoint */ }
+    }
+  } catch (e) {
+    console.error('[Esport.is] Erreur:', e.message);
+  }
+  console.log(`[Esport.is] ${items.length} matchs trouvés`);
+  return items;
+}
+
+// ─── 3c. FETCH : E-Sport via PandaScore API ────────────────
 // Cache en mémoire des jeux disponibles sur PandaScore
 let pandascoreVideogames = [];
 let pandascoreGamesLastFetch = 0;
@@ -3336,15 +3399,18 @@ async function refreshAllNews(force) {
     results.drama = drama.length;
   }
 
+  // Esport via esport.is (matches live/upcoming/results)
+  const esportIs = await fetchEsportFromEsportIs();
+  let esport = [...esportIs];
   // Esport via PandaScore (matches en direct/à venir)
   const esportPs = await fetchEsportFromPandaScore();
-  let esport = [...esportPs];
-  // Merge esport RSS articles (HLTV, etc.)
+  esport = [...esport, ...esportPs];
+  // Merge esport RSS articles (HLTV, CS2 FR, LoL, VALORANT, Dot Esports)
   const esportRss = await fetchEsportFromRSS();
   if (esportRss.length > 0) {
     esport = [...esport, ...esportRss];
   }
-  // Si PandaScore n'a rien renvoyé, on utilise les données statiques (avec logos et équipes)
+  // Si aucune donnée, on utilise les données statiques (avec logos et équipes)
   if (esport.length === 0) {
     try {
       const fallback = JSON.parse(require('fs').readFileSync(path.join(__dirname, 'data', 'news.json'), 'utf-8'));
@@ -4210,7 +4276,8 @@ app.listen(PORT, () => {
   console.log('[Server] XBL_API_KEY:', process.env.XBL_API_KEY ? 'defined' : 'NON DÉFINI — Xbox import ne marchera pas');
   console.log('[Server] RAWG_API_KEY:', process.env.RAWG_API_KEY ? 'defined' : 'NON DÉFINI — catalogue RAWG indisponible');
   console.log('[Server] TWITCH_CLIENT_ID:', process.env.TWITCH_CLIENT_ID ? 'defined' : 'NON DÉFINI — catalogue IGDB indisponible');
-  console.log('[Server] PANDASCORE_API_KEY:', process.env.PANDASCORE_API_KEY ? 'defined' : 'NON DÉFINI — données e-sport limitées au RSS HLTV');
+  console.log('[Server] PANDASCORE_API_KEY:', process.env.PANDASCORE_API_KEY ? 'defined' : 'NON DÉFINI — données e-sport limitées aux RSS');
+  console.log('[Server] ESPORT_IS_API_KEY:', process.env.ESPORT_IS_API_KEY ? 'defined' : 'NON DÉFINI — API e-sport esport.is désactivée');
   console.log('[Server] GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? 'defined' : 'NON DÉFINI — connexion Google indisponible');
   console.log('[Server] Epic Games : connexion par nom d\'utilisateur (sans API)');
   console.log('[Server] PlayStation : connexion par NPSSO (pas de clé API requise)');

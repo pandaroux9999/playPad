@@ -2335,7 +2335,7 @@ function WhatsAppChat({ friend, messages, onSend, refreshChat, chatInput, setCha
     if (!suggestSearch.trim()) { setCatalogResults([]); return; }
     const t = setTimeout(async () => {
       setCatalogSearching(true);
-      try { const d = await API.getCatalog(1, 20, suggestSearch); setCatalogResults(d.games || []); } catch (e) {}
+      try { const d = await API.getCatalog(1, 50, suggestSearch); setCatalogResults(d.catalog || []); } catch (e) {}
       setCatalogSearching(false);
     }, 300);
     return () => clearTimeout(t);

@@ -3059,7 +3059,7 @@ async function fetchEsportFromRSS() {
       const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
       let match;
       let count = 0;
-      while ((match = itemRegex.exec(xml)) !== null && count < 10) {
+      while ((match = itemRegex.exec(xml)) !== null && count < 15) {
         const block = match[1];
         const get = (tag) => {
           const m = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i').exec(block);
@@ -3094,7 +3094,7 @@ async function fetchEsportFromRSS() {
     }
   }
   items.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
-  return items.slice(0, 12);
+  return items.slice(0, 30);
 }
 
 // ─── 3b. FETCH : E-Sport via esport.is API ───────────────

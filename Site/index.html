@@ -2418,9 +2418,25 @@ function WhatsAppChat({ friend, messages, onSend, refreshChat, chatInput, setCha
           h('p', { className: "text-xs font-bold flex-1", style: { color: WA_ACCENT } }, "Proposer un jeu \u00e0 ", friend.display_name),
           h('button', { onClick: () => setSuggestOpen(false), className: "w-6 h-6 rounded-full flex items-center justify-center hover:opacity-80" }, h(X, { size: 14, style: { color: "#8696A0" } }))
         ),
-        h('div', { className: "relative mb-2" },
-          h(Search, { size: 12, className: "absolute left-3 top-1/2 -translate-y-1/2", style: { color: "#8696A0" } }),
-          h('input', { value: suggestSearch, onChange: e => setSuggestSearch(e.target.value), placeholder: "Chercher un jeu...", className: "w-full rounded-xl pl-8 pr-3 py-2.5 text-xs outline-none", style: { background: WA_BG, color: "#E9EDEF", border: "1px solid rgba(255,255,255,0.1)" } })
+        h('div', { className: "flex items-center gap-2 mb-2" },
+          h('div', { className: "relative flex-1" },
+            h(Search, { size: 12, className: "absolute left-3 top-1/2 -translate-y-1/2", style: { color: "#8696A0" } }),
+            h('input', { value: suggestSearch, onChange: e => setSuggestSearch(e.target.value), placeholder: "Chercher un jeu...", className: "w-full rounded-xl pl-8 pr-3 py-2.5 text-xs outline-none", style: { background: WA_BG, color: "#E9EDEF", border: "1px solid rgba(255,255,255,0.1)" } })
+          ),
+          h('button', { onClick: async () => {
+            if (selectedGames.size === 0) return;
+            setSuggesting(true);
+            try {
+              const games = catalogResults.filter(g => selectedGames.has(g.game_id || g.id));
+              for (const game of games) {
+                await API.sendSuggestion(friend.id, game.game_id || game.id, game.title, game.cover, "Regarde ce jeu !");
+              }
+              refreshChat();
+              setSuggestOpen(false); setSuggestSearch(""); setCatalogResults([]); setSelectedGames(new Set());
+              onAddNotification?.(`${games.length} jeu${games.length > 1 ? "x" : ""} propos\u00e9${games.length > 1 ? "s" : ""} \u00e0 ${friend.display_name}`, "friend");
+            } catch (e) {}
+            setSuggesting(false);
+          }, disabled: suggesting || selectedGames.size === 0, className: "px-3 py-2.5 rounded-xl text-[11px] font-bold text-white whitespace-nowrap flex-shrink-0 transition-opacity", style: { background: selectedGames.size > 0 && !suggesting ? WA_ACCENT : "rgba(255,255,255,0.1)", opacity: suggesting ? 0.6 : 1 } }, suggesting ? h(Loader, { size: 12, className: "animate-spin" }) : "Proposer")
         ),
         h('div', { className: "overflow-y-auto", style: { scrollbarWidth: "none", maxHeight: "calc(50vh - 120px)" } },
           catalogSearching
@@ -2435,33 +2451,19 @@ function WhatsAppChat({ friend, messages, onSend, refreshChat, chatInput, setCha
                         const gid = game.game_id || game.id;
                         const sel = selectedGames.has(gid);
                         return h('div', { key: gid, onClick: () => setSelectedGames(prev => { const n = new Set(prev); if (n.has(gid)) n.delete(gid); else n.add(gid); return n; }), className: "flex flex-col rounded-lg overflow-hidden cursor-pointer transition-all", style: { background: sel ? `${WA_ACCENT}20` : WA_BG, border: `1px solid ${sel ? WA_ACCENT : "rgba(255,255,255,0.06)"}`, outline: sel ? `2px solid ${WA_ACCENT}` : "none" } },
-                          h('div', { className: "relative", style: { aspectRatio: "3/4" } },
-                            game.cover
-                              ? h('img', { src: game.cover, alt: "", className: "w-full h-full object-cover" })
-                              : h('div', { className: "w-full h-full flex items-center justify-center text-sm font-black", style: { color: `${WA_ACCENT}40` } }, "?"),
-                            sel && h('div', { className: "absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center", style: { background: WA_ACCENT } }, h(Check, { size: 12, className: "text-white" }))
-                          ),
+                            h('div', { className: "relative", style: { aspectRatio: "3/4" } },
+                              game.cover
+                                ? h('img', { src: game.cover, alt: "", className: "w-full h-full object-cover" })
+                                : h('div', { className: "w-full h-full flex items-center justify-center text-sm font-black", style: { color: `${WA_ACCENT}40` } }, "?"),
+                              sel && h('div', { className: "absolute inset-0 flex items-center justify-center", style: { background: "rgba(0,0,0,0.55)" } },
+                                h('span', { className: "text-[9px] font-bold text-white px-2 py-1 rounded-lg", style: { background: WA_ACCENT } }, "S\u00e9lectionn\u00e9")
+                              )
+                            ),
                           h('div', { className: "p-1" },
                             h('p', { className: "text-[9px] font-bold leading-tight line-clamp-1 text-center", style: { color: "#E9EDEF", fontFamily: "'Rajdhani', sans-serif" } }, game.title)
                           )
                         );
                       })
-                    ),
-                    selectedGames.size > 0 && h('div', { className: "flex items-center gap-2 pt-2 pb-1 sticky bottom-0", style: { background: WA_HEADER } },
-                      h('p', { className: "text-[10px] font-bold flex-1", style: { color: "#8696A0" } }, selectedGames.size, " jeu", selectedGames.size > 1 ? "x" : "", " s\u00e9lectionn\u00e9", selectedGames.size > 1 ? "s" : ""),
-                      h('button', { onClick: async () => {
-                        setSuggesting(true);
-                        try {
-                          const games = catalogResults.filter(g => selectedGames.has(g.game_id || g.id));
-                          for (const game of games) {
-                            await API.sendSuggestion(friend.id, game.game_id || game.id, game.title, game.cover, "Regarde ce jeu !");
-                          }
-                          refreshChat();
-                          setSuggestOpen(false); setSuggestSearch(""); setCatalogResults([]); setSelectedGames(new Set());
-                          onAddNotification?.(`${games.length} jeu${games.length > 1 ? "x" : ""} propos\u00e9${games.length > 1 ? "s" : ""} \u00e0 ${friend.display_name}`, "friend");
-                        } catch (e) {}
-                        setSuggesting(false);
-                      }, disabled: suggesting, className: "px-4 py-2 rounded-xl text-[11px] font-bold text-white", style: { background: WA_ACCENT } }, suggesting ? h(Loader, { size: 12, className: "animate-spin" }) : "Proposer")
                     )
                   ]
       )

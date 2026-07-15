@@ -1392,6 +1392,32 @@ function readJSONStrippedBOM(fpath) {
   return JSON.parse(clean);
 }
 
+// Import streaming : lit le fichier ligne par ligne sans tout charger en mémoire
+async function streamImportJSON(fpath, label) {
+  const fs = require('fs');
+  const readline = require('readline');
+  if (!fs.existsSync(fpath)) { console.log(`[StreamImport] ${label} non trouvé`); return 0; }
+  const stats = fs.statSync(fpath);
+  console.log(`[StreamImport] ${label} (${(stats.size/1024/1024).toFixed(1)}MB) début streaming...`);
+  const stream = fs.createReadStream(fpath, 'utf-8');
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  let total = 0, batch = [], depth = 0, current = '', inObj = false;
+  for await (const line of rl) {
+    for (const ch of line) {
+      if (ch === '{') { if (!inObj) { current = '{'; inObj = true; depth = 1; } else { current += ch; depth++; } }
+      else if (ch === '}') { current += ch; depth--; if (depth === 0 && inObj) {
+          try { const obj = JSON.parse(current); batch.push(obj); } catch (e) { /* skip malformed */ }
+          current = ''; inObj = false;
+          if (batch.length >= 200) { await db.batchUpsertCatalog(batch); total += batch.length; batch = []; }
+      } }
+      else if (inObj) current += ch;
+    }
+  }
+  if (batch.length > 0) { await db.batchUpsertCatalog(batch); total += batch.length; }
+  console.log(`[StreamImport] ✅ ${label}: ${total} jeux importés en streaming`);
+  return total;
+}
+
 app.get('/api/catalog/replace-from-json', async (req, res) => {
   res.json({ ok: true, pending: true, message: 'Import en arrière-plan, vérifie les logs Render' });
   try {
@@ -1869,40 +1895,38 @@ async function fixMissingCovers() {
     if (missing.length > 0) { await db.batchUpsertCatalog(missing); }
     console.log(`[Catalog] ${missing.length} jeux cultes ajoutés (${GAMES_CATALOG.length - missing.length} déjà présents)`);
   } catch (e) { console.error('[Catalog] Erreur jeux cultes:', e.message); }
-  // Import de tous les fichiers JSON de catalogue (jv-catalog + RAWG)
+  // Import jv-catalog.json au démarrage (petit fichier, synchrone)
   try {
-    const fs = require('fs');
     const dataDir = path.join(__dirname, 'data');
-    const catalogFiles = ['jv-catalog.json', 'rawg-catalog1.json', 'rawg-catalog2.json'];
-    let totalImported = 0;
-    for (const file of catalogFiles) {
-      try {
-        const fpath = path.join(dataDir, file);
-        if (fs.existsSync(fpath)) {
-          const stats = fs.statSync(fpath);
-          const sizeMB = (stats.size / 1024 / 1024).toFixed(1);
-          console.log(`[Catalog] Import de ${file} (${sizeMB}MB)...`);
-          const games = readJSONStrippedBOM(fpath);
-          if (Array.isArray(games) && games.length > 0) {
-            await db.batchUpsertCatalog(games);
-            totalImported += games.length;
-            console.log(`[Catalog] ✅ ${file}: ${games.length} jeux importés`);
-          }
-        } else {
-          console.log(`[Catalog] ${file} non trouvé, ignoré`);
-        }
-      } catch (e) {
-        console.error(`[Catalog] ❌ ÉCHEC import ${file}: ${e.message}`);
+    const jvPath = path.join(dataDir, 'jv-catalog.json');
+    if (fs.existsSync(jvPath)) {
+      console.log(`[Catalog] Import jv-catalog.json...`);
+      const jvGames = readJSONStrippedBOM(jvPath);
+      if (Array.isArray(jvGames) && jvGames.length > 0) {
+        await db.batchUpsertCatalog(jvGames);
+        console.log(`[Catalog] ✅ jv-catalog.json: ${jvGames.length} jeux importés`);
       }
     }
-    if (totalImported > 0) {
-      console.log(`[Catalog] ✅ ${totalImported} jeux importés depuis les fichiers JSON`);
+  } catch (e) { console.error('[Catalog] ❌ jv-catalog.json:', e.message); }
+  // Import RAWG en streaming (arrière-plan, ne bloque pas le démarrage)
+  const rawgFiles = ['rawg-catalog1.json', 'rawg-catalog2.json'];
+  for (const file of rawgFiles) {
+    const fpath = path.join(__dirname, 'data', file);
+    if (fs.existsSync(fpath)) {
+      streamImportJSON(fpath, file).then(n => {
+        if (n > 0) console.log(`[Catalog] ✅ ${file}: ${n} jeux importés en streaming`);
+      }).catch(e => console.error(`[Catalog] ❌ ${file} streaming:`, e.message));
+    } else {
+      console.log(`[Catalog] ${file} non trouvé, ignoré`);
     }
-    const finalCount = await db.getCatalogCount();
-    console.log(`[Catalog] 📊 TOTAL dans la base: ${finalCount} jeux`);
-  } catch (e) {
-    console.error('[Catalog] Erreur import JSON au démarrage:', e.message);
   }
+  // Log du total après un délai (le temps que le streaming commence)
+  setTimeout(async () => {
+    try {
+      const finalCount = await db.getCatalogCount();
+      console.log(`[Catalog] 📊 TOTAL dans la base: ${finalCount} jeux (les imports streaming continuent en arrière-plan)`);
+    } catch (e) { console.error('[Catalog] Erreur count:', e.message); }
+  }, 5000);
   // Correction des couvertures manquantes
   try { await fixMissingCovers(); } catch (e) { console.error('[Covers] Error:', e.message); }
   // Données de démonstration après le catalogue

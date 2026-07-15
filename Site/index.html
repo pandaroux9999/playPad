@@ -2147,9 +2147,9 @@ function NewsDetailSheet({ item, onClose, showAuthModal, user }) {
                 h('div', { className: "flex items-center gap-2" },
                   h('input', { value: manualUrl, onChange: e => setManualUrl(e.target.value), onKeyDown: e => { if (e.key === 'Enter') handleManualEmbed(); }, placeholder: "twitch.tv/riotgames ou youtu.be/...", className: "flex-1 bg-secondary/60 border border-border rounded-xl px-3 py-2.5 text-[11px] text-foreground placeholder-muted-foreground outline-none" }),
                   h('button', { onClick: handleManualEmbed, className: "px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all hover:opacity-80 flex-shrink-0", style: { background: manualUrl.trim() ? P1 : `${P1}40`, color: '#fff' } }, h(Tv, { size: 13 }))
-                )
-              );
-            }
+    )
+  ));
+}
             if (stream.type === 'link') {
               return h('div', { className: "mb-3" },
                 h('a', { href: stream.url, target: "_blank", rel: "noopener noreferrer", className: "flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold transition-all", style: { background: `${P1}20`, color: P1 } }, h(ExternalLink, { size: 14 }), isLive ? "Voir le match en direct" : "Voir le replay")
@@ -2331,6 +2331,7 @@ function WhatsAppChat({ friend, messages, onSend, refreshChat, chatInput, setCha
   const initials = (friend.display_name || "??").charAt(0).toUpperCase() + ((friend.display_name || "?")[1] || "").toUpperCase();
   const [catalogResults, setCatalogResults] = useState([]);
   const [catalogSearching, setCatalogSearching] = useState(false);
+  const [selectedGames, setSelectedGames] = useState(new Set());
   useEffect(() => {
     if (!suggestSearch.trim()) { setCatalogResults([]); return; }
     const t = setTimeout(async () => {
@@ -2428,30 +2429,43 @@ function WhatsAppChat({ friend, messages, onSend, refreshChat, chatInput, setCha
               ? h('p', { className: "text-[11px] text-center py-6", style: { color: "#8696A0" } }, "Cherche un jeu dans le catalogue")
               : catalogResults.length === 0
                 ? h('p', { className: "text-[11px] text-center py-6", style: { color: "#8696A0" } }, "Aucun jeu trouv\u00e9")
-                : h('div', { className: "grid grid-cols-3 gap-1.5" },
-                    catalogResults.map(game =>
-                      h('div', { key: game.game_id || game.id, className: "flex items-center gap-2 rounded-lg overflow-hidden cursor-pointer hover:opacity-85 transition-opacity p-1.5", style: { background: WA_BG, border: "1px solid rgba(255,255,255,0.06)" } },
-                        h('div', { className: "w-8 h-11 rounded overflow-hidden flex-shrink-0" },
-                          game.cover
-                            ? h('img', { src: game.cover, alt: "", className: "w-full h-full object-cover" })
-                            : h('div', { className: "w-full h-full flex items-center justify-center text-[10px] font-black", style: { color: `${WA_ACCENT}40` } }, "?")
-                        ),
-                        h('span', { className: "text-[10px] font-bold flex-1 leading-tight line-clamp-1", style: { color: "#E9EDEF", fontFamily: "'Rajdhani', sans-serif" } }, game.title),
-                        h('button', { onClick: async () => {
-                          setSuggesting(true);
-                          try {
+                : [
+                    h('div', { className: "grid grid-cols-3 gap-1.5" },
+                      catalogResults.map(game => {
+                        const gid = game.game_id || game.id;
+                        const sel = selectedGames.has(gid);
+                        return h('div', { key: gid, onClick: () => setSelectedGames(prev => { const n = new Set(prev); if (n.has(gid)) n.delete(gid); else n.add(gid); return n; }), className: "flex flex-col rounded-lg overflow-hidden cursor-pointer transition-all", style: { background: sel ? `${WA_ACCENT}20` : WA_BG, border: `1px solid ${sel ? WA_ACCENT : "rgba(255,255,255,0.06)"}`, outline: sel ? `2px solid ${WA_ACCENT}` : "none" } },
+                          h('div', { className: "relative", style: { aspectRatio: "3/4" } },
+                            game.cover
+                              ? h('img', { src: game.cover, alt: "", className: "w-full h-full object-cover" })
+                              : h('div', { className: "w-full h-full flex items-center justify-center text-sm font-black", style: { color: `${WA_ACCENT}40` } }, "?"),
+                            sel && h('div', { className: "absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center", style: { background: WA_ACCENT } }, h(Check, { size: 12, className: "text-white" }))
+                          ),
+                          h('div', { className: "p-1" },
+                            h('p', { className: "text-[9px] font-bold leading-tight line-clamp-1 text-center", style: { color: "#E9EDEF", fontFamily: "'Rajdhani', sans-serif" } }, game.title)
+                          )
+                        );
+                      })
+                    ),
+                    selectedGames.size > 0 && h('div', { className: "flex items-center gap-2 pt-2 pb-1 sticky bottom-0", style: { background: WA_HEADER } },
+                      h('p', { className: "text-[10px] font-bold flex-1", style: { color: "#8696A0" } }, selectedGames.size, " jeu", selectedGames.size > 1 ? "x" : "", " s\u00e9lectionn\u00e9", selectedGames.size > 1 ? "s" : ""),
+                      h('button', { onClick: async () => {
+                        setSuggesting(true);
+                        try {
+                          const games = catalogResults.filter(g => selectedGames.has(g.game_id || g.id));
+                          for (const game of games) {
                             await API.sendSuggestion(friend.id, game.game_id || game.id, game.title, game.cover, "Regarde ce jeu !");
-                            refreshChat();
-                            setSuggestOpen(false); setSuggestSearch(""); setCatalogResults([]);
-                            onAddNotification?.(`Tu as propos\u00e9 "${game.title}" \u00e0 ${friend.display_name}`, "friend");
-                          } catch (e) {}
-                          setSuggesting(false);
-                        }, disabled: suggesting, className: "px-1.5 py-1 rounded-lg text-[8px] font-bold text-white text-center whitespace-nowrap flex-shrink-0", style: { background: WA_ACCENT } }, suggesting ? "..." : "Prop")
-                      )
+                          }
+                          refreshChat();
+                          setSuggestOpen(false); setSuggestSearch(""); setCatalogResults([]); setSelectedGames(new Set());
+                          onAddNotification?.(`${games.length} jeu${games.length > 1 ? "x" : ""} propos\u00e9${games.length > 1 ? "s" : ""} \u00e0 ${friend.display_name}`, "friend");
+                        } catch (e) {}
+                        setSuggesting(false);
+                      }, disabled: suggesting, className: "px-4 py-2 rounded-xl text-[11px] font-bold text-white", style: { background: WA_ACCENT } }, suggesting ? h(Loader, { size: 12, className: "animate-spin" }) : "Proposer")
                     )
-                  )
-        )
+                  ]
       )
+    )
     ),
     h('form', { onSubmit: async (e) => { e.preventDefault(); if (!chatInput.trim() || chatSending) return; onSend(); }, className: "flex items-center gap-2 px-3 py-2 flex-shrink-0", style: { background: WA_INPUT } },
       h('button', { type: "button", onClick: () => setSuggestOpen(o => !o), className: "w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 hover:opacity-80 transition-opacity" }, h(Plus, { size: 20, style: { color: suggestOpen ? WA_ACCENT : "#8696A0" } })),

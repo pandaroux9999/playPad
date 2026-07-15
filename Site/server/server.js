@@ -1897,6 +1897,7 @@ async function fixMissingCovers() {
   } catch (e) { console.error('[Catalog] Erreur jeux cultes:', e.message); }
   // Import jv-catalog.json au démarrage (petit fichier, synchrone)
   try {
+    const fs = require('fs');
     const dataDir = path.join(__dirname, 'data');
     const jvPath = path.join(dataDir, 'jv-catalog.json');
     if (fs.existsSync(jvPath)) {
@@ -1909,17 +1910,19 @@ async function fixMissingCovers() {
     }
   } catch (e) { console.error('[Catalog] ❌ jv-catalog.json:', e.message); }
   // Import RAWG en streaming (arrière-plan, ne bloque pas le démarrage)
-  const rawgFiles = ['rawg-catalog1.json', 'rawg-catalog2.json'];
-  for (const file of rawgFiles) {
-    const fpath = path.join(__dirname, 'data', file);
-    if (fs.existsSync(fpath)) {
-      streamImportJSON(fpath, file).then(n => {
-        if (n > 0) console.log(`[Catalog] ✅ ${file}: ${n} jeux importés en streaming`);
-      }).catch(e => console.error(`[Catalog] ❌ ${file} streaming:`, e.message));
-    } else {
-      console.log(`[Catalog] ${file} non trouvé, ignoré`);
+  try {
+    const rawgFiles = ['rawg-catalog1.json', 'rawg-catalog2.json'];
+    for (const file of rawgFiles) {
+      const fpath = path.join(__dirname, 'data', file);
+      if (require('fs').existsSync(fpath)) {
+        streamImportJSON(fpath, file).then(n => {
+          if (n > 0) console.log(`[Catalog] ✅ ${file}: ${n} jeux importés en streaming`);
+        }).catch(e => console.error(`[Catalog] ❌ ${file} streaming:`, e.message));
+      } else {
+        console.log(`[Catalog] ${file} non trouvé, ignoré`);
+      }
     }
-  }
+  } catch (e) { console.error('[Catalog] Erreur import RAWG:', e.message); }
   // Log du total après un délai (le temps que le streaming commence)
   setTimeout(async () => {
     try {

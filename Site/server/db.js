@@ -1175,10 +1175,7 @@ async function getMessages(userId, friendId) {
     .limit(100);
   if (error) throw new Error(error.message);
   const msgs = data || [];
-  // Enrich messages with game suggestion data if stored in game_suggestions
-  const withGameData = msgs.filter(m => m.game_id || m.game_title || m.game_cover);
-  if (withGameData.length === msgs.length) return msgs;
-  // Fallback: look up game_suggestions for messages that match suggestion pattern
+  // Enrich messages with game suggestion data
   try {
     const { data: suggestions } = await supabaseAdmin
       .from('game_suggestions')
@@ -1187,16 +1184,15 @@ async function getMessages(userId, friendId) {
       .order('created_at', { ascending: false });
     if (suggestions) {
       for (const m of msgs) {
-        if (!m.game_id && !m.game_title) {
-          const match = suggestions.find(s =>
-            Math.abs(new Date(m.created_at) - new Date(s.created_at)) < 5000 &&
-            m.message.includes(s.game_title)
-          );
-          if (match) {
-            m.game_id = match.game_id;
-            m.game_title = match.game_title;
-            m.game_cover = match.game_cover;
-          }
+        if (m.game_id && m.game_title) continue;
+        const match = suggestions.find(s =>
+          Math.abs(new Date(m.created_at) - new Date(s.created_at)) < 30000 &&
+          (m.message || '').includes(s.game_title)
+        );
+        if (match) {
+          m.game_id = match.game_id;
+          m.game_title = match.game_title;
+          m.game_cover = match.game_cover;
         }
       }
     }

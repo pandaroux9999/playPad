@@ -2092,5 +2092,14 @@ async function ensureMissingTables() {
   } catch (e) {
     // silent - nécessite exec_sql dans Supabase
   }
+  // Migration directe : ajout des colonnes game aux messages si pas déjà fait
+  try {
+    await supabaseAdmin.from('messages').select('game_id').limit(1);
+  } catch (e) {
+    // colonne n'existe pas, on la crée
+    try { await supabaseAdmin.rpc('exec_sql', { query: "ALTER TABLE messages ADD COLUMN IF NOT EXISTS game_id TEXT DEFAULT ''" }).catch(() => {}); } catch (x) {}
+    try { await supabaseAdmin.rpc('exec_sql', { query: "ALTER TABLE messages ADD COLUMN IF NOT EXISTS game_title TEXT DEFAULT ''" }).catch(() => {}); } catch (x) {}
+    try { await supabaseAdmin.rpc('exec_sql', { query: "ALTER TABLE messages ADD COLUMN IF NOT EXISTS game_cover TEXT DEFAULT ''" }).catch(() => {}); } catch (x) {}
+  }
 }
 ensureMissingTables();

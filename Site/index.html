@@ -1387,7 +1387,7 @@ function ProfilView({ user, games, wishlistIds, ratings, onToggleWishlist, onSel
 }
 
 function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelectFriend, onSelectGame, onAddNotification, showAuthModal, user, onChatFriend, showToast }) {
-  const [subTab, setSubTab] = useState("friends");
+  const [subTab, setSubTab] = useState("reviews");
   const [publicReviews, setPublicReviews] = useState([]);
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState([]);

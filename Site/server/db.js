@@ -1174,7 +1174,34 @@ async function getMessages(userId, friendId) {
     .order('created_at', { ascending: true })
     .limit(100);
   if (error) throw new Error(error.message);
-  return data || [];
+  const msgs = data || [];
+  // Enrich messages with game suggestion data if stored in game_suggestions
+  const withGameData = msgs.filter(m => m.game_id || m.game_title || m.game_cover);
+  if (withGameData.length === msgs.length) return msgs;
+  // Fallback: look up game_suggestions for messages that match suggestion pattern
+  try {
+    const { data: suggestions } = await supabaseAdmin
+      .from('game_suggestions')
+      .select('*')
+      .or(`and(from_user_id.eq.${userId},to_user_id.eq.${friendId}),and(from_user_id.eq.${friendId},to_user_id.eq.${userId})`)
+      .order('created_at', { ascending: false });
+    if (suggestions) {
+      for (const m of msgs) {
+        if (!m.game_id && !m.game_title) {
+          const match = suggestions.find(s =>
+            Math.abs(new Date(m.created_at) - new Date(s.created_at)) < 5000 &&
+            m.message.includes(s.game_title)
+          );
+          if (match) {
+            m.game_id = match.game_id;
+            m.game_title = match.game_title;
+            m.game_cover = match.game_cover;
+          }
+        }
+      }
+    }
+  } catch (e) { /* suggestions table may not exist */ }
+  return msgs;
 }
 
 async function markMessagesRead(userId, senderId) {
@@ -2091,15 +2118,6 @@ async function ensureMissingTables() {
     console.log('[DB] Tables OK');
   } catch (e) {
     // silent - nécessite exec_sql dans Supabase
-  }
-  // Migration directe : ajout des colonnes game aux messages si pas déjà fait
-  try {
-    await supabaseAdmin.from('messages').select('game_id').limit(1);
-  } catch (e) {
-    // colonne n'existe pas, on la crée
-    try { await supabaseAdmin.rpc('exec_sql', { query: "ALTER TABLE messages ADD COLUMN IF NOT EXISTS game_id TEXT DEFAULT ''" }).catch(() => {}); } catch (x) {}
-    try { await supabaseAdmin.rpc('exec_sql', { query: "ALTER TABLE messages ADD COLUMN IF NOT EXISTS game_title TEXT DEFAULT ''" }).catch(() => {}); } catch (x) {}
-    try { await supabaseAdmin.rpc('exec_sql', { query: "ALTER TABLE messages ADD COLUMN IF NOT EXISTS game_cover TEXT DEFAULT ''" }).catch(() => {}); } catch (x) {}
   }
 }
 ensureMissingTables();

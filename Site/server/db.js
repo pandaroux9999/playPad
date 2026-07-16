@@ -1135,10 +1135,17 @@ async function clearPsnTokens(userId) {
   if (error) throw new Error(error.message);
 }
 
-async function sendMessage(senderId, receiverId, message) {
+async function sendMessage(senderId, receiverId, message, gameId, gameTitle, gameCover) {
   const { data, error } = await supabaseAdmin
     .from('messages')
-    .insert({ sender_id: senderId, receiver_id: receiverId, message })
+    .insert({
+      sender_id: senderId,
+      receiver_id: receiverId,
+      message,
+      game_id: gameId || '',
+      game_title: gameTitle || '',
+      game_cover: gameCover || '',
+    })
     .select('*')
     .single();
   if (error) throw new Error(error.message);

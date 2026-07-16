@@ -2361,7 +2361,7 @@ app.post('/api/suggestions', requireAuth, async (req, res) => {
     const sMsg = stripHtml(message || '');
     const sCover = gameCover && isValidUrl(gameCover) ? gameCover : '';
     await db.sendGameSuggestion(req.session.userId, toUserId, gameId, sTitle, sCover, sMsg);
-    await db.sendMessage(req.session.userId, toUserId, 'Je te propose "' + sTitle + '"' + (sMsg ? ' : ' + sMsg : ''));
+    await db.sendMessage(req.session.userId, toUserId, 'Je te propose "' + sTitle + '"' + (sMsg ? ' : ' + sMsg : ''), gameId, sTitle, sCover);
     const me = await db.getUserById(req.session.userId);
     db.createNotification(toUserId, 'friend', 'Suggestion de jeu',
       `${me?.display_name || 'Quelqu\'un'} te propose "${sTitle}"`,

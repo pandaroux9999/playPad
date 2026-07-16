@@ -499,6 +499,28 @@ app.get('/api/reviews/:id/replies', requireAuth, async (req, res) => {
   }
 });
 
+app.delete('/api/reviews/:id', requireAuth, async (req, res) => {
+  try {
+    const reviewId = parseInt(req.params.id);
+    const { data: review } = await db.supabaseAdmin
+      .from('community_reviews')
+      .select('user_id')
+      .eq('id', reviewId)
+      .single();
+    if (!review) return res.status(404).json({ error: 'Critique introuvable' });
+    if (Number(review.user_id) !== Number(req.session.userId))
+      return res.status(403).json({ error: 'Vous ne pouvez supprimer que vos propres critiques' });
+    await db.supabaseAdmin.from('review_votes').delete().eq('review_id', reviewId);
+    await db.supabaseAdmin.from('review_replies').delete().eq('review_id', reviewId);
+    const { error } = await db.supabaseAdmin.from('community_reviews').delete().eq('id', reviewId);
+    if (error) throw new Error(error.message);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[DeleteReview] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/account/reviews', requireAuth, async (req, res) => {
   try {
     const { error, count } = await db.supabaseAdmin
@@ -2339,7 +2361,7 @@ app.post('/api/suggestions', requireAuth, async (req, res) => {
     const sMsg = stripHtml(message || '');
     const sCover = gameCover && isValidUrl(gameCover) ? gameCover : '';
     await db.sendGameSuggestion(req.session.userId, toUserId, gameId, sTitle, sCover, sMsg);
-    await db.sendMessage(req.session.userId, toUserId, 'Je te propose "' + sTitle + '"' + (sMsg ? ' : ' + sMsg : ''));
+    await db.sendMessage(req.session.userId, toUserId, 'Je te propose "' + sTitle + '"' + (sMsg ? ' : ' + sMsg : ''), gameId, sTitle, sCover);
     const me = await db.getUserById(req.session.userId);
     db.createNotification(toUserId, 'friend', 'Suggestion de jeu',
       `${me?.display_name || 'Quelqu\'un'} te propose "${sTitle}"`,
@@ -3411,13 +3433,16 @@ async function refreshAllNews(force) {
   if (esportRss.length > 0) {
     esport = [...esport, ...esportRss];
   }
-  // Si aucune donnée, on utilise les données statiques (avec logos et équipes)
-  if (esport.length === 0) {
+  // Si aucune donnée API (matchs avec équipes), on utilise le fallback statique
+  const hasApiMatches = esportIs.length > 0 || esportPs.length > 0;
+  if (!hasApiMatches) {
     try {
       const fallback = JSON.parse(require('fs').readFileSync(path.join(__dirname, 'data', 'news.json'), 'utf-8'));
       if (fallback.esport && fallback.esport.length > 0) {
-        esport = fallback.esport;
-        console.log('[News] Fallback e-sport statique utilisé (' + esport.length + ' événements)');
+        // On merge le fallback avec les articles RSS sans dupliquer
+        const fallbackTitles = new Set(fallback.esport.map(e => e.event));
+        esport = [...esport, ...fallback.esport.filter(e => !fallbackTitles.has(e.event))];
+        console.log('[News] Fallback e-sport statique mergé (' + fallback.esport.length + ' événements)');
       }
     } catch (e) {
       console.error('[News] Fallback e-sport error:', e.message);

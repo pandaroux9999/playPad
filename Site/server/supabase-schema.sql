@@ -135,9 +135,16 @@ CREATE TABLE IF NOT EXISTS messages (
   sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   receiver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   message TEXT NOT NULL,
+  game_id TEXT DEFAULT '',
+  game_title TEXT DEFAULT '',
+  game_cover TEXT DEFAULT '',
   read BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS game_id TEXT DEFAULT '';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS game_title TEXT DEFAULT '';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS game_cover TEXT DEFAULT '';
 
 -- Table catalogue partagé (tous les jeux connus, dédupliqués par game_id)
 CREATE TABLE IF NOT EXISTS catalog (

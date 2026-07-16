@@ -1135,13 +1135,34 @@ async function clearPsnTokens(userId) {
   if (error) throw new Error(error.message);
 }
 
-async function sendMessage(senderId, receiverId, message) {
+async function sendMessage(senderId, receiverId, message, gameId, gameTitle, gameCover) {
+  const payload = {
+    sender_id: senderId,
+    receiver_id: receiverId,
+    message,
+  };
+  if (gameId || gameTitle || gameCover) {
+    payload.game_id = gameId || '';
+    payload.game_title = gameTitle || '';
+    payload.game_cover = gameCover || '';
+  }
   const { data, error } = await supabaseAdmin
     .from('messages')
-    .insert({ sender_id: senderId, receiver_id: receiverId, message })
+    .insert(payload)
     .select('*')
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (gameId || gameTitle || gameCover) {
+      const { data: d2, error: e2 } = await supabaseAdmin
+        .from('messages')
+        .insert({ sender_id: senderId, receiver_id: receiverId, message })
+        .select('*')
+        .single();
+      if (e2) throw new Error(e2.message);
+      return d2;
+    }
+    throw new Error(error.message);
+  }
   return data;
 }
 
@@ -1153,7 +1174,30 @@ async function getMessages(userId, friendId) {
     .order('created_at', { ascending: true })
     .limit(100);
   if (error) throw new Error(error.message);
-  return data || [];
+  const msgs = data || [];
+  // Enrich messages with game suggestion data
+  try {
+    const { data: suggestions } = await supabaseAdmin
+      .from('game_suggestions')
+      .select('*')
+      .or(`and(from_user_id.eq.${userId},to_user_id.eq.${friendId}),and(from_user_id.eq.${friendId},to_user_id.eq.${userId})`)
+      .order('created_at', { ascending: false });
+    if (suggestions) {
+      for (const m of msgs) {
+        if (m.game_id && m.game_title) continue;
+        const match = suggestions.find(s =>
+          Math.abs(new Date(m.created_at) - new Date(s.created_at)) < 30000 &&
+          (m.message || '').includes(s.game_title)
+        );
+        if (match) {
+          m.game_id = match.game_id;
+          m.game_title = match.game_title;
+          m.game_cover = match.game_cover;
+        }
+      }
+    }
+  } catch (e) { /* suggestions table may not exist */ }
+  return msgs;
 }
 
 async function markMessagesRead(userId, senderId) {

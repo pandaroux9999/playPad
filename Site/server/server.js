@@ -3433,13 +3433,16 @@ async function refreshAllNews(force) {
   if (esportRss.length > 0) {
     esport = [...esport, ...esportRss];
   }
-  // Si aucune donnée, on utilise les données statiques (avec logos et équipes)
-  if (esport.length === 0) {
+  // Si aucune donnée API (matchs avec équipes), on utilise le fallback statique
+  const hasApiMatches = esportIs.length > 0 || esportPs.length > 0;
+  if (!hasApiMatches) {
     try {
       const fallback = JSON.parse(require('fs').readFileSync(path.join(__dirname, 'data', 'news.json'), 'utf-8'));
       if (fallback.esport && fallback.esport.length > 0) {
-        esport = fallback.esport;
-        console.log('[News] Fallback e-sport statique utilisé (' + esport.length + ' événements)');
+        // On merge le fallback avec les articles RSS sans dupliquer
+        const fallbackTitles = new Set(fallback.esport.map(e => e.event));
+        esport = [...esport, ...fallback.esport.filter(e => !fallbackTitles.has(e.event))];
+        console.log('[News] Fallback e-sport statique mergé (' + fallback.esport.length + ' événements)');
       }
     } catch (e) {
       console.error('[News] Fallback e-sport error:', e.message);

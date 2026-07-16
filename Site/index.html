@@ -2399,7 +2399,7 @@ function WhatsAppChat({ friend, messages, onSend, refreshChat, chatInput, setCha
                             h('div', { className: "flex-1 min-w-0 flex flex-col justify-center gap-1.5" },
                               h('p', { className: "text-xs font-bold text-white leading-tight line-clamp-2", style: { fontFamily: "'Rajdhani', sans-serif" } }, item.msg.game_title),
                               h('p', { className: "text-[9px]", style: { color: "#8696A0" } }, "Proposition de jeu"),
-                              h('button', { onClick: () => onSelectGame?.({ game_id: item.msg.game_id, title: item.msg.game_title, cover: item.msg.game_cover }), className: "self-start px-2.5 py-1 rounded-lg text-[9px] font-bold text-white transition-opacity hover:opacity-80", style: { background: WA_ACCENT } }, "Voir d\u00e9tail")
+                              h('button', { onClick: () => setZoomCover(item.msg.game_cover), className: "self-start px-2.5 py-1 rounded-lg text-[9px] font-bold text-white transition-opacity hover:opacity-80", style: { background: WA_ACCENT } }, "Voir d\u00e9tail")
                             )
                           ),
                           item.msg.message !== "Regarde ce jeu !" && h('p', { className: "text-xs text-white/80 leading-relaxed px-1" }, item.msg.message)

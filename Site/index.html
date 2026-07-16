@@ -3745,7 +3745,6 @@ function App() {
   const [friendsCount, setFriendsCount] = useState(0);
   const [showHero, setShowHero] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [guestMode, setGuestMode] = useState(false);
   const [authModal, setAuthModal] = useState(null); // null | 'login' | 'register'
   const discoveryTimerRef = useRef(null);
   const refreshBooster = useCallback(async () => {
@@ -4081,8 +4080,6 @@ function App() {
       )
     );
   }
-
-  if (!user && !guestMode) return h(LandingPage, { onLoginSuccess: handleLoginSuccess, resetToken, onResetComplete: () => setResetToken(null), onEnterAsGuest: () => setGuestMode(true) });
 
   const showAuthModal = (mode) => setAuthModal(mode);
   const closeAuthModal = () => setAuthModal(null);

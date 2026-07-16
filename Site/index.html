@@ -1465,8 +1465,8 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
   const recentReviews = useMemo(() => [...publicReviews].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)), [publicReviews]);
 
   const SUBTABS = [
-    { id: "friends", label: "Amis", Icon: User },
     { id: "reviews", label: "Critiques", Icon: MessageSquare },
+    { id: "friends", label: "Amis", Icon: User },
   ];
 
   return h('div', { className: "flex flex-col h-full overflow-y-auto pb-20 view-enter", style: { scrollbarWidth: "none" } },

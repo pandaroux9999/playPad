@@ -1136,19 +1136,33 @@ async function clearPsnTokens(userId) {
 }
 
 async function sendMessage(senderId, receiverId, message, gameId, gameTitle, gameCover) {
+  const payload = {
+    sender_id: senderId,
+    receiver_id: receiverId,
+    message,
+  };
+  if (gameId || gameTitle || gameCover) {
+    payload.game_id = gameId || '';
+    payload.game_title = gameTitle || '';
+    payload.game_cover = gameCover || '';
+  }
   const { data, error } = await supabaseAdmin
     .from('messages')
-    .insert({
-      sender_id: senderId,
-      receiver_id: receiverId,
-      message,
-      game_id: gameId || '',
-      game_title: gameTitle || '',
-      game_cover: gameCover || '',
-    })
+    .insert(payload)
     .select('*')
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (gameId || gameTitle || gameCover) {
+      const { data: d2, error: e2 } = await supabaseAdmin
+        .from('messages')
+        .insert({ sender_id: senderId, receiver_id: receiverId, message })
+        .select('*')
+        .single();
+      if (e2) throw new Error(e2.message);
+      return d2;
+    }
+    throw new Error(error.message);
+  }
   return data;
 }
 

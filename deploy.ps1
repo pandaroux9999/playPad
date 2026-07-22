@@ -37,7 +37,7 @@ if (-not $SkipNpmInstall) {
 }
 
 Write-Host "[4/5] Restauration du .env et permissions..." -ForegroundColor Yellow
-ssh -i $SSH_KEY $SSH_HOST "sudo cp /tmp/.env.backup $REMOTE_PATH/server/.env 2>/dev/null; sudo chown -R root:root $REMOTE_PATH 2>/dev/null; echo 'OK'"
+ssh -i $SSH_KEY $SSH_HOST "sudo cp /tmp/.env.backup $REMOTE_PATH/server/.env 2>/dev/null; echo 'OK'"
 
 Write-Host "[5/5] Restart PM2..." -ForegroundColor Yellow
 ssh -i $SSH_KEY $SSH_HOST "sudo pm2 restart playpad --update-env"

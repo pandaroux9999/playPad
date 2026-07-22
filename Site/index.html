@@ -399,13 +399,7 @@ function normalizePlatform(raw) {
   }
   return r;
 }
-function normalizePlatform(raw) {
-  const r = raw.toLowerCase().trim();
-  for (const [key, aliases] of Object.entries(PLATFORM_ALIAS)) {
-    if (aliases.some(a => r === a || r.startsWith(a))) return key;
-  }
-  return r;
-}
+
 function getGamePlatforms(game) {
   const set = new Set();
   if (game.platform) set.add(normalizePlatform(game.platform));
@@ -1096,12 +1090,14 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
     return f;
   }, [filterPlatform, filterGenre, filterYearMin, filterAgeRating]);
 
+  const loadVersionRef = useRef(0);
   const loadCatalog = useCallback(async (page, append) => {
-    if (loadingCatalog) return;
+    const version = ++loadVersionRef.current;
     setLoadingCatalog(true);
     try {
       const filters = buildFilters();
       const d = await API.getCatalog(page, 60, search || undefined, activeLetter === 'all' ? undefined : activeLetter, filters);
+      if (version !== loadVersionRef.current) return;
       const games = d.catalog || [];
       if (append) setCatalog(prev => [...prev, ...games]);
       else { setCatalog(games); }
@@ -1109,6 +1105,7 @@ function CatalogueView({ onSelect, wishlistIds, onToggleWishlist, ratings, topTh
       setCatalogTotalAll(d.totalCatalog || 0);
       setCatalogPage(page);
     } catch (e) {
+      if (version !== loadVersionRef.current) return;
       if (!append) setCatalog(CATALOGUE);
     }
     setLoadingCatalog(false);
@@ -1405,7 +1402,7 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
   const [streamerResults, setStreamerResults] = useState([]);
   const [streamerSearching, setStreamerSearching] = useState(false);
   const load = () => Promise.all([
-    API.getFriends().then(d => setFriends(d.friends || [])).catch(() => {}),
+    API.getFriends().then(d => setFriends(d.friends || [])).catch(e => { if (e.message === 'Non authentifié') showToast('Session expirée, reconnecte-toi', 'error'); }),
     API.getPendingRequests().then(d => setRequests(d.requests || [])).catch(() => {}),
     API.getReviewsFeed().then(d => { console.log('[CommunityView] getReviewsFeed response:', d); setPublicReviews(d.reviews || []); }).catch(e => { console.error('[CommunityView] getReviewsFeed error:', e); }),
     API.getSuggestions().then(d => setSuggestions(d.suggestions || [])).catch(() => {}),
@@ -1445,14 +1442,11 @@ function CommunityView({ refreshKey, freshReview, onFreshReviewConsumed, onSelec
   }, []);
   const doSearch = useCallback((q) => {
     API.searchUsers(q).then(d => {
-      setSearchResults(d.users || []);
-      const ids = (d.users || []).map(u => u.id);
-      if (ids.length) Promise.all(ids.map(id => API.getFriendStatus(id).then(s => ({ id, status: s.status })).catch(() => null)))
-        .then(results => {
-          const m = {};
-          for (const r of results) if (r) m[r.id] = r.status;
-          setFriendStatuses(m);
-        }).catch(() => {});
+      const users = d.users || [];
+      setSearchResults(users);
+      const m = {};
+      for (const u of users) m[u.id] = u.friend_status || 'none';
+      setFriendStatuses(m);
     }).catch(() => {});
   }, []);
   useEffect(() => {
@@ -3250,8 +3244,9 @@ function GameDetailSheet({ game, onClose, onSaveReview, onDeleteGame, wishlistId
                 ? h('button', { onClick: () => setShowTrailer(!showTrailer), className: "text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 hover:opacity-80", style: { color: showTrailer ? "#8888aa" : "#ef4444" } }, h(Play, { size: 10 }), showTrailer ? "Fermer" : "Bande-annonce")
                 : !trailerLoading && h('button', { onClick: () => window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent((game.title || game.name) + ' trailer')}`, '_blank'), className: "text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 hover:opacity-80", style: { color: "#ef4444" } }, h(Play, { size: 10 }), "Bande-annonce")
             ),
-            showTrailer && trailerVideoId && h('div', { className: "mb-3 rounded-xl overflow-hidden", style: { aspectRatio: "16/9" } },
-              h('iframe', { src: `https://www.youtube-nocookie.com/embed/${trailerVideoId}?autoplay=1&origin=${window.location.origin}`, allow: "autoplay; encrypted-media", allowFullScreen: true, className: "w-full h-full", style: { border: "none" } })
+            showTrailer && trailerVideoId && h('div', { className: "mb-3 rounded-xl overflow-hidden", style: { aspectRatio: "16/9", position: "relative" } },
+              h('iframe', { src: `https://www.youtube-nocookie.com/embed/${trailerVideoId}?autoplay=1&origin=${window.location.origin}`, allow: "autoplay; encrypted-media", allowFullScreen: true, className: "w-full h-full", style: { border: "none" } }),
+              h('a', { href: `https://www.youtube.com/watch?v=${trailerVideoId}`, target: "_blank", className: "absolute top-2 right-2 px-2.5 py-1 rounded-lg text-[9px] font-bold text-white no-underline", style: { background: "rgba(0,0,0,0.75)" } }, "YouTube \u2197")
             ),
             gameDetails?.description && h('p', { className: "text-[11px] text-foreground/70 leading-relaxed mb-3" }, gameDetails.description),
             h('div', { className: "grid grid-cols-2 gap-2 text-[10px]" },

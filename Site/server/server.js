@@ -1,9 +1,10 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env'), override: true });
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const session = require('express-session');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
+const DUMMY_HASH = bcrypt.hashSync('dummy', bcrypt.genSaltSync(12));
 const https = require('https');
 const crypto = require('crypto');
 const querystring = require('querystring');
@@ -88,7 +89,7 @@ app.use(session({
   saveUninitialized: false,
   store: sessionStore,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: 'auto',
     maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax',
     httpOnly: true,
@@ -266,7 +267,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
     const user = await db.getUserByUsername(username);
     if (!user) {
       console.log('[Login] User not found:', username);
-      await bcrypt.compare(password, '$2b$12$' + 'x'.repeat(53));
+      await bcrypt.compare(password, DUMMY_HASH);
       return res.status(401).json({ error: 'Identifiant ou mot de passe incorrect' });
     }
     console.log('[Login] User found, comparing password');
@@ -1386,6 +1387,17 @@ const CATALOG_PLATFORMS = [
 const CATALOG_PAGES = 50; // 50 pages × 40 jeux = 2000 jeux par plateforme
 let lastCatalogPopulate = 0;
 const CATALOG_COOLDOWN = 60000; // 1 min entre chaque peuplement
+
+app.post('/api/catalog/populate-rawg', requireAuth, async (req, res) => {
+  const rawgKey = process.env.RAWG_API_KEY;
+  if (!rawgKey) return res.status(400).json({ error: 'RAWG_API_KEY non configurée' });
+  res.json({ ok: true, message: 'Import RAWG console en arrière-plan...' });
+  (async () => {
+    const total = await populateCatalogFromRAWG(rawgKey);
+    console.log(`[Catalog] Peuplement RAWG terminé: ${total} jeux ajoutés`);
+    db.invalidateCatalogCache();
+  })();
+});
 
 app.post('/api/catalog/populate', requireAuth, async (req, res) => {
   const now = Date.now();
@@ -4312,3 +4324,5 @@ app.listen(PORT, () => {
     console.warn('    Ajoute PUBLIC_URL=https://ton-app.render.com dans les env vars Render.');
   }
 });
+
+module.exports = { validatePassword, validateEmail, stripHtml };

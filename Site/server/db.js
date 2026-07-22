@@ -1,5 +1,8 @@
 const { createClient } = require('@supabase/supabase-js');
+const WebSocket = require('ws');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
@@ -15,8 +18,8 @@ if (!supabaseUrl.startsWith('https://') || !supabaseUrl.endsWith('.supabase.co')
   process.exit(1);
 }
 
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
-const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, { realtime: { transport: WebSocket } });
+const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey, { realtime: { transport: WebSocket } });
 
 function checkResult({ data, error }) {
   if (error) throw new Error(error.message);
@@ -40,6 +43,7 @@ async function getUserByUsername(username) {
     .eq('username', username)
     .maybeSingle();
   if (error) throw new Error(error.message);
+  if (data) delete data.password;
   return data;
 }
 
@@ -58,6 +62,7 @@ async function getUserByEmail(email) {
     .eq('email', email)
     .maybeSingle();
   if (error) throw new Error(error.message);
+  if (data) delete data.password;
   return data;
 }
 
@@ -479,7 +484,21 @@ async function searchUsers(query, currentUserId) {
   }
   const { data, error } = await builder;
   if (error) throw new Error(error.message);
-  return data || [];
+  const users = data || [];
+  if (users.length === 0) return [];
+  const ids = users.map(u => u.id);
+  const { data: friendships } = await supabaseAdmin
+    .from('friends')
+    .select('friend_id, status')
+    .eq('user_id', currentUserId)
+    .in('friend_id', ids);
+  const statusMap = {};
+  if (friendships) {
+    for (const f of friendships) {
+      statusMap[f.friend_id] = f.status;
+    }
+  }
+  return users.map(u => ({ ...u, friend_status: statusMap[u.id] || 'none' }));
 }
 
 async function sendFriendRequest(userId, friendId) {
@@ -614,9 +633,9 @@ async function ensureCatalogGame(game) {
     .from('catalog')
     .upsert(payload, { onConflict: 'game_id', ignoreDuplicates: false });
   if (error && error.code !== '23505') {
-    if (error.message && (error.message.includes('developer') || error.message.includes('description'))) {
-      const fallback = { game_id, title, platform: platform || '', cover: cover || '', genre: genre || '', year: year || 0 };
-      if (description && !error.message.includes('description')) fallback.description = description;
+    const retryFields = ['developer', 'description', 'editorial_score', 'user_score', 'platforms_raw', 'jv_url', 'age_rating'];
+    if (retryFields.some(f => error.message.includes(f))) {
+      const fallback = { game_id, title, platform: platform || '', cover: cover || '', genre: genre || '', year: year || 0, description: description || '' };
       const { error: e2 } = await supabaseAdmin
         .from('catalog')
         .upsert(fallback, { onConflict: 'game_id', ignoreDuplicates: false });
@@ -650,7 +669,7 @@ async function batchUpsertCatalog(games) {
       age_rating: g.age_rating || 0,
       updated_at: now,
     }));
-    const { error } = await supabaseAdmin.from('catalog').upsert(payloads, { onConflict: 'game_id', ignoreDuplicates: true });
+    const { error } = await supabaseAdmin.from('catalog').upsert(payloads, { onConflict: 'game_id', ignoreDuplicates: false });
     if (error) {
       const basic = batch.map(g => ({
         game_id: g.game_id, title: g.title, platform: g.platform || '',
@@ -658,7 +677,7 @@ async function batchUpsertCatalog(games) {
         developer: g.developer || '', publisher: g.publisher || '',
         description: g.description || '',
       }));
-      const { error: e2 } = await supabaseAdmin.from('catalog').upsert(basic, { onConflict: 'game_id', ignoreDuplicates: true });
+      const { error: e2 } = await supabaseAdmin.from('catalog').upsert(basic, { onConflict: 'game_id', ignoreDuplicates: false });
       if (!e2) {
         const extra = batch.map(g => ({
           game_id: g.game_id,
@@ -805,32 +824,123 @@ async function mergeCatalogDuplicatesByTitle() {
 }
 
 let catalogCache = null;
+let catalogLoading = false;
+
+function getGameKey(g) {
+  let t = (g.title || '').toLowerCase().trim().replace(/\s+/g, ' ');
+  t = t.replace(/\s+sur\s+(pc|ps4|ps5|xbox|nintendo|switch|ios|android|steam|epic|xbox\s*360|xbox\s*one|xbox\s*series\s*[sx]?|playstation\s*[345]?|windows|mac|linux|vr)\s*$/i, '');
+  t = t.replace(/\s*:\s*/g, ': ').replace(/\s+/g, ' ');
+  t = t.replace(/[™®©]/g, '').trim();
+  return t + '|' + (g.year || 0);
+}
+
+function mergeCatalog(games) {
+  const merged = new Map();
+  for (const g of games) {
+    const key = getGameKey(g);
+    if (!merged.has(key)) {
+      merged.set(key, {
+        ...g,
+        _platforms: g.platform ? [g.platform] : [],
+        _genres: g.genre ? g.genre.split(',').map(s => s.trim()).filter(Boolean) : [],
+        _gameIds: [g.game_id],
+      });
+    } else {
+      const e = merged.get(key);
+      const p = g.platform;
+      if (p && !e._platforms.includes(p)) e._platforms.push(p);
+      if (g.platforms_raw) {
+        String(g.platforms_raw).split(',').map(s => s.trim()).filter(Boolean).forEach(pf => {
+          if (!e._platforms.includes(pf)) e._platforms.push(pf);
+        });
+      }
+      if (g.genre) {
+        g.genre.split(',').map(s => s.trim()).filter(Boolean).forEach(gen => {
+          if (!e._genres.includes(gen)) e._genres.push(gen);
+        });
+      }
+      if (!e.cover && g.cover) e.cover = g.cover;
+      if (!e.developer && g.developer) e.developer = g.developer;
+      if (!e.publisher && g.publisher) e.publisher = g.publisher;
+      if (!e.description && g.description) e.description = g.description;
+      if (!e.age_rating && g.age_rating) e.age_rating = g.age_rating;
+      if (g.cover && (!e.cover || e.cover.includes('screenshots'))) e.cover = g.cover;
+      if (!e.game_id.startsWith('rawg-') && g.game_id.startsWith('rawg-')) e.game_id = g.game_id;
+      e._gameIds.push(g.game_id);
+    }
+  }
+  const originalCount = games.length;
+  const result = Array.from(merged.values()).map(g => {
+    const { _platforms, _genres, _gameIds, ...rest } = g;
+    const pf = _platforms.join(',');
+    return {
+      ...rest,
+      platform: pf,
+      platforms_raw: pf,
+      genre: _genres.join(', '),
+    };
+  });
+  console.log(`[Catalog] getCatalog: ${result.length} jeux uniques (fusionnés depuis ${originalCount} entrées)`);
+  return result;
+}
 
 async function getCatalog() {
   if (catalogCache) return catalogCache;
-  const { data, error } = await supabaseAdmin
-    .from('catalog')
-    .select('*')
-    .limit(500000);
-  if (error) throw new Error(error.message);
-  if (!data) return [];
-  const letterRe = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/;
-  data.sort((a, b) => {
-    const aTitle = a.title || '';
-    const bTitle = b.title || '';
-    const aLetter = letterRe.test(aTitle);
-    const bLetter = letterRe.test(bTitle);
-    if (aLetter && !bLetter) return -1;
-    if (!aLetter && bLetter) return 1;
-    const al = aTitle.toLowerCase();
-    const bl = bTitle.toLowerCase();
-    if (al < bl) return -1;
-    if (al > bl) return 1;
-    return 0;
-  });
-  catalogCache = data;
-  console.log(`[Catalog] getCatalog: ${data.length} jeux chargés en mémoire (cache)`);
-  return data;
+  if (catalogLoading) { while (catalogLoading) await new Promise(r => setTimeout(r, 200)); return catalogCache; }
+  catalogLoading = true;
+  const cachePath = path.join(__dirname, 'data', 'catalog-cache.json');
+  try {
+    if (fs.existsSync(cachePath)) {
+      try {
+        const raw = fs.readFileSync(cachePath, 'utf8');
+        catalogCache = JSON.parse(raw);
+        console.log(`[Catalog] Cache fichier: ${catalogCache.length} jeux chargés`);
+        return catalogCache;
+      } catch (e) {
+        console.error('[Catalog] Erreur lecture cache fichier, rechargement Supabase:', e.message);
+      }
+    }
+    let allData = [];
+    let from = 0;
+    const PAGE = 1000;
+    while (true) {
+      const { data, error } = await supabaseAdmin
+        .from('catalog')
+        .select('*')
+        .order('game_id')
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) break;
+      allData = allData.concat(data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    allData = mergeCatalog(allData);
+    const letterRe = /^[a-zA-ZÀ-ÖØ-öø-ÿŒœ]/;
+    allData.sort((a, b) => {
+      const aTitle = a.title || '';
+      const bTitle = b.title || '';
+      const aLetter = letterRe.test(aTitle);
+      const bLetter = letterRe.test(bTitle);
+      if (aLetter && !bLetter) return -1;
+      if (!aLetter && bLetter) return 1;
+      const al = aTitle.toLowerCase();
+      const bl = bTitle.toLowerCase();
+      if (al < bl) return -1;
+      if (al > bl) return 1;
+      return 0;
+    });
+    catalogCache = allData;
+    try {
+      fs.writeFileSync(cachePath, JSON.stringify(allData), 'utf8');
+      console.log(`[Catalog] Cache fichier sauvegardé: ${allData.length} jeux`);
+    } catch (e) {
+      console.error('[Catalog] Erreur sauvegarde cache fichier:', e.message);
+    }
+    return allData;
+  } finally {
+    catalogLoading = false;
+  }
 }
 
 async function queryCatalog({ search, letter, platform, genre, yearMin, yearMax, editorialMin, editorialMax, userScoreMin, userScoreMax, ageRating, page = 1, limit = 60 }) {
@@ -839,17 +949,51 @@ async function queryCatalog({ search, letter, platform, genre, yearMin, yearMax,
 
   if (search && search.trim()) {
     const s = search.trim().toLowerCase();
+    const terms = s.split(/\s+/).filter(Boolean);
+    const esc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Filter: all terms must appear in the title
     filtered = filtered.filter(g => {
-      const haystack = [
-        g.title,
-        g.genre,
-        g.developer,
-        g.publisher,
-        g.description,
-        g.platform,
-        g.platforms_raw,
-      ].filter(Boolean).join(' ').toLowerCase();
-      return haystack.includes(s);
+      const t = (g.title || '').toLowerCase();
+      return terms.every(term => t.includes(term));
+    });
+    if (filtered.length < 20) {
+      // Expand to description/genre/developer/publisher if few title results
+      const descMatches = all.filter(g => {
+        const t = (g.title || '').toLowerCase();
+        if (terms.every(term => t.includes(term))) return false;
+        const haystack = [g.genre, g.developer, g.publisher, g.description, g.platform, g.platforms_raw].filter(Boolean).join(' ').toLowerCase();
+        return terms.every(term => haystack.includes(term));
+      });
+      filtered = [...filtered, ...descMatches];
+    }
+    // Sort by relevance
+    filtered.sort((a, b) => {
+      const aTitle = (a.title || '').toLowerCase();
+      const bTitle = (b.title || '').toLowerCase();
+      let scoreA = 0, scoreB = 0;
+      if (aTitle === s) scoreA += 10000;
+      if (bTitle === s) scoreB += 10000;
+      if (aTitle.startsWith(s)) scoreA += 5000;
+      if (bTitle.startsWith(s)) scoreB += 5000;
+      let allA = true, allB = true;
+      for (const t of terms) {
+        const inA = aTitle.includes(t);
+        const inB = bTitle.includes(t);
+        if (!inA) allA = false;
+        if (!inB) allB = false;
+        if (inA) {
+          if (new RegExp('(^|\\s)' + esc(t)).test(aTitle)) scoreA += 200;
+          if (new RegExp('\\b' + esc(t) + '\\b').test(aTitle)) scoreA += 50;
+        }
+        if (inB) {
+          if (new RegExp('(^|\\s)' + esc(t)).test(bTitle)) scoreB += 200;
+          if (new RegExp('\\b' + esc(t) + '\\b').test(bTitle)) scoreB += 50;
+        }
+      }
+      if (allA) scoreA += 1000;
+      if (allB) scoreB += 1000;
+      if (scoreA === scoreB) return (a.title || '').length - (b.title || '').length;
+      return scoreB - scoreA;
     });
   }
 
@@ -863,17 +1007,19 @@ async function queryCatalog({ search, letter, platform, genre, yearMin, yearMax,
     }
   }
 
-  filtered = applyExtraFilters(filtered, {
-    platform,
-    genre,
-    yearMin,
-    yearMax,
-    editorialMin,
-    editorialMax,
-    userScoreMin,
-    userScoreMax,
-    ageRating,
+  if (platform && platform !== 'all') filtered = filtered.filter(g => {
+    if (normalizePlatform(g.platform) === platform) return true;
+    if (g.platforms_raw) return String(g.platforms_raw).split(',').map(s => s.trim()).filter(Boolean).some(p => normalizePlatform(p) === platform);
+    return false;
   });
+  if (genre && genre !== 'all') filtered = filtered.filter(g => (g.genre || '').toLowerCase().split(',').map(s => s.trim()).includes(genre.toLowerCase()));
+  if (yearMin) filtered = filtered.filter(g => g.year >= parseInt(yearMin));
+  if (yearMax) filtered = filtered.filter(g => g.year <= parseInt(yearMax));
+  if (ageRating) { const a = parseInt(ageRating); filtered = filtered.filter(g => g.age_rating >= a); }
+  if (editorialMin) filtered = filtered.filter(g => parseScore(g.editorial_score) >= parseFloat(editorialMin));
+  if (editorialMax) filtered = filtered.filter(g => parseScore(g.editorial_score) <= parseFloat(editorialMax));
+  if (userScoreMin) filtered = filtered.filter(g => parseScore(g.user_score) >= parseFloat(userScoreMin));
+  if (userScoreMax) filtered = filtered.filter(g => parseScore(g.user_score) <= parseFloat(userScoreMax));
 
   const total = filtered.length;
   const totalCatalog = await getCatalogCount();
@@ -937,11 +1083,17 @@ const PLATFORM_ALIAS = {
   dos: ['dos'],
   web: ['web','browser'],
 };
+const normalizeCache = new Map();
 function normalizePlatform(raw) {
   const r = String(raw).toLowerCase().trim();
+  if (normalizeCache.has(r)) return normalizeCache.get(r);
   for (const [key, aliases] of Object.entries(PLATFORM_ALIAS)) {
-    if (aliases.some(a => r === a || r.startsWith(a))) return key;
+    if (aliases.some(a => r === a || r.startsWith(a))) {
+      normalizeCache.set(r, key);
+      return key;
+    }
   }
+  normalizeCache.set(r, r);
   return r;
 }
 
@@ -955,18 +1107,10 @@ async function getCatalogFilters() {
   for (const g of all) {
     if (g.platform) platformsSet.add(normalizePlatform(g.platform));
     if (g.platforms_raw) {
-      String(g.platforms_raw)
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean)
-        .forEach(p => platformsSet.add(normalizePlatform(p)));
+      String(g.platforms_raw).split(',').map(s => s.trim()).filter(Boolean).forEach(p => platformsSet.add(normalizePlatform(p)));
     }
     if (g.genre) {
-      String(g.genre)
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean)
-        .forEach(genreName => genresSet.add(genreName));
+      String(g.genre).split(',').map(s => s.trim()).filter(Boolean).forEach(genreName => genresSet.add(genreName));
     }
     if (g.age_rating && Number(g.age_rating) > 0) ageRatingsSet.add(Number(g.age_rating));
     if (g.year && Number(g.year) > 0) yearsSet.add(Number(g.year));
@@ -974,7 +1118,7 @@ async function getCatalogFilters() {
 
   return {
     genres: [...genresSet].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })),
-    platforms: [...platformsSet].sort(),
+    platforms: [...platformsSet].filter(p => PLATFORM_ALIAS[p]).sort(),
     ageRatings: [...ageRatingsSet].sort((a, b) => a - b),
     years: [...yearsSet].sort((a, b) => b - a),
   };
@@ -1001,11 +1145,8 @@ function invalidateCatalogCache() {
 }
 
 async function getCatalogCount() {
-  const { count, error } = await supabaseAdmin
-    .from('catalog')
-    .select('*', { count: 'exact', head: true });
-  if (error) throw new Error(error.message);
-  return count || 0;
+  const cache = await getCatalog();
+  return cache.length;
 }
 
 async function getRecentReleases() {
